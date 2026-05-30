@@ -1,0 +1,121 @@
+name: Compose Preview Screenshot Test
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  screenshot-test:
+    name: Validate Compose Preview Screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      # :app 모듈은 google-services plugin 활성화 — processDebugGoogleServices 가 google-services.json 요구.
+      # CI 환경엔 실 키 없으므로 stub JSON 생성 (Firebase 호출 안 함, plugin 통과 목적).
+      # 실 분석/배포는 Firebase App Distribution 워크플로 에서 별도 secret 으로 처리.
+      - name: Create stub google-services.json (CI only)
+        run: |
+          cat > app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "slowclock-ci-stub",
+              "storage_bucket": "slowclock-ci-stub.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.example.slowclock"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  { "current_key": "AIzaSyDfake_ci_only_no_real_value_xxxxxxxxxxx" }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+
+      - name: Run validateScreenshotTest
+        run: ./gradlew :app:validateScreenshotTest --parallel
+
+      # 실패 시 diff/rendered 이미지를 artifact 로 업로드 — 본인이 다운로드해 시각 차이 확인 가능
+      - name: Upload screenshot diff on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-test-results
+          path: |
+            app/build/outputs/screenshotTest-results/
+          retention-days: 7
+
+      # 실패 시 PR 에 artifact URL + 조치 가이드 자동 코멘트.
+      # 같은 PR 의 재실행에서는 기존 코멘트를 update (marker 로 중복 누적 방지).
+      - name: Comment artifact URL on PR (failure)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- screenshot-fail-bot -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              marker,
+              '❌ **Screenshot test fail** — baseline 과 CI rendered PNG 차이.',
+              '',
+              `📦 **Artifact**: ${runUrl} (페이지 하단 Artifacts → \`screenshot-test-results\`)`,
+              '',
+              '🔍 **확인 위치** (artifact zip 내부):',
+              '- diff PNG: `preview/debug/diffs/...`',
+              '- rendered PNG: `preview/debug/rendered/...` (CI 환경에서 새로 그린 결과)',
+              '- baseline PNG: repo `app/src/screenshotTestDebug/reference/...`',
+              '',
+              '📝 **조치 가이드**:',
+              '- diff 가 anti-aliasing/font 미세 차이 → rendered PNG 를 baseline 으로 교체 후 commit/push',
+              '- 의미 있는 시각 변경 → 의도 확인 후 `./gradlew :app:updateScreenshotTest` 로 baseline 갱신 + commit/push',
+              '',
+              '근본 fix (docker 통일 baseline 환경) 는 별 epic.',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

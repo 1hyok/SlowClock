@@ -63,3 +63,5 @@ temp/
 *.json
 !package.json
 keys/
+# Claude 개인 컨벤션 파일 (.claude/backup 에서 SessionStart 복원)
+CLAUDE.md

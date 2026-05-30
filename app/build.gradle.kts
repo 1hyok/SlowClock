@@ -1,13 +1,29 @@
+import com.google.firebase.appdistribution.gradle.firebaseAppDistribution
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ktlint.gradle)
+    alias(libs.plugins.compose.screenshot)
+    alias(libs.plugins.firebase.app.distribution)
     id("com.google.gms.google-services")
+}
+
+// local.properties 에서 release 서명 키 로드 (CI 는 시크릿으로 local.properties 합성)
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
 
 android {
     namespace = "com.example.slowclock"
     compileSdk = 35
+
+    // Compose Preview Screenshot Testing (alpha) 활성화
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
 
     defaultConfig {
         applicationId = "com.example.slowclock"
@@ -33,6 +49,18 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val releaseStoreFile = localProperties.getProperty("RELEASE_STORE_FILE")
+            if (releaseStoreFile != null) {
+                storeFile = file(releaseStoreFile)
+                storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -40,6 +68,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
+            firebaseAppDistribution {
+                groups = "slowclock"
+                releaseNotes = "Release build for internal distribution"
+            }
         }
     }
     compileOptions {
@@ -93,4 +126,18 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Compose Preview Screenshot Testing
+    screenshotTestImplementation(libs.screenshot.validation.api)
+    screenshotTestImplementation(libs.androidx.ui.tooling)
+
+    // ktlint compose 규칙셋
+    ktlintRuleset(libs.compose.rules)
+}
+
+// ktlint (org.jlleitschuh.gradle.ktlint) — 버전을 lint.yml 의 ktlint_version 과 통일
+ktlint {
+    version.set("1.8.0")
+    android.set(true)
+    ignoreFailures.set(false)
 }

@@ -1,0 +1,92 @@
+name: Release Distribution (Firebase App Distribution)
+
+# main 브랜치 push 시점에만 실행. PR / 다른 브랜치에서는 트리거되지 않음 —
+# "main 머지된 상태만 배포" 운영 정책에 맞춤. 수동 트리거 (1hyok 머신) 는 fallback 으로 유지.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  distribute:
+    name: Build Release and Upload to Firebase App Distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      # fail-fast — secret 누락 시 Gradle 까지 가지 않고 즉시 실패.
+      # secret 값은 echo 하지 않음 (env 로만 받아서 길이 검사). 누락 키 이름은 안전.
+      - name: Verify required secrets are set
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+          RELEASE_STORE_FILE_B64: ${{ secrets.RELEASE_STORE_FILE_B64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          missing=""
+          [ -z "$GOOGLE_SERVICES_JSON_B64" ] && missing="$missing GOOGLE_SERVICES_JSON_B64"
+          [ -z "$RELEASE_STORE_FILE_B64" ] && missing="$missing RELEASE_STORE_FILE_B64"
+          [ -z "$RELEASE_STORE_PASSWORD" ] && missing="$missing RELEASE_STORE_PASSWORD"
+          [ -z "$RELEASE_KEY_ALIAS" ] && missing="$missing RELEASE_KEY_ALIAS"
+          [ -z "$RELEASE_KEY_PASSWORD" ] && missing="$missing RELEASE_KEY_PASSWORD"
+          [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && missing="$missing FIREBASE_SERVICE_ACCOUNT_JSON"
+          if [ -n "$missing" ]; then
+            echo "::error::필수 secret 누락:$missing — Settings → Secrets and variables → Actions 에 등록"
+            exit 1
+          fi
+
+      # google-services plugin 이 app/google-services.json 을 요구. 파일은 .gitignore 라
+      # CI 환경엔 없음. base64 인코딩된 secret 으로 받아서 decode.
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > app/google-services.json
+
+      - name: Decode release keystore
+        env:
+          RELEASE_STORE_FILE_B64: ${{ secrets.RELEASE_STORE_FILE_B64 }}
+        run: |
+          echo "$RELEASE_STORE_FILE_B64" | base64 -d > "$HOME/slowclock-release.jks"
+
+      # Firebase App Distribution Gradle plugin 이 GOOGLE_APPLICATION_CREDENTIALS 환경변수로
+      # service account JSON 경로를 인식. plugin DSL 의 serviceCredentialsFile 미지정 시 fallback.
+      # 참고: https://firebase.google.com/docs/app-distribution/android/distribute-gradle
+      - name: Decode Firebase service account credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$HOME/firebase-service-account.json"
+
+      # app/build.gradle.kts 의 signingConfigs.release 가 local.properties 의 RELEASE_* 4개 키를
+      # 읽음. CI 환경에서는 local.properties 가 없으므로 secret 으로부터 작성.
+      - name: Compose local.properties
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          {
+            echo "RELEASE_STORE_FILE=$HOME/slowclock-release.jks"
+            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+          } > local.properties
+
+      - name: Build release APK and upload to Firebase App Distribution
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$HOME/firebase-service-account.json"
+          ./gradlew assembleRelease appDistributionUploadRelease --no-daemon

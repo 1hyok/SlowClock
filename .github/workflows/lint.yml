@@ -1,0 +1,76 @@
+name: Static Analysis (Reviewdog)
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ktlint:
+    name: Check Code Quality (Ktlint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Run Ktlint
+        uses: ScaCap/action-ktlint@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review # PR 리뷰 댓글로 표시
+          android: true # Android 스타일 가이드 준수
+          fail_on_error: true # 에러 발견 시 빌드 실패
+          level: warning # Warning 이상은 댓글로 표시
+          ktlint_version: "1.8.0" # 로컬(libs.versions.toml)과 버전 통일
+
+  android-lint:
+    name: Check Project Issues (Android Lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      # fail-fast — secret 누락 시 Gradle 까지 가지 않고 즉시 실패
+      # secret 값은 echo 하지 않음 (env 로만 받아서 길이 검사). 누락 키 이름은 안전.
+      - name: Verify required secrets are set
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          missing=""
+          [ -z "$GOOGLE_SERVICES_JSON_B64" ] && missing="$missing GOOGLE_SERVICES_JSON_B64"
+          if [ -n "$missing" ]; then
+            echo "::error::필수 secret 누락:$missing — Settings → Secrets and variables → Actions 에 등록"
+            exit 1
+          fi
+
+      # google-services plugin 이 app/google-services.json 을 요구. 파일은 .gitignore 라
+      # CI 환경엔 없음. base64 인코딩된 secret 으로 받아서 decode.
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > app/google-services.json
+
+      - name: Run Android Lint
+        run: ./gradlew lintDebug --continue --parallel
+
+      # 단일 모듈 (:app) 의 lint XML 을 Reviewdog 에 그대로 전달해 위반을 PR 인라인 코멘트로 띄운다.
+      # lintDebug 결과는 app/build/reports/lint-results-debug.xml 에 생성된다.
+      - name: Report Android Lint (Reviewdog)
+        if: always()
+        uses: dvdandroid/action-android-lint@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          level: warning
+          lint_xml_file: app/build/reports/lint-results-debug.xml

@@ -1,0 +1,61 @@
+name: Unit Test
+
+# PR 대상 main 일 때 :app 모듈의 JVM unit test (./gradlew testDebugUnitTest) 실행.
+# lint.yml 과 setup 이 거의 동일하지만 분리 — lint 실패가 test 결과를 가리지 않도록 fail-fast 독립.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-test:
+    name: Run Unit Tests (testDebugUnitTest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      # fail-fast — secret 누락 시 Gradle 까지 가지 않고 즉시 실패.
+      # secret 값은 echo 하지 않음 (env 로만 받아서 길이 검사). 누락 키 이름은 안전.
+      - name: Verify required secrets are set
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          missing=""
+          [ -z "$GOOGLE_SERVICES_JSON_B64" ] && missing="$missing GOOGLE_SERVICES_JSON_B64"
+          if [ -n "$missing" ]; then
+            echo "::error::필수 secret 누락:$missing — Settings → Secrets and variables → Actions 에 등록"
+            exit 1
+          fi
+
+      # google-services plugin 이 app/google-services.json 을 요구. 파일은 .gitignore 라
+      # CI 환경엔 없음. base64 인코딩된 secret 으로 받아서 decode.
+      - name: Decode google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > app/google-services.json
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --continue --parallel
+
+      # 실패한 테스트의 HTML/XML 리포트를 PR artifact 로 보존 — CI 로그에서 stack trace 추적이 빠름.
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            **/build/reports/tests/testDebugUnitTest
+            **/build/test-results/testDebugUnitTest
+          retention-days: 7

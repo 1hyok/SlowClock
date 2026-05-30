@@ -22,6 +22,12 @@ navigationCompose = "2.9.0"
 firebaseUiAuth = "9.0.0"
 volley = "1.2.1"
 material = "1.9.0-beta01"
+# --- 운영 툴링 도입 (Afternote 패리티): ktlint / compose screenshot test / firebase app distribution ---
+ktlint = "1.8.0"
+ktlintGradle = "12.1.1"
+composeRules = "0.5.6"
+screenshot = "0.0.1-alpha15"
+firebaseAppDistribution = "5.2.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -58,9 +64,15 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 firebase-ui-auth = { group = "com.firebaseui", name = "firebase-ui-auth", version.ref = "firebaseUiAuth" }
 volley = { group = "com.android.volley", name = "volley", version.ref = "volley" }
 androidx-material = { group = "androidx.compose.material", name = "material", version.ref = "material" }
+# 운영 툴링
+compose-rules = { group = "io.nlopez.compose.rules", name = "ktlint", version.ref = "composeRules" }
+screenshot-validation-api = { group = "com.android.tools.screenshot", name = "screenshot-validation-api", version.ref = "screenshot" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ktlint-gradle = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
+compose-screenshot = { id = "com.android.compose.screenshot", version.ref = "screenshot" }
+firebase-app-distribution = { id = "com.google.firebase.appdistribution", version.ref = "firebaseAppDistribution" }
 
