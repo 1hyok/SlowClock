@@ -9,16 +9,20 @@ import androidx.core.content.ContextCompat
 import com.example.slowclock.ui.alarm.AlarmTriggerService
 
 class AlarmReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         val title = intent.getStringExtra("title") ?: "Schedule Reminder"
         val desc = intent.getStringExtra("desc") ?: ""
         val isFullScreen = intent.getBooleanExtra("isFullScreen", false)
 
-        val serviceIntent = Intent(context, AlarmTriggerService::class.java).apply {
-            putExtra("title", title)
-            putExtra("desc", desc)
-            putExtra("isFullScreen", isFullScreen)
-        }
+        val serviceIntent =
+            Intent(context, AlarmTriggerService::class.java).apply {
+                putExtra("title", title)
+                putExtra("desc", desc)
+                putExtra("isFullScreen", isFullScreen)
+            }
 
         Log.d("AlarmReceiver", "🔔 알람 수신됨 (풀스크린: $isFullScreen), 서비스 실행: $title / $desc")
 

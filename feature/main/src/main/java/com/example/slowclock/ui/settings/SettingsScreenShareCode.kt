@@ -16,7 +16,7 @@ import com.example.slowclock.ui.main.MainViewModel
 @Composable
 fun SettingsScreenShareCode(
     onReturn: () -> Unit,
-    viewModel: MainViewModel = hiltViewModel()
+    viewModel: MainViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
@@ -24,11 +24,12 @@ fun SettingsScreenShareCode(
     var inputValue by remember { mutableStateOf(TextFieldValue(shareCode)) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(24.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Enter Share Code to View Shared Reminders", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(24.dp))
@@ -36,7 +37,7 @@ fun SettingsScreenShareCode(
             value = inputValue,
             onValueChange = { inputValue = it },
             label = { Text("Share Code") },
-            singleLine = true
+            singleLine = true,
         )
         Spacer(modifier = Modifier.height(24.dp))
         Button(onClick = {

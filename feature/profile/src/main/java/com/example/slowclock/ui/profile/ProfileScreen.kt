@@ -38,9 +38,7 @@ import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(
-    onNavigateBack: () -> Unit
-) {
+fun ProfileScreen(onNavigateBack: () -> Unit) {
     val currentUser = FirebaseAuth.getInstance().currentUser
     var userModel by remember { mutableStateOf<User?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -49,7 +47,11 @@ fun ProfileScreen(
     LaunchedEffect(currentUser?.uid) {
         if (currentUser?.uid != null) {
             try {
-                val doc = FirestoreDB.users.document(currentUser.uid).get().await()
+                val doc =
+                    FirestoreDB.users
+                        .document(currentUser.uid)
+                        .get()
+                        .await()
                 userModel = doc.toObject<User>()
                 isLoading = false
             } catch (e: Exception) {
@@ -68,7 +70,7 @@ fun ProfileScreen(
                     Text(
                         text = "내 정보",
                         style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 },
                 navigationIcon = {
@@ -77,23 +79,25 @@ fun ProfileScreen(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "뒤로가기",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(28.dp),
                         )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                colors =
+                    TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
             )
-        }
+        },
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(24.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(24.dp),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (isLoading) {
                 Text("로딩 중...")
@@ -105,7 +109,7 @@ fun ProfileScreen(
                     Icons.Default.Person,
                     contentDescription = "프로필",
                     modifier = Modifier.size(120.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
@@ -114,7 +118,7 @@ fun ProfileScreen(
                 Text(
                     text = userModel?.name ?: currentUser?.displayName ?: "이름 없음",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -123,7 +127,7 @@ fun ProfileScreen(
                 Text(
                     text = userModel?.email ?: currentUser?.email ?: "이메일 없음",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -131,7 +135,7 @@ fun ProfileScreen(
                 // 공유 코드
                 Text(
                     text = "내 공유 코드:",
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.labelLarge,
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -139,7 +143,7 @@ fun ProfileScreen(
                 Text(
                     text = userModel?.shareCode ?: "-",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
 
                 Spacer(modifier = Modifier.height(56.dp))
@@ -150,15 +154,16 @@ fun ProfileScreen(
                         FirebaseAuth.getInstance().signOut()
                         onNavigateBack()
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier.size(width = 200.dp, height = 56.dp)
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                        ),
+                    modifier = Modifier.size(width = 200.dp, height = 56.dp),
                 ) {
                     Text(
                         text = "로그아웃",
                         color = MaterialTheme.colorScheme.onError,
-                        style = MaterialTheme.typography.bodyLarge
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                 }
             }

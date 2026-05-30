@@ -20,16 +20,17 @@ class DummyDataManager {
                     if (existing.isEmpty()) {
                         Log.d("DUMMY", "일정 없음, 더미 데이터 추가")
 
-                        val schedules = listOf(
-                            Schedule(title = "아침 운동", startTime = getTodayTime(9, 0)),
-                            Schedule(
-                                title = "점심 약속",
-                                startTime = getTodayTime(12, 30),
-                                completed = true
-                            ),
-                            Schedule(title = "저녁 산책", startTime = getTodayTime(18, 0)),
-                            Schedule(title = "지금 할 일", startTime = Timestamp.now())
-                        )
+                        val schedules =
+                            listOf(
+                                Schedule(title = "아침 운동", startTime = getTodayTime(9, 0)),
+                                Schedule(
+                                    title = "점심 약속",
+                                    startTime = getTodayTime(12, 30),
+                                    completed = true,
+                                ),
+                                Schedule(title = "저녁 산책", startTime = getTodayTime(18, 0)),
+                                Schedule(title = "지금 할 일", startTime = Timestamp.now()),
+                            )
 
                         schedules.forEach { schedule ->
                             when (val addResult = scheduleRepository.addSchedule(schedule)) {
@@ -57,7 +58,10 @@ class DummyDataManager {
         }
     }
 
-    private fun getTodayTime(hour: Int, minute: Int): Timestamp {
+    private fun getTodayTime(
+        hour: Int,
+        minute: Int,
+    ): Timestamp {
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.HOUR_OF_DAY, hour)
         calendar.set(Calendar.MINUTE, minute)

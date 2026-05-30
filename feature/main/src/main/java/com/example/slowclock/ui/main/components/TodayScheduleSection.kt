@@ -31,19 +31,19 @@ fun TodayScheduleSection(
         // 섹션 제목
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(bottom = 12.dp),
         ) {
             Icon(
                 Icons.Outlined.CalendarToday,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "오늘의 일정",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
 
@@ -56,7 +56,7 @@ fun TodayScheduleSection(
                         schedule = schedule,
                         onToggleComplete = { onToggleComplete(schedule.id) },
                         onShowDetail = { onShowDetail(schedule.id) },
-                        completed = schedule.completed
+                        completed = schedule.completed,
                     )
                 }
             }
@@ -71,11 +71,10 @@ fun TodayScheduleSection(
                         schedule = schedule,
                         onToggleComplete = { onToggleComplete(schedule.id) },
                         onShowDetail = { onShowDetail(schedule.id) },
-                        completed = schedule.completed
+                        completed = schedule.completed,
                     )
                 }
             }
         }
     }
 }
-

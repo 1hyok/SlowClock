@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
@@ -37,13 +39,9 @@ import com.example.slowclock.ui.main.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 
 @Composable
-fun DoneScreen(
-    mainViewModel: MainViewModel
-) {
+fun DoneScreen(mainViewModel: MainViewModel) {
     val uiState by mainViewModel.uiState.collectAsState()
 
     val completed = uiState.todaySchedules.filter { it.completed }
@@ -53,25 +51,27 @@ fun DoneScreen(
     val timeFormatter = SimpleDateFormat("a h:mm", Locale.KOREAN)
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
     ) {
         Text(
             text = "오늘의 일정",
             style = MaterialTheme.typography.headlineSmall,
             color = Color(0xFF3A5CCC),
-            modifier = Modifier.align(Alignment.CenterHorizontally)
+            modifier = Modifier.align(Alignment.CenterHorizontally),
         )
         Text(
             text = formatter.format(Date()),
             fontSize = 16.sp,
             color = Color.DarkGray,
-            modifier = Modifier
-                .padding(bottom = 16.dp)
-                .align(Alignment.CenterHorizontally),
-            textAlign = TextAlign.Center
+            modifier =
+                Modifier
+                    .padding(bottom = 16.dp)
+                    .align(Alignment.CenterHorizontally),
+            textAlign = TextAlign.Center,
         )
 
         if (completed.isNotEmpty()) {
@@ -83,7 +83,7 @@ fun DoneScreen(
                         completed = true,
                         onClick = { schedule ->
                             mainViewModel.toggleScheduleComplete(schedule.id)
-                        }
+                        },
                     )
                 }
             }
@@ -98,7 +98,7 @@ fun DoneScreen(
                         completed = false,
                         onClick = { schedule ->
                             mainViewModel.toggleScheduleComplete(schedule.id)
-                        }
+                        },
                     )
                 }
             }
@@ -109,30 +109,40 @@ fun DoneScreen(
             text = "오늘 ${completed.size}개의 일정을 완료했어요!",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.align(Alignment.CenterHorizontally),
-            color = Color.DarkGray
+            color = Color.DarkGray,
         )
 
         // 🔥 수정된 LinearProgressIndicator
         LinearProgressIndicator(
             progress = {
-                if ((completed.size + remaining.size) == 0) 0f
-                else completed.size.toFloat() / (completed.size + remaining.size)
+                if ((completed.size + remaining.size) == 0) {
+                    0f
+                } else {
+                    completed.size.toFloat() / (completed.size + remaining.size)
+                }
             },
             color = Color(0xFF00A152),
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .fillMaxWidth()
+            modifier =
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth(),
         )
     }
 }
 
 @Composable
-fun Section(title: String, icon: ImageVector, color: Color, content: @Composable ColumnScope.() -> Unit) {
+fun Section(
+    title: String,
+    icon: ImageVector,
+    color: Color,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FB))
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FB)),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -151,37 +161,39 @@ fun ScheduleCard(
     schedule: Schedule,
     timeFormatter: SimpleDateFormat,
     completed: Boolean,
-    onClick: (Schedule) -> Unit
+    onClick: (Schedule) -> Unit,
 ) {
     val cardColor = if (completed) Color(0xFFE0F8E0) else Color(0xFFEAF1FF)
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable { onClick(schedule) },
-        colors = CardDefaults.cardColors(containerColor = cardColor)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .clickable { onClick(schedule) },
+        colors = CardDefaults.cardColors(containerColor = cardColor),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Checkbox(
                     checked = completed,
-                    onCheckedChange = { onClick(schedule) }
+                    onCheckedChange = { onClick(schedule) },
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(text = schedule.title, fontWeight = FontWeight.Bold)
                     Text(
                         text = timeFormatter.format(schedule.startTime.toDate()),
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                 }
             }
@@ -190,7 +202,7 @@ fun ScheduleCard(
                 Text(
                     text = "완료",
                     color = Color(0xFF00A152),
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }

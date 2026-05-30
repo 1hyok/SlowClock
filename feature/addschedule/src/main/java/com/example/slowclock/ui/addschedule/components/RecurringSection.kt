@@ -32,34 +32,34 @@ fun RecurringSection(
     recurring: Boolean,
     recurringType: String,
     onRecurringChange: (Boolean) -> Unit,
-    onRecurringTypeChange: (String) -> Unit
+    onRecurringTypeChange: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text(
                 text = "반복 설정",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 16.dp),
             )
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Checkbox(
                     checked = recurring,
-                    onCheckedChange = onRecurringChange
+                    onCheckedChange = onRecurringChange,
                 )
                 Text(
                     text = "반복 일정으로 설정",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = 12.dp)
+                    modifier = Modifier.padding(start = 12.dp),
                 )
             }
 
@@ -67,15 +67,16 @@ fun RecurringSection(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 var expanded by remember { mutableStateOf(false) }
-                val recurringOptions = listOf(
-                    "daily" to "매일",
-                    "weekly" to "매주",
-                    "monthly" to "매월"
-                )
+                val recurringOptions =
+                    listOf(
+                        "daily" to "매일",
+                        "weekly" to "매주",
+                        "monthly" to "매월",
+                    )
 
                 ExposedDropdownMenuBox(
                     expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
+                    onExpandedChange = { expanded = !expanded },
                 ) {
                     OutlinedTextField(
                         value = recurringOptions.find { it.first == recurringType }?.second ?: "매일",
@@ -84,32 +85,33 @@ fun RecurringSection(
                         label = {
                             Text(
                                 "반복 주기",
-                                style = MaterialTheme.typography.bodyLarge
+                                style = MaterialTheme.typography.bodyLarge,
                             )
                         },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            .fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyLarge
+                        modifier =
+                            Modifier
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                .fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge,
                     )
 
                     ExposedDropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onDismissRequest = { expanded = false },
                     ) {
                         recurringOptions.forEach { (value, label) ->
                             DropdownMenuItem(
                                 text = {
                                     Text(
                                         label,
-                                        style = MaterialTheme.typography.bodyLarge
+                                        style = MaterialTheme.typography.bodyLarge,
                                     )
                                 },
                                 onClick = {
                                     onRecurringTypeChange(value)
                                     expanded = false
-                                }
+                                },
                             )
                         }
                     }

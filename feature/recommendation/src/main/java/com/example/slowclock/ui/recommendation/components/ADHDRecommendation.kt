@@ -24,49 +24,57 @@ import androidx.compose.ui.unit.sp
 import com.example.slowclock.data.model.Recommendation
 
 @Composable
-fun ADHDRecommendation(list : List<Recommendation>, onSelectRecommendation : (String) -> Unit, modifier: Modifier = Modifier) {
+fun ADHDRecommendation(
+    list: List<Recommendation>,
+    onSelectRecommendation: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val recommendations = list.filter { it.type == "ADHD" || it.type == "일반" }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp),
     ) {
         Text("추천 일정", style = MaterialTheme.typography.titleMedium)
         LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
             contentPadding = PaddingValues(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(count = recommendations.size) { index ->
                 val item = recommendations[index]
                 Card(
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    border = BorderStroke(1.dp, Color(0xFF1A73E8))
+                    border = BorderStroke(1.dp, Color(0xFF1A73E8)),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                        modifier =
+                            Modifier
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = item.title,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color.Black
+                                color = Color.Black,
                             )
                             Text(
                                 text = item.type, // 필요한 경우 실제 시간 추가 가능
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = Color.Gray,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
                             )
                         }
 

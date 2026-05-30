@@ -36,10 +36,11 @@ class NotificationRepository {
     suspend fun addNotification(notification: Notification): String? {
         val uid = auth.currentUser?.uid ?: return null
 
-        val newNotification = notification.copy(
-            userId = uid,
-            createdAt = Timestamp.now()
-        )
+        val newNotification =
+            notification.copy(
+                userId = uid,
+                createdAt = Timestamp.now(),
+            )
 
         return try {
             val docRef = notificationsCollection.document()
@@ -52,16 +53,16 @@ class NotificationRepository {
     }
 
     // 알림 읽음 상태 변경
-    suspend fun markNotificationAsRead(notificationId: String): Boolean {
-        return try {
-            notificationsCollection.document(notificationId)
+    suspend fun markNotificationAsRead(notificationId: String): Boolean =
+        try {
+            notificationsCollection
+                .document(notificationId)
                 .update("isRead", true)
                 .await()
             true
         } catch (e: Exception) {
             false
         }
-    }
 
     // 모든 알림 읽음 상태로 변경
     suspend fun markAllNotificationsAsRead(): Boolean {
@@ -70,11 +71,12 @@ class NotificationRepository {
         return try {
             val batch = FirestoreDB.db.batch()
 
-            val unreadNotifications = notificationsCollection
-                .whereEqualTo("userId", uid)
-                .whereEqualTo("isRead", false)
-                .get()
-                .await()
+            val unreadNotifications =
+                notificationsCollection
+                    .whereEqualTo("userId", uid)
+                    .whereEqualTo("isRead", false)
+                    .get()
+                    .await()
 
             unreadNotifications.documents.forEach { document ->
                 batch.update(document.reference, "isRead", true)
@@ -88,12 +90,11 @@ class NotificationRepository {
     }
 
     // 알림 삭제
-    suspend fun deleteNotification(notificationId: String): Boolean {
-        return try {
+    suspend fun deleteNotification(notificationId: String): Boolean =
+        try {
             notificationsCollection.document(notificationId).delete().await()
             true
         } catch (e: Exception) {
             false
         }
-    }
 }

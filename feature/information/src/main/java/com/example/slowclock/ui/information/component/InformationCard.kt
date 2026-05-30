@@ -22,26 +22,28 @@ import androidx.core.net.toUri
 import com.example.slowclock.data.model.InfoData
 
 @Composable
-fun InfoItem(info: InfoData){
+fun InfoItem(info: InfoData) {
     val context = LocalContext.current
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable {
-                val intent = Intent(Intent.ACTION_VIEW, info.infoUrl.toUri())
-                context.startActivity(intent)
-            },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clickable {
+                    val intent = Intent(Intent.ACTION_VIEW, info.infoUrl.toUri())
+                    context.startActivity(intent)
+                },
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, Color(0xFF1A73E8)),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Text(
             text = info.title,
             fontSize = 18.sp,
-            modifier = Modifier
-                .padding(16.dp)
+            modifier =
+                Modifier
+                    .padding(16.dp),
         )
     }
 }
@@ -50,7 +52,7 @@ fun InfoItem(info: InfoData){
 fun InfoList(list: List<InfoData>) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 8.dp)
+        contentPadding = PaddingValues(vertical = 8.dp),
     ) {
         items(list.size) { index ->
             InfoItem(info = list[index])

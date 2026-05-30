@@ -39,7 +39,7 @@ fun TimePickerSection(
     selectedTime: Calendar,
     endTime: Calendar?,
     onTimeSelected: (Calendar) -> Unit,
-    onEndTimeSelected: (Calendar?) -> Unit
+    onEndTimeSelected: (Calendar?) -> Unit,
 ) {
     val timeFormat = SimpleDateFormat("a h:mm", Locale.KOREAN)
 
@@ -51,10 +51,11 @@ fun TimePickerSection(
     var endMinute by remember { mutableStateOf(endTime?.get(Calendar.MINUTE)?.toString() ?: "") }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         Text("시간 설정", style = MaterialTheme.typography.titleLarge)
 
@@ -62,7 +63,7 @@ fun TimePickerSection(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -84,7 +85,7 @@ fun TimePickerSection(
                         modifier = Modifier.weight(1f),
                         textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
                     )
 
                     OutlinedTextField(
@@ -97,7 +98,7 @@ fun TimePickerSection(
                         modifier = Modifier.weight(1f),
                         textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
                     )
                 }
             }
@@ -107,7 +108,7 @@ fun TimePickerSection(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -129,7 +130,7 @@ fun TimePickerSection(
                         modifier = Modifier.weight(1f),
                         textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
                     )
 
                     OutlinedTextField(
@@ -142,17 +143,19 @@ fun TimePickerSection(
                         modifier = Modifier.weight(1f),
                         textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
                     )
                 }
             }
         }
     }
-
 }
 
-fun updateCalendarTime(hour: String, minute: String): Calendar? {
-    return try {
+fun updateCalendarTime(
+    hour: String,
+    minute: String,
+): Calendar? =
+    try {
         val h = hour.toInt()
         val m = minute.toInt()
         if (h in 0..23 && m in 0..59) {
@@ -161,8 +164,9 @@ fun updateCalendarTime(hour: String, minute: String): Calendar? {
                 set(Calendar.MINUTE, m)
                 set(Calendar.SECOND, 0)
             }
-        } else null
+        } else {
+            null
+        }
     } catch (e: NumberFormatException) {
         null
     }
-}

@@ -19,22 +19,24 @@ import androidx.navigation.NavController
 @Composable
 fun SettingsScreen(navController: NavController) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable {
-                navController.navigate("information")
-            },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clickable {
+                    navController.navigate("information")
+                },
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, Color(0xFF1A73E8)),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Text(
             text = "의료 정보 - 메디컬타임즈",
             fontSize = 18.sp,
-            modifier = Modifier
-                .padding(16.dp)
+            modifier =
+                Modifier
+                    .padding(16.dp),
         )
     }
 }

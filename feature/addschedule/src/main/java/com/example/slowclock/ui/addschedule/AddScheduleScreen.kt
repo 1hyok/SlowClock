@@ -46,7 +46,7 @@ fun AddScheduleScreen(
     initialTitle: String? = null,
     onNavigateBack: (Boolean) -> Unit,
     viewModel: AddScheduleViewModel = hiltViewModel(),
-    onNavigateToRecommendation: () -> Unit
+    onNavigateToRecommendation: () -> Unit,
 ) {
     val scrollState = remember { ScrollState(0) }
     val uiState by viewModel.uiState.collectAsState()
@@ -80,7 +80,7 @@ fun AddScheduleScreen(
                     Text(
                         text = if (isEditMode) "일정 수정" else "일정 추가",
                         style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 },
                 navigationIcon = {
@@ -89,50 +89,56 @@ fun AddScheduleScreen(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "뒤로가기",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(28.dp),
                         )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                colors =
+                    TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
             )
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { viewModel.saveSchedule(context) },
-                containerColor = if (uiState.canSave)
-                    MaterialTheme.colorScheme.secondary
-                else
-                    MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.size(64.dp)
+                containerColor =
+                    if (uiState.canSave) {
+                        MaterialTheme.colorScheme.secondary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                modifier = Modifier.size(64.dp),
             ) {
                 Icon(
                     Icons.Default.Check,
                     contentDescription = "저장",
-                    tint = if (uiState.canSave)
-                        MaterialTheme.colorScheme.onSecondary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(28.dp)
+                    tint =
+                        if (uiState.canSave) {
+                            MaterialTheme.colorScheme.onSecondary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    modifier = Modifier.size(28.dp),
                 )
             }
-        }
+        },
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(scrollState)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(28.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(scrollState)
+                    .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
             // 일정 제목 입력 (분리된 컴포넌트)
             TitleInputSection(
                 title = uiState.title,
                 description = uiState.description,
                 onTitleChange = viewModel::updateTitle,
-                onDescriptionChange = viewModel::updateDescription
+                onDescriptionChange = viewModel::updateDescription,
             )
 
             // 시간 선택
@@ -141,49 +147,50 @@ fun AddScheduleScreen(
                 endTime = uiState.endTime,
                 onTimeSelected = viewModel::updateTime,
                 onEndTimeSelected = viewModel::updateEndTime,
-             )
+            )
 
             // 반복 일정 설정 (분리된 컴포넌트)
             RecurringSection(
                 recurring = uiState.recurring,
                 recurringType = uiState.recurringType,
                 onRecurringChange = viewModel::updateRecurring,
-                onRecurringTypeChange = viewModel::updateRecurringType
+                onRecurringTypeChange = viewModel::updateRecurringType,
             )
 
             // 추천 기능 영역
             RecommendationPlaceholder(
-                onNavigateToRecommendation = onNavigateToRecommendation
+                onNavigateToRecommendation = onNavigateToRecommendation,
             )
 
             // 에러 메시지
             if (uiState.error != null) {
                 Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                        ),
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Text(
                             text = uiState.error!!.message,
                             color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
                         )
 
                         if (uiState.canRetry) {
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 OutlinedButton(
                                     onClick = { viewModel.clearError() },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
                                 ) {
                                     Text("닫기")
                                 }
 
                                 Button(
                                     onClick = { viewModel.retryLastAction(context) },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
                                 ) {
                                     Text("다시 시도")
                                 }
@@ -196,22 +203,23 @@ fun AddScheduleScreen(
             // 로딩 상태
             if (uiState.isLoading) {
                 Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                    colors =
+                        CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
                 ) {
                     Row(
                         modifier = Modifier.padding(20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
                             text = "일정을 저장하는 중...",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
                 }

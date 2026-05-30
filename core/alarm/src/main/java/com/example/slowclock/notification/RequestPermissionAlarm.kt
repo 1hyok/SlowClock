@@ -15,4 +15,3 @@ fun requestExactAlarmPermissionIfNeeded(context: Context) {
         }
     }
 }
-

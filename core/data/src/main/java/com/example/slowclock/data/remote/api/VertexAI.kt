@@ -13,34 +13,34 @@ interface VertexAIService {
         @Path("location") location: String,
         @Path("modelId") modelId: String,
         @Body request: GenerateContentRequest,
-        @Header("Authorization") auth: String
+        @Header("Authorization") auth: String,
     ): GenerateContentResponse
 }
 
 // 요청/응답 모델
 data class GenerateContentRequest(
     val contents: List<Content>,
-    val generationConfig: GenerationConfig
+    val generationConfig: GenerationConfig,
 )
 
 data class Content(
     val role: String,
-    val parts: List<Part>
+    val parts: List<Part>,
 )
 
 data class Part(
-    val text: String
+    val text: String,
 )
 
 data class GenerationConfig(
     val maxOutputTokens: Int,
-    val temperature: Float
+    val temperature: Float,
 )
 
 data class GenerateContentResponse(
-    val candidates: List<Candidate>
+    val candidates: List<Candidate>,
 )
 
 data class Candidate(
-    val content: Content
+    val content: Content,
 )

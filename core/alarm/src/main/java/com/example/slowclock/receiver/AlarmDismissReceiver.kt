@@ -7,7 +7,10 @@ import android.content.Intent
 import android.util.Log
 
 class AlarmDismissReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
         Log.d("AlarmDismissReceiver", "알림 닫기 버튼 클릭됨")
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

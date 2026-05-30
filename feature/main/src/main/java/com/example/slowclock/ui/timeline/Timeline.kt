@@ -37,66 +37,72 @@ import java.util.Locale
 @Composable
 fun Timeline(
     height: Dp,
-    items: List<Schedule>
+    items: List<Schedule>,
 ) {
     val sortedItems = items.sortedBy { it.startTime.seconds }
     val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
     ) {
         // 전체 세로선: Box 전체 높이를 따라 고정
         Divider(
             color = Color(0xFF3A5CCC),
-            modifier = Modifier
-                .width(2.dp)
-                .fillMaxHeight()
-                .align(Alignment.Center)
+            modifier =
+                Modifier
+                    .width(2.dp)
+                    .fillMaxHeight()
+                    .align(Alignment.Center),
         )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(60.dp),
-            contentPadding = PaddingValues(vertical = 24.dp)
+            contentPadding = PaddingValues(vertical = 24.dp),
         ) {
             itemsIndexed(sortedItems) { index, item ->
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
                 ) {
                     // 점
                     Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .align(Alignment.Center)
-                            .background(Color(0xFF3A5CCC), shape = CircleShape)
+                        modifier =
+                            Modifier
+                                .size(10.dp)
+                                .align(Alignment.Center)
+                                .background(Color(0xFF3A5CCC), shape = CircleShape),
                     )
 
                     val alignStart = index % 2 == 0
                     Card(
-                        modifier = Modifier
-                            .align(if (alignStart) Alignment.CenterStart else Alignment.CenterEnd)
-                            .padding(horizontal = 40.dp),
+                        modifier =
+                            Modifier
+                                .align(if (alignStart) Alignment.CenterStart else Alignment.CenterEnd)
+                                .padding(horizontal = 40.dp),
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.dp, if (item.completed) Color.Transparent else Color(0xFF1A73E8)),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (item.completed) Color(0xFFE6F4EA) else Color.White
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor = if (item.completed) Color(0xFFE6F4EA) else Color.White,
+                            ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = item.title,
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                             Text(
                                 text = timeFormat.format(item.startTime.toDate()),
                                 fontSize = 12.sp,
-                                color = Color.Gray
+                                color = Color.Gray,
                             )
                         }
                     }
@@ -104,5 +110,4 @@ fun Timeline(
             }
         }
     }
-
 }

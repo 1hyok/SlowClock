@@ -6,12 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
-import com.example.slowclock.receiver.AlarmReceiver
 import com.example.slowclock.data.model.Schedule
+import com.example.slowclock.receiver.AlarmReceiver
 import java.util.*
 
 object ScheduleAlarmHelper {
-
     private const val TAG = "ScheduleAlarmHelper"
     private const val END_ALARM_OFFSET = 9999
 
@@ -21,7 +20,11 @@ object ScheduleAlarmHelper {
      * @param schedule 스케줄 정보
      * @param isFullScreen 풀스크린 알람 여부 (기본값: false)
      */
-    fun scheduleAlarm(context: Context, schedule: Schedule, isFullScreen: Boolean = true) {
+    fun scheduleAlarm(
+        context: Context,
+        schedule: Schedule,
+        isFullScreen: Boolean = true,
+    ) {
         // 기존 알람 취소 후 새로 예약
         cancelAlarm(context, schedule)
 
@@ -49,7 +52,7 @@ object ScheduleAlarmHelper {
         schedule: Schedule,
         now: Long,
         alarmManager: AlarmManager,
-        isFullScreen: Boolean
+        isFullScreen: Boolean,
     ) {
         schedule.startTime?.toDate()?.time?.takeIf { it > now }?.let { triggerTime ->
             val intent = createAlarmIntent(context, schedule, "시작", isFullScreen)
@@ -75,7 +78,7 @@ object ScheduleAlarmHelper {
         schedule: Schedule,
         now: Long,
         alarmManager: AlarmManager,
-        isFullScreen: Boolean
+        isFullScreen: Boolean,
     ) {
         schedule.endTime?.toDate()?.time?.takeIf { it > now }?.let { triggerTime ->
             val intent = createAlarmIntent(context, schedule, "종료", isFullScreen)
@@ -100,40 +103,48 @@ object ScheduleAlarmHelper {
         context: Context,
         schedule: Schedule,
         type: String,
-        isFullScreen: Boolean
-    ): Intent {
-        return Intent(context, AlarmReceiver::class.java).apply {
+        isFullScreen: Boolean,
+    ): Intent =
+        Intent(context, AlarmReceiver::class.java).apply {
             putExtra("title", "${schedule.title} ($type)")
             putExtra("desc", schedule.description ?: "")
             putExtra("isFullScreen", isFullScreen)
             putExtra("scheduleId", schedule.id)
             putExtra("alarmType", type)
         }
-    }
 
     /**
      * PendingIntent를 생성합니다.
      */
-    private fun createPendingIntent(context: Context, intent: Intent, requestCode: Int): PendingIntent {
-        return PendingIntent.getBroadcast(
+    private fun createPendingIntent(
+        context: Context,
+        intent: Intent,
+        requestCode: Int,
+    ): PendingIntent =
+        PendingIntent.getBroadcast(
             context,
             requestCode,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-    }
 
     /**
      * 정확한 알람을 설정합니다.
      */
-    private fun setExactAlarm(alarmManager: AlarmManager, triggerTime: Long, pendingIntent: PendingIntent) {
+    private fun setExactAlarm(
+        alarmManager: AlarmManager,
+        triggerTime: Long,
+        pendingIntent: PendingIntent,
+    ) {
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
             }
+
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT -> {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
             }
+
             else -> {
                 alarmManager.set(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
             }
@@ -143,7 +154,10 @@ object ScheduleAlarmHelper {
     /**
      * 스케줄의 모든 알람을 취소합니다.
      */
-    fun cancelAlarm(context: Context, schedule: Schedule) {
+    fun cancelAlarm(
+        context: Context,
+        schedule: Schedule,
+    ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         // 시작 알람 취소
@@ -161,22 +175,24 @@ object ScheduleAlarmHelper {
         alarmManager: AlarmManager,
         schedule: Schedule,
         requestCode: Int,
-        type: String
+        type: String,
     ) {
         try {
-            val intent = Intent(context, AlarmReceiver::class.java).apply {
-                putExtra("title", "${schedule.title} ($type)")
-                putExtra("desc", schedule.description ?: "")
-                putExtra("scheduleId", schedule.id)
-                putExtra("alarmType", type)
-            }
+            val intent =
+                Intent(context, AlarmReceiver::class.java).apply {
+                    putExtra("title", "${schedule.title} ($type)")
+                    putExtra("desc", schedule.description ?: "")
+                    putExtra("scheduleId", schedule.id)
+                    putExtra("alarmType", type)
+                }
 
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                requestCode,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            val pendingIntent =
+                PendingIntent.getBroadcast(
+                    context,
+                    requestCode,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
 
             alarmManager.cancel(pendingIntent)
             pendingIntent.cancel() // PendingIntent도 함께 취소
@@ -193,7 +209,7 @@ object ScheduleAlarmHelper {
         context: Context,
         schedule: Schedule,
         minutesBefore: Int = 10,
-        isFullScreen: Boolean = false
+        isFullScreen: Boolean = false,
     ) {
         schedule.startTime?.toDate()?.time?.let { startTime ->
             val reminderTime = startTime - (minutesBefore * 60 * 1000)
@@ -201,13 +217,14 @@ object ScheduleAlarmHelper {
 
             if (reminderTime > now) {
                 val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                val intent = Intent(context, AlarmReceiver::class.java).apply {
-                    putExtra("title", "미리 알림: ${schedule.title}")
-                    putExtra("desc", "${minutesBefore}분 후 시작됩니다")
-                    putExtra("isFullScreen", isFullScreen)
-                    putExtra("scheduleId", schedule.id)
-                    putExtra("alarmType", "reminder")
-                }
+                val intent =
+                    Intent(context, AlarmReceiver::class.java).apply {
+                        putExtra("title", "미리 알림: ${schedule.title}")
+                        putExtra("desc", "${minutesBefore}분 후 시작됩니다")
+                        putExtra("isFullScreen", isFullScreen)
+                        putExtra("scheduleId", schedule.id)
+                        putExtra("alarmType", "reminder")
+                    }
 
                 val requestCode = generateReminderRequestCode(schedule.id)
                 val pendingIntent = createPendingIntent(context, intent, requestCode)
@@ -225,18 +242,22 @@ object ScheduleAlarmHelper {
     /**
      * 미리 알림 알람을 취소합니다.
      */
-    fun cancelReminderAlarm(context: Context, schedule: Schedule) {
+    fun cancelReminderAlarm(
+        context: Context,
+        schedule: Schedule,
+    ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val requestCode = generateReminderRequestCode(schedule.id)
 
         try {
             val intent = Intent(context, AlarmReceiver::class.java)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                requestCode,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            val pendingIntent =
+                PendingIntent.getBroadcast(
+                    context,
+                    requestCode,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
 
             alarmManager.cancel(pendingIntent)
             pendingIntent.cancel()
@@ -253,7 +274,7 @@ object ScheduleAlarmHelper {
         context: Context,
         schedule: Schedule,
         repeatInterval: Long = AlarmManager.INTERVAL_DAY,
-        isFullScreen: Boolean = false
+        isFullScreen: Boolean = false,
     ) {
         schedule.startTime?.toDate()?.time?.let { startTime ->
             val now = System.currentTimeMillis()
@@ -274,7 +295,7 @@ object ScheduleAlarmHelper {
                     AlarmManager.RTC_WAKEUP,
                     nextTriggerTime,
                     repeatInterval,
-                    pendingIntent
+                    pendingIntent,
                 )
                 Log.d(TAG, "⏰ 반복 알람 예약 성공: ${schedule.title} at ${Date(nextTriggerTime)} (간격: ${repeatInterval}ms)")
             } catch (e: Exception) {
@@ -287,33 +308,42 @@ object ScheduleAlarmHelper {
      * RequestCode 생성 함수들
      */
     private fun generateStartRequestCode(scheduleId: String): Int = scheduleId.hashCode()
+
     private fun generateEndRequestCode(scheduleId: String): Int = scheduleId.hashCode() + END_ALARM_OFFSET
+
     private fun generateReminderRequestCode(scheduleId: String): Int = scheduleId.hashCode() + 5000
+
     private fun generateRepeatingRequestCode(scheduleId: String): Int = scheduleId.hashCode() + 7000
 
     /**
      * 알람 상태를 확인합니다.
      */
-    fun isAlarmScheduled(context: Context, schedule: Schedule): Boolean {
-        return try {
+    fun isAlarmScheduled(
+        context: Context,
+        schedule: Schedule,
+    ): Boolean =
+        try {
             val intent = Intent(context, AlarmReceiver::class.java)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                generateStartRequestCode(schedule.id),
-                intent,
-                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-            )
+            val pendingIntent =
+                PendingIntent.getBroadcast(
+                    context,
+                    generateStartRequestCode(schedule.id),
+                    intent,
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+                )
             pendingIntent != null
         } catch (e: Exception) {
             Log.e(TAG, "알람 상태 확인 실패: ${e.message}")
             false
         }
-    }
 
     /**
      * 모든 알람을 취소합니다 (디버깅/테스트용)
      */
-    fun cancelAllAlarms(context: Context, schedules: List<Schedule>) {
+    fun cancelAllAlarms(
+        context: Context,
+        schedules: List<Schedule>,
+    ) {
         schedules.forEach { schedule ->
             cancelAlarm(context, schedule)
             cancelReminderAlarm(context, schedule)

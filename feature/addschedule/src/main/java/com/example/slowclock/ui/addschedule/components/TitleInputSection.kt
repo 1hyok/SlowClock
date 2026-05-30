@@ -19,19 +19,19 @@ fun TitleInputSection(
     title: String,
     description: String,
     onTitleChange: (String) -> Unit,
-    onDescriptionChange: (String) -> Unit
+    onDescriptionChange: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text(
                 text = "할 일",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 16.dp),
             )
             OutlinedTextField(
                 value = title,
@@ -40,13 +40,14 @@ fun TitleInputSection(
                     Text(
                         "무엇을 할까요?",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                textStyle =
+                    MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -55,7 +56,7 @@ fun TitleInputSection(
                 text = "상세 내용 (선택사항)",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 12.dp),
             )
             OutlinedTextField(
                 value = description,
@@ -64,14 +65,15 @@ fun TitleInputSection(
                     Text(
                         "자세한 내용을 입력하세요",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 3,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                textStyle =
+                    MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
             )
         }
     }

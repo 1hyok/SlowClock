@@ -1,6 +1,5 @@
 package com.example.slowclock.ui.familygroup
 
-import androidx.hilt.navigation.compose.hiltViewModel
 import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +12,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.collectAsState
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun FamilyGroupManageScreen(viewModel: FamilyGroupViewModel = hiltViewModel()) {
@@ -42,7 +42,7 @@ fun FamilyGroupManageScreen(viewModel: FamilyGroupViewModel = hiltViewModel()) {
                 value = groupId,
                 onValueChange = { groupId = it },
                 label = { Text("그룹 ID 입력") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             Button(onClick = {
                 viewModel.joinGroup(groupId)
@@ -60,4 +60,3 @@ fun FamilyGroupManageScreen(viewModel: FamilyGroupViewModel = hiltViewModel()) {
         Text(text = statusMessage, modifier = Modifier.padding(top = 8.dp))
     }
 }
-

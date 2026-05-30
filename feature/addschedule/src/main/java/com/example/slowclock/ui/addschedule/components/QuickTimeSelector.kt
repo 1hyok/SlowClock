@@ -18,9 +18,7 @@ import androidx.compose.ui.unit.dp
 import java.util.Calendar
 
 @Composable
-fun QuickTimeSelector(
-    onTimeSelected: (Calendar) -> Unit
-) {
+fun QuickTimeSelector(onTimeSelected: (Calendar) -> Unit) {
     val quickTimes = remember { getQuickTimeOptions() }
 
     Column {
@@ -28,22 +26,22 @@ fun QuickTimeSelector(
             text = "빠른 선택",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(bottom = 12.dp),
         )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             quickTimes.take(3).forEach { (label, calendar) ->
                 OutlinedButton(
                     onClick = { onTimeSelected(calendar) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(
                         label,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -53,17 +51,17 @@ fun QuickTimeSelector(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             quickTimes.drop(3).forEach { (label, calendar) ->
                 OutlinedButton(
                     onClick = { onTimeSelected(calendar) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(
                         label,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -71,29 +69,33 @@ fun QuickTimeSelector(
     }
 }
 
-private fun getQuickTimeOptions(): List<Pair<String, Calendar>> {
-    return listOf(
+private fun getQuickTimeOptions(): List<Pair<String, Calendar>> =
+    listOf(
         "지금" to Calendar.getInstance(),
-        "30분 후" to Calendar.getInstance().apply {
-            add(Calendar.MINUTE, 30)
-        },
-        "1시간 후" to Calendar.getInstance().apply {
-            add(Calendar.HOUR, 1)
-        },
-        "오후 2시" to Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 14)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-        },
-        "오후 6시" to Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 18)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-        },
-        "오후 8시" to Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 20)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-        }
+        "30분 후" to
+            Calendar.getInstance().apply {
+                add(Calendar.MINUTE, 30)
+            },
+        "1시간 후" to
+            Calendar.getInstance().apply {
+                add(Calendar.HOUR, 1)
+            },
+        "오후 2시" to
+            Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 14)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+            },
+        "오후 6시" to
+            Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 18)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+            },
+        "오후 8시" to
+            Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 20)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+            },
     )
-}

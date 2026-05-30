@@ -15,7 +15,6 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class AlarmFullScreenActivity : Activity() {
-
     private var mediaPlayer: MediaPlayer? = null
     private val timeHandler = Handler(Looper.getMainLooper())
     private lateinit var timeRunnable: Runnable
@@ -30,9 +29,9 @@ class AlarmFullScreenActivity : Activity() {
         } else {
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD,
             )
         }
 
@@ -58,27 +57,30 @@ class AlarmFullScreenActivity : Activity() {
     }
 
     private fun updateCurrentTime(timeTextView: TextView) {
-        timeRunnable = object : Runnable {
-            override fun run() {
-                val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                timeTextView.text = sdf.format(Date())
-                timeHandler.postDelayed(this, 1000)
+        timeRunnable =
+            object : Runnable {
+                override fun run() {
+                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    timeTextView.text = sdf.format(Date())
+                    timeHandler.postDelayed(this, 1000)
+                }
             }
-        }
         timeHandler.post(timeRunnable)
     }
 
     private fun playAlarmSound() {
         try {
-            val alarmUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val alarmUri: Uri =
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(this@AlarmFullScreenActivity, alarmUri)
-                isLooping = true
-                prepare()
-                start()
-            }
+            mediaPlayer =
+                MediaPlayer().apply {
+                    setDataSource(this@AlarmFullScreenActivity, alarmUri)
+                    isLooping = true
+                    prepare()
+                    start()
+                }
         } catch (e: Exception) {
             e.printStackTrace()
         }

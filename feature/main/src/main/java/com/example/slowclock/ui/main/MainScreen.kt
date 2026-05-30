@@ -46,9 +46,9 @@ import com.example.slowclock.ui.main.components.EmptyStateCard
 import com.example.slowclock.ui.main.components.ScheduleDetailDialog
 import com.example.slowclock.ui.main.components.SharedRemindersSection
 import com.example.slowclock.ui.main.components.TodayScheduleSection
-import java.util.Calendar
 import com.google.firebase.auth.FirebaseAuth
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -61,7 +61,7 @@ fun MainScreen(
     onEditSchedule: (String) -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    onRefreshHandled: () -> Unit = {}
+    onRefreshHandled: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val dateFormat = SimpleDateFormat("yyyy년 M월 d일 EEEE", Locale.KOREAN)
@@ -97,10 +97,9 @@ fun MainScreen(
             onDelete = {
                 viewModel.hideScheduleDetail()
                 viewModel.showDeleteConfirmDialog(schedule.id)
-            }
+            },
         )
     }
-
 
     // 삭제 확인 다이얼로그 (이것도 필요함)
     if (uiState.showDeleteConfirmDialog && uiState.scheduleToDelete != null) {
@@ -109,7 +108,7 @@ fun MainScreen(
             onConfirm = {
                 viewModel.deleteSchedule(uiState.scheduleToDelete!!.id)
             },
-            onDismiss = { viewModel.hideDeleteConfirmDialog() }
+            onDismiss = { viewModel.hideDeleteConfirmDialog() },
         )
     }
 
@@ -125,17 +124,17 @@ fun MainScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
                             text = "느린시계",
                             style = MaterialTheme.typography.headlineLarge, // fontSize 대신 style 사용
-                            color = MaterialTheme.colorScheme.primary // 하드코딩 색상 제거
+                            color = MaterialTheme.colorScheme.primary, // 하드코딩 색상 제거
                         )
                         Text(
                             text = dateFormat.format(Date()),
                             style = MaterialTheme.typography.bodyLarge, // fontSize 대신 style 사용
-                            color = MaterialTheme.colorScheme.onSurfaceVariant // 하드코딩 색상 제거
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, // 하드코딩 색상 제거
                         )
                     }
                 },
@@ -143,62 +142,65 @@ fun MainScreen(
                     // 프로필 버튼 (더 크게)
                     IconButton(
                         onClick = onNavigateToProfile,
-                        modifier = Modifier.size(56.dp) // 48dp → 56dp
+                        modifier = Modifier.size(56.dp), // 48dp → 56dp
                     ) {
                         Icon(
                             Icons.Default.Person,
                             contentDescription = "내 정보",
                             tint = MaterialTheme.colorScheme.primary, // 하드코딩 색상 제거
-                            modifier = Modifier.size(32.dp) // 28dp → 32dp
+                            modifier = Modifier.size(32.dp), // 28dp → 32dp
                         )
                     }
                     // 설정(share code) 버튼
                     IconButton(
                         onClick = onNavigateToSettings,
-                        modifier = Modifier.size(56.dp)
+                        modifier = Modifier.size(56.dp),
                     ) {
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = "설정",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(32.dp),
                         )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface // 하드코딩 색상 제거
-                )
+                colors =
+                    TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface, // 하드코딩 색상 제거
+                    ),
             )
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddSchedule,
                 containerColor = MaterialTheme.colorScheme.primary, // 하드코딩 색상 제거
-                modifier = Modifier.size(72.dp) // 64dp → 72dp
+                modifier = Modifier.size(72.dp), // 64dp → 72dp
             ) {
                 Icon(
                     Icons.Default.Add,
                     contentDescription = "일정 추가",
                     tint = MaterialTheme.colorScheme.onPrimary, // 하드코딩 색상 제거
-                    modifier = Modifier.size(36.dp) // 32dp → 36dp
+                    modifier = Modifier.size(36.dp), // 32dp → 36dp
                 )
             }
-        }
+        },
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background), // 하드코딩 색상 제거
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .background(MaterialTheme.colorScheme.background),
+            // 하드코딩 색상 제거
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp), // 더 큰 패딩
-            verticalArrangement = Arrangement.spacedBy(24.dp) // 더 큰 간격
+            verticalArrangement = Arrangement.spacedBy(24.dp), // 더 큰 간격
         ) {
             // 🟡 지금 할 일
             uiState.currentSchedule?.let { schedule ->
                 item {
                     CurrentTaskSection(
                         schedule = schedule,
-                        onShowDetail = { viewModel.showScheduleDetail(schedule.id) }
+                        onShowDetail = { viewModel.showScheduleDetail(schedule.id) },
                     )
                 }
             }
@@ -221,7 +223,7 @@ fun MainScreen(
                         timeFormat = timeFormat,
                         onToggleComplete = { scheduleId ->
                             viewModel.toggleSharedReminderComplete(scheduleId, context)
-                        }
+                        },
                     )
                 }
             }
@@ -240,7 +242,7 @@ fun MainScreen(
                         error = uiState.error!!,
                         canRetry = uiState.canRetry,
                         onRetry = { viewModel.retryLastAction() },
-                        onDismiss = { viewModel.clearError() }
+                        onDismiss = { viewModel.clearError() },
                     )
                 }
             }

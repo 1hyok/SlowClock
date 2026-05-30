@@ -11,35 +11,36 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun RecommendationPlaceholder(
-    onNavigateToRecommendation: () -> Unit
-) {
+fun RecommendationPlaceholder(onNavigateToRecommendation: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onNavigateToRecommendation() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onNavigateToRecommendation() },
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp)
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .padding(24.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "🔮 일정 추천해드릴까요?",
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Text(
                     text = "터치하면 추천 기능으로 이동합니다",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
             }
         }

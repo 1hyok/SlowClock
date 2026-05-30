@@ -14,9 +14,9 @@ val Pink40 = Color(0xFF7D5260)
 // ============== 접근성 강화 색상 시스템 ==============
 
 // 텍스트 색상 (고대비)
-val TextPrimary = Color(0xFF212121)    // 검은색에 가까운 회색
-val TextSecondary = Color(0xFF424242)  // 진한 회색
-val TextDisabled = Color(0xFF757575)   // 비활성 텍스트
+val TextPrimary = Color(0xFF212121) // 검은색에 가까운 회색
+val TextSecondary = Color(0xFF424242) // 진한 회색
+val TextDisabled = Color(0xFF757575) // 비활성 텍스트
 
 // 배경 색상
-val Surface = Color(0xFFFFFFFF)        // 순백색
+val Surface = Color(0xFFFFFFFF) // 순백색

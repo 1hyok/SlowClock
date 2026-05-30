@@ -16,9 +16,11 @@ class SlowClockApplication : Application() {
 
         // Firestore 설정
         val firestore = FirebaseFirestore.getInstance()
-        val settings = FirebaseFirestoreSettings.Builder()
-            .setPersistenceEnabled(true) // 오프라인 지원 활성화
-            .build()
+        val settings =
+            FirebaseFirestoreSettings
+                .Builder()
+                .setPersistenceEnabled(true) // 오프라인 지원 활성화
+                .build()
         firestore.firestoreSettings = settings
     }
 }

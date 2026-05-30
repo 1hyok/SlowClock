@@ -53,13 +53,14 @@ class FamilyGroupRepository {
     suspend fun createFamilyGroup(name: String): String? {
         val uid = auth.currentUser?.uid ?: return null
 
-        val familyGroup = FamilyGroup(
-            name = name,
-            ownerUserId = uid,
-            memberIds = listOf(uid),
-            createdAt = Timestamp.now(),
-            updatedAt = Timestamp.now()
-        )
+        val familyGroup =
+            FamilyGroup(
+                name = name,
+                ownerUserId = uid,
+                memberIds = listOf(uid),
+                createdAt = Timestamp.now(),
+                updatedAt = Timestamp.now(),
+            )
 
         return try {
             val docRef = familyGroupsCollection.document()
@@ -72,46 +73,51 @@ class FamilyGroupRepository {
     }
 
     // 가족 그룹에 멤버 추가
-    suspend fun addMemberToGroup(groupId: String, memberId: String): Boolean {
-        return try {
-            familyGroupsCollection.document(groupId)
+    suspend fun addMemberToGroup(
+        groupId: String,
+        memberId: String,
+    ): Boolean =
+        try {
+            familyGroupsCollection
+                .document(groupId)
                 .update(
                     mapOf(
                         "memberIds" to FieldValue.arrayUnion(memberId),
-                        "updatedAt" to Timestamp.now()
-                    )
+                        "updatedAt" to Timestamp.now(),
+                    ),
                 ).await()
             true
         } catch (e: Exception) {
             false
         }
-    }
 
     // 가족 그룹에서 멤버 제거
-    suspend fun removeMemberFromGroup(groupId: String, memberId: String): Boolean {
-        return try {
-            familyGroupsCollection.document(groupId)
+    suspend fun removeMemberFromGroup(
+        groupId: String,
+        memberId: String,
+    ): Boolean =
+        try {
+            familyGroupsCollection
+                .document(groupId)
                 .update(
                     mapOf(
                         "memberIds" to FieldValue.arrayRemove(memberId),
-                        "updatedAt" to Timestamp.now()
-                    )
+                        "updatedAt" to Timestamp.now(),
+                    ),
                 ).await()
             true
         } catch (e: Exception) {
             false
         }
-    }
 
     // 가족 그룹 정보 가져오기
-    suspend fun getFamilyGroupById(groupId: String): FamilyGroup? {
-        return try {
+    suspend fun getFamilyGroupById(groupId: String): FamilyGroup? =
+        try {
             val document = familyGroupsCollection.document(groupId).get().await()
             document.toObject<FamilyGroup>()
         } catch (e: Exception) {
             null
         }
-    }
 
     // 가족 그룹 삭제
     suspend fun deleteFamilyGroup(groupId: String): Boolean {
@@ -127,6 +133,7 @@ class FamilyGroupRepository {
             return false
         }
     }
+
     // 4. 해당 그룹 전체의 FCM 토큰 쿼리 (코루틴)
     suspend fun fetchGroupMembersFcmTokens(groupId: String): List<String> {
         val group = getFamilyGroupById(groupId) ?: return emptyList()
@@ -141,14 +148,19 @@ class FamilyGroupRepository {
     }
 
     // 5. 그룹 전체에게 FCM 알림 발송
-    suspend fun sendAlertToGroup(context: Context, groupId: String, title: String, message: String) {
+    suspend fun sendAlertToGroup(
+        context: Context,
+        groupId: String,
+        title: String,
+        message: String,
+    ) {
         val tokens = fetchGroupMembersFcmTokens(groupId)
         tokens.forEach { token ->
             GuardianNotifier.sendReminderToUser(
                 context = context,
                 fcmToken = token,
                 title = title,
-                message = message
+                message = message,
             )
         }
     }

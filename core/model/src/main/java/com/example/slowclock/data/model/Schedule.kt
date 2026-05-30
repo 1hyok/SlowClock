@@ -18,5 +18,5 @@ data class Schedule(
     val recurring: Boolean = false,
     val recurringType: String? = null,
     val createdAt: Timestamp = Timestamp.now(),
-    val updatedAt: Timestamp = Timestamp.now()
+    val updatedAt: Timestamp = Timestamp.now(),
 )

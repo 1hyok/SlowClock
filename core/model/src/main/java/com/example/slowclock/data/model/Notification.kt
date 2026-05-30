@@ -11,5 +11,5 @@ data class Notification(
     val message: String = "",
     val relatedScheduleId: String? = null,
     val isRead: Boolean = false,
-    val createdAt: Timestamp = Timestamp.now()
+    val createdAt: Timestamp = Timestamp.now(),
 )

@@ -29,24 +29,28 @@ fun SharedRemindersSection(
     sharedReminders: List<Schedule>,
     currentUserUid: String?,
     timeFormat: SimpleDateFormat,
-    onToggleComplete: (String) -> Unit
+    onToggleComplete: (String) -> Unit,
 ) {
     if (sharedReminders.isEmpty()) return
     Card(
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFE3F2FD)
-        )
+        shape =
+            androidx.compose.foundation.shape
+                .RoundedCornerShape(16.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(vertical = 8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = Color(0xFFE3F2FD),
+            ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "공유 일정",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.height(8.dp))
             sharedReminders.forEach { schedule ->
@@ -55,13 +59,13 @@ fun SharedRemindersSection(
                         if (schedule.userId == currentUserUid) {
                             IconButton(
                                 onClick = { onToggleComplete(schedule.id) },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(24.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = if (schedule.completed) "완료됨" else "미완료",
                                     tint = if (schedule.completed) Color(0xFF388E3C) else Color.Red,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(18.dp),
                                 )
                             }
                         } else {
@@ -69,44 +73,44 @@ fun SharedRemindersSection(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = if (schedule.completed) "완료됨" else "미완료",
                                 tint = if (schedule.completed) Color(0xFF388E3C) else Color.Red,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
                             )
                         }
                         Text(
                             text = if (schedule.completed) "완료됨" else "미완료",
                             style = MaterialTheme.typography.labelSmall,
                             color = if (schedule.completed) Color(0xFF388E3C) else Color.Red,
-                            modifier = Modifier.padding(start = 4.dp, end = 8.dp)
+                            modifier = Modifier.padding(start = 4.dp, end = 8.dp),
                         )
                         Text(
                             text = schedule.title,
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
                         )
                     }
                     if (schedule.description.isNotBlank()) {
                         Text(
                             text = schedule.description,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     val start = schedule.startTime.toDate()
                     val end = schedule.endTime?.toDate()
-                    val timeText = if (end != null) {
-                        "${timeFormat.format(start)} ~ ${timeFormat.format(end)}"
-                    } else {
-                        timeFormat.format(start)
-                    }
+                    val timeText =
+                        if (end != null) {
+                            "${timeFormat.format(start)} ~ ${timeFormat.format(end)}"
+                        } else {
+                            timeFormat.format(start)
+                        }
                     Text(
                         text = timeText,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
         }
     }
 }
-

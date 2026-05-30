@@ -154,6 +154,5 @@ dependencies {
 // ktlint (org.jlleitschuh.gradle.ktlint) — 버전을 lint.yml 의 ktlint_version 과 통일
 ktlint {
     version.set("1.8.0")
-    android.set(true)
     ignoreFailures.set(false)
 }

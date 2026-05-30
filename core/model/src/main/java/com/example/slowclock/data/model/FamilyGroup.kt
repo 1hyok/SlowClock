@@ -10,5 +10,5 @@ data class FamilyGroup(
     val ownerUserId: String = "",
     val memberIds: List<String> = emptyList(),
     val createdAt: Timestamp = Timestamp.now(),
-    val updatedAt: Timestamp = Timestamp.now()
+    val updatedAt: Timestamp = Timestamp.now(),
 )

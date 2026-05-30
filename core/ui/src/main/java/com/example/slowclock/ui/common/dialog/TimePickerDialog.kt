@@ -31,72 +31,76 @@ fun TimePickerDialog(
     title: String,
     initialTime: Calendar,
     onTimeSelected: (Calendar) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
-    val timePickerState = rememberTimePickerState(
-        initialHour = initialTime.get(Calendar.HOUR_OF_DAY),
-        initialMinute = initialTime.get(Calendar.MINUTE)
-    )
+    val timePickerState =
+        rememberTimePickerState(
+            initialHour = initialTime.get(Calendar.HOUR_OF_DAY),
+            initialMinute = initialTime.get(Calendar.MINUTE),
+        )
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(20.dp),
         ) {
             Column(
                 modifier = Modifier.padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 20.dp)
+                    modifier = Modifier.padding(bottom = 20.dp),
                 )
 
                 TimePicker(
                     state = timePickerState,
-                    colors = TimePickerDefaults.colors(
-                        clockDialColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectorColor = MaterialTheme.colorScheme.primary
-                    )
+                    colors =
+                        TimePickerDefaults.colors(
+                            clockDialColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectorColor = MaterialTheme.colorScheme.primary,
+                        ),
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
                     TextButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(
                             "취소",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
                         )
                     }
 
                     TextButton(
                         onClick = {
-                            val selectedCalendar = Calendar.getInstance().apply {
-                                set(Calendar.HOUR_OF_DAY, timePickerState.hour)
-                                set(Calendar.MINUTE, timePickerState.minute)
-                                set(Calendar.SECOND, 0)
-                            }
+                            val selectedCalendar =
+                                Calendar.getInstance().apply {
+                                    set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                                    set(Calendar.MINUTE, timePickerState.minute)
+                                    set(Calendar.SECOND, 0)
+                                }
                             onTimeSelected(selectedCalendar)
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(
                             "확인",
                             color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
                         )
                     }
                 }
