@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -25,7 +25,7 @@ import com.example.slowclock.ui.settings.SettingsScreen
 
 @Composable
 fun AppNavigation() {
-    val mainViewModel: MainViewModel = viewModel()
+    val mainViewModel: MainViewModel = hiltViewModel()
     val navController = rememberNavController()
     val currentRoute by navController.currentBackStackEntryFlow.collectAsState(
         initial = navController.currentBackStackEntry

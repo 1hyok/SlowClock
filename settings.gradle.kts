@@ -21,3 +21,14 @@ dependencyResolutionManagement {
 
 rootProject.name = "SlowClock"
 include(":app")
+include(":core:model")
+include(":core:common")
+include(":core:ui")
+include(":core:alarm")
+include(":core:data")
+include(":feature:main")
+include(":feature:addschedule")
+include(":feature:recommendation")
+include(":feature:information")
+include(":feature:profile")
+include(":feature:familygroup")
