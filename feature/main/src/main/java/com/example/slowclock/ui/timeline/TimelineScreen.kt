@@ -44,14 +44,14 @@ fun TimelineScreen(
 
     // Timeline 날짜 선택 및 이동
     var calendar = remember { Calendar.getInstance() }
-    val Date = remember { mutableStateOf(formatter.format(calendar.time)) }
+    val date = remember { mutableStateOf(formatter.format(calendar.time)) }
 
     val datePickerDialog =
         DatePickerDialog(
             context,
             { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
                 calendar.set(year, month, dayOfMonth)
-                Date.value = formatter.format(calendar.time)
+                date.value = formatter.format(calendar.time)
             },
             calendar.get(Calendar.YEAR),
             calendar.get(Calendar.MONTH),
@@ -62,7 +62,7 @@ fun TimelineScreen(
     val filteredSchedules =
         uiState.todaySchedules.filter { schedule ->
             val scheduleDate = formatter.format(schedule.startTime.toDate())
-            scheduleDate == Date.value
+            scheduleDate == date.value
         }
 
     // Timeline Screen 컨텐츠
@@ -80,11 +80,11 @@ fun TimelineScreen(
                             if (!hasSwiped) {
                                 if (dragAmount > 100) {
                                     calendar.add(Calendar.DAY_OF_MONTH, -1)
-                                    Date.value = formatter.format(calendar.time)
+                                    date.value = formatter.format(calendar.time)
                                     hasSwiped = true
                                 } else if (dragAmount < -100) {
                                     calendar.add(Calendar.DAY_OF_MONTH, 1)
-                                    Date.value = formatter.format(calendar.time)
+                                    date.value = formatter.format(calendar.time)
                                     hasSwiped = true
                                 }
                             }
@@ -106,7 +106,7 @@ fun TimelineScreen(
             )
             // Timeline 날짜 Text
             Text(
-                text = Date.value,
+                text = date.value,
                 fontSize = 15.sp,
                 color = Color.Gray,
                 modifier =

@@ -18,7 +18,6 @@ import retrofit2.HttpException
 class VertexAIRepository(
     private val context: Context,
 ) {
-    private val TAG = "VertexAI_SLOWCLOCK"
     private val vertexAIService: VertexAIService = VertexAIServiceFactory.create()
 
     suspend fun generateScheduleRecommendation(prompt: String): String? =
@@ -77,4 +76,8 @@ class VertexAIRepository(
             Log.e(TAG, "상세 에러: ${e.stackTraceToString()}")
             null
         }
+
+    companion object {
+        private const val TAG = "VertexAI_SLOWCLOCK"
+    }
 }
