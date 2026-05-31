@@ -24,9 +24,10 @@ import com.example.slowclock.ui.theme.SlowClockTheme
 import com.firebase.ui.auth.AuthUI
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
-
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
     private val dummyDataManager = DummyDataManager()
@@ -65,7 +66,7 @@ class MainActivity : ComponentActivity() {
                 },
                 onError = { error ->
                     Log.e("AUTH", "로그인 실패: $error")
-                }
+                },
             )
 
 // 로그인 상태 확인
@@ -87,7 +88,7 @@ class MainActivity : ComponentActivity() {
                     authManager.ensureShareCodeForUser(
                         currentUser.uid,
                         currentUser.displayName ?: "",
-                        currentUser.email ?: ""
+                        currentUser.email ?: "",
                     )
                 }
                 addDummyData()
@@ -128,17 +129,20 @@ class MainActivity : ComponentActivity() {
         val descriptionText = "일정 시간에 울리는 알림"
         val importance = NotificationManager.IMPORTANCE_HIGH
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
+        val audioAttributes =
+            AudioAttributes
+                .Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
 
-        val channel = NotificationChannel("schedule_channel", name, importance).apply {
-            description = descriptionText
-            enableLights(true)
-            enableVibration(true)
-            setSound(soundUri, audioAttributes) // 🔊 사운드 설정 추가
-        }
+        val channel =
+            NotificationChannel("schedule_channel", name, importance).apply {
+                description = descriptionText
+                enableLights(true)
+                enableVibration(true)
+                setSound(soundUri, audioAttributes) // 🔊 사운드 설정 추가
+            }
 
         val notificationManager: NotificationManager =
             getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -148,12 +152,12 @@ class MainActivity : ComponentActivity() {
     private fun requestNotificationPermission() {
         if (ContextCompat.checkSelfPermission(
                 this,
-                android.Manifest.permission.POST_NOTIFICATIONS
+                android.Manifest.permission.POST_NOTIFICATIONS,
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(
                 arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                1001
+                1001,
             )
         }
     }
@@ -162,13 +166,16 @@ class MainActivity : ComponentActivity() {
         val user = FirebaseAuth.getInstance().currentUser
         if (user != null) {
             FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                db.collection("users").document(user.uid)
+                val db =
+                    com.google.firebase.firestore.FirebaseFirestore
+                        .getInstance()
+                db
+                    .collection("users")
+                    .document(user.uid)
                     .update("fcmToken", token)
                     .addOnSuccessListener { Log.d("FCM", "로그인 후 토큰 Firestore 저장 성공") }
                     .addOnFailureListener { e -> Log.e("FCM", "로그인 후 토큰 Firestore 저장 실패", e) }
             }
         }
     }
-
 }

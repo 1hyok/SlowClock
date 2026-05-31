@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.ktlint.gradle)
     alias(libs.plugins.compose.screenshot)
     alias(libs.plugins.firebase.app.distribution)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
     id("com.google.gms.google-services")
 }
 
@@ -88,6 +90,17 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:model"))
+    implementation(project(":core:common"))
+    implementation(project(":core:ui"))
+    implementation(project(":core:alarm"))
+    implementation(project(":core:data"))
+    implementation(project(":feature:main"))
+    implementation(project(":feature:addschedule"))
+    implementation(project(":feature:recommendation"))
+    implementation(project(":feature:information"))
+    implementation(project(":feature:profile"))
+    implementation(project(":feature:familygroup"))
     implementation(platform("com.google.firebase:firebase-bom:33.14.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation(libs.androidx.core.ktx)
@@ -116,6 +129,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.firebase.ui.auth)
     implementation(libs.volley)
     implementation(libs.androidx.material)
@@ -138,6 +154,5 @@ dependencies {
 // ktlint (org.jlleitschuh.gradle.ktlint) — 버전을 lint.yml 의 ktlint_version 과 통일
 ktlint {
     version.set("1.8.0")
-    android.set(true)
     ignoreFailures.set(false)
 }

@@ -58,6 +58,13 @@ jobs:
           }
           EOF
 
+      # VertexAIRepository 가 core/data 의 R.raw.service_account 를 참조 — 멀티모듈에서 raw 리소스가
+      # 없으면 R.raw 미생성으로 컴파일 실패. CI 는 실 키 불필요(런타임 미실행)라 stub raw 생성.
+      - name: Create stub service_account raw (CI only)
+        run: |
+          mkdir -p core/data/src/main/res/raw
+          printf '%s' '{"type":"service_account","project_id":"ci-stub"}' > core/data/src/main/res/raw/service_account
+
       - name: Run validateScreenshotTest
         run: ./gradlew :app:validateScreenshotTest --parallel
 

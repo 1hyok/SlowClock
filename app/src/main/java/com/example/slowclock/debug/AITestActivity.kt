@@ -51,14 +51,15 @@ fun AITestScreen(aiManager: VertexAIRepository) {
 
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(16.dp)
-                .fillMaxSize()
+            modifier =
+                Modifier
+                    .padding(innerPadding)
+                    .padding(16.dp)
+                    .fillMaxSize(),
         ) {
             Text(
                 text = "AI 테스트",
-                style = MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.headlineMedium,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -67,7 +68,7 @@ fun AITestScreen(aiManager: VertexAIRepository) {
                 value = prompt,
                 onValueChange = { prompt = it },
                 label = { Text("프롬프트") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -83,7 +84,7 @@ fun AITestScreen(aiManager: VertexAIRepository) {
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("실행")
             }
@@ -92,14 +93,14 @@ fun AITestScreen(aiManager: VertexAIRepository) {
 
             Text(
                 text = "결과:",
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = result,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
