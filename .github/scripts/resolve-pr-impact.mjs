@@ -171,7 +171,19 @@ export function resolvePrImpact(changedFiles, modules, dependencies) {
             filePath.startsWith(".github/") ||
             filePath.startsWith("scripts/") ||
             filePath.startsWith("git-hooks/") ||
-            [".dockerignore", ".editorconfig", ".gitignore", ".mcp.json", "Dockerfile.screenshot"].includes(filePath);
+            // Firestore 규칙과 그 테스트는 Android 모듈과 무관하다. 전용 워크플로(firestore-rules.yml)가
+            // 에뮬레이터로 검증하므로 여기서 전체 검증을 강제하지 않는다.
+            filePath.startsWith("firestore-tests/") ||
+            [
+                ".dockerignore",
+                ".editorconfig",
+                ".gitignore",
+                ".mcp.json",
+                "Dockerfile.screenshot",
+                "firebase.json",
+                "firestore.indexes.json",
+                "firestore.rules",
+            ].includes(filePath);
 
         if (IMPACT_POLICY_PATHS.has(filePath)) {
             // A planner or one of its consumers must not be able to classify its own

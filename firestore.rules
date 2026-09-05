@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 사용자 컬렉션 - 본인 데이터만 읽기/쓰기 가능
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // 다른 사용자의 공개 정보 읽기 허용 (이름, 공유코드 등)
+      allow read: if request.auth != null;
+    }
+    
+    // 일정 컬렉션
+    match /schedules/{scheduleId} {
+      // 본인이 만든 일정
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         request.auth.uid == request.resource.data.userId);
+      
+      // 공유 일정은 sharedCode가 비어있지 않으면 누구나 읽기 가능
+      allow read: if request.auth != null && 
+        resource.data.sharedCode != null && 
+        resource.data.sharedCode != "";
+        
+      // 공유 일정 완료 상태 변경 허용
+      allow update: if request.auth != null && 
+        resource.data.sharedCode != null && 
+        resource.data.sharedCode != "" &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed', 'updatedAt']);
+    }
+    
+    // 알림 컬렉션 - 본인 알림만 접근
+    match /notifications/{notificationId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // 일정 추천 - 모든 인증된 사용자가 읽기 가능
+    match /scheduleRecommendations/{recommendationId} {
+      allow read: if request.auth != null;
+      allow write: if false; // 관리자만 쓰기 가능하도록 제한
+    }
+    
+    // 가족 그룹 - 그룹 멤버만 접근 가능
+    match /familyGroups/{groupId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == resource.data.ownerUserId || 
+         request.auth.uid in resource.data.memberIds);
+    }
+    
+    // 공유코드 감시자 (FCM 토큰 저장용)
+    match /shareCodeWatchers/{shareCode}/tokens/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

@@ -1,0 +1,61 @@
+name: Firestore Rules
+
+# 보안 규칙은 앱의 모든 사용자 데이터를 지키는 유일한 방어선이다. 콘솔에서 손으로 고치면
+# 리뷰도 이력도 남지 않으므로 저장소의 firestore.rules 를 정본으로 두고 여기서 검증한다.
+on:
+  pull_request:
+    paths:
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'firebase.json'
+      - 'firestore-tests/**'
+      - '.github/workflows/firestore-rules.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - 'firebase.json'
+      - 'firestore-tests/**'
+      - '.github/workflows/firestore-rules.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-rules-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    name: Verify Firestore security rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # 에뮬레이터는 JVM 위에서 돈다.
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Node
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firestore-tests/package-lock.json
+
+      - name: Install test dependencies
+        working-directory: firestore-tests
+        run: npm ci
+
+      - name: Run rules tests on the Firestore emulator
+        working-directory: firestore-tests
+        run: npm test

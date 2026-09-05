@@ -60,8 +60,13 @@ package-lock.json
 seeds/
 temp/
 *.csv
+# json 은 기본적으로 무시한다. google-services.json 처럼 비밀값이 든 파일이 실수로 들어가는 것을 막는다.
+# 저장소에 있어야 하는 설정 파일은 아래에 하나씩 예외로 적는다.
 *.json
 !package.json
+!package-lock.json
+!firebase.json
+!firestore.indexes.json
 keys/
 # Claude 개인 컨벤션 파일 (.claude/backup 에서 SessionStart 복원)
 CLAUDE.md
