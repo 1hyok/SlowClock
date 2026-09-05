@@ -1,9 +1,6 @@
 package com.example.slowclock.ui.alarm
 
 import android.app.Activity
-import android.media.MediaPlayer
-import android.media.RingtoneManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -18,7 +15,6 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class AlarmFullScreenActivity : Activity() {
-    private var mediaPlayer: MediaPlayer? = null
     private val timeHandler = Handler(Looper.getMainLooper())
     private lateinit var timeRunnable: Runnable
 
@@ -48,12 +44,9 @@ class AlarmFullScreenActivity : Activity() {
         updateCurrentTime(currentTimeText)
 
         findViewById<Button>(R.id.dismissButton).setOnClickListener {
-            stopAlarmSound()
+            dismissAlarm()
             finish()
         }
-
-        // 알람 소리 재생
-        playAlarmSound()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val callback = OnBackInvokedCallback { }
@@ -77,37 +70,13 @@ class AlarmFullScreenActivity : Activity() {
         timeHandler.post(timeRunnable)
     }
 
-    private fun playAlarmSound() {
-        try {
-            val alarmUri: Uri =
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-
-            mediaPlayer =
-                MediaPlayer().apply {
-                    setDataSource(this@AlarmFullScreenActivity, alarmUri)
-                    isLooping = true
-                    prepare()
-                    start()
-                }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun stopAlarmSound() {
-        mediaPlayer?.let {
-            if (it.isPlaying) {
-                it.stop()
-            }
-            it.release()
-        }
-        mediaPlayer = null
+    /** 소리와 진동은 서비스가 낸다. 여기서는 끄라고만 알린다(#122). */
+    private fun dismissAlarm() {
+        startService(AlarmTriggerService.dismissIntent(this))
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        stopAlarmSound()
         timeHandler.removeCallbacks(timeRunnable)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             backGestureCallback?.let(onBackInvokedDispatcher::unregisterOnBackInvokedCallback)
