@@ -20,9 +20,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -55,11 +55,11 @@ fun Timeline(
                 .padding(horizontal = 24.dp),
     ) {
         // 전체 세로선: Box 전체 높이를 따라 고정
-        Divider(
+        VerticalDivider(
             color = MaterialTheme.colorScheme.secondary,
+            thickness = 2.dp,
             modifier =
                 Modifier
-                    .width(2.dp)
                     .fillMaxHeight()
                     .align(Alignment.Center),
         )
