@@ -21,7 +21,7 @@ ktlint = "1.8.0"
 ktlintGradle = "12.1.1"
 composeRules = "0.5.6"
 screenshot = "0.0.1-alpha15"
-firebaseAppDistribution = "5.2.1"
+firebaseAppDistribution = "5.3.0"
 # --- 멀티모듈 DI ---
 hilt = "2.52"
 ksp = "2.0.21-1.0.28"
