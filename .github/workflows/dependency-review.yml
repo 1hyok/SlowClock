@@ -1,0 +1,43 @@
+name: Dependency Review
+
+on:
+  pull_request:
+    paths:
+      - '**/*.gradle'
+      - '**/*.gradle.kts'
+      - '**/*.lockfile'
+      - '**/buildSrc/**'
+      - '**/gradle.properties'
+      - '**/gradlew'
+      - '**/gradlew.bat'
+      - 'gradle/**'
+      - '.github/workflows/dependency-review.yml'
+      - '.github/workflows/dependency-submission.yml'
+      - '.github/workflows/dependency-submission-trusted.yml'
+      - '.github/workflows/dependency-submission-upload.yml'
+
+concurrency:
+  group: dependency-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Review dependency changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # PR snapshot 은 두 workflow 를 거쳐 API 에 올라온다 (fork PR 을 checkout 하지 않기 위한 분리다).
+      #   1. Generate PR Dependency Graph — PR context 에서 artifact 만 만든다.
+      #   2. Submit PR Dependency Graph   — trusted workflow_run 에서 artifact 를 제출한다.
+      # 이 job 은 1번과 동시에 출발하므로 제출이 끝날 때까지 snapshot warning 을 재시도한다.
+      - name: Fail on newly introduced high-severity vulnerabilities
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-scopes: runtime, development, unknown
+          fail-on-severity: high
+          license-check: true
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 1200

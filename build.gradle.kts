@@ -13,5 +13,20 @@ plugins {
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.ktlint.gradle) apply false
     id("com.google.gms.google-services") version "4.4.2" apply false
+}
+
+// ktlint 를 모든 모듈에 적용한다. 종전엔 :app 에만 붙어 있어 core/feature 모듈은 Gradle 로 검사되지 않았다.
+// 버전은 .github/workflows 의 ktlint 와 통일(1.8.0). compose 규칙셋(io.nlopez.compose.rules)도 전 모듈 공통.
+val composeRules = libs.compose.rules
+subprojects {
+    apply(plugin = "org.jlleitschuh.gradle.ktlint")
+    extensions.configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+        version.set("1.8.0")
+        ignoreFailures.set(false)
+    }
+    dependencies {
+        add("ktlintRuleset", composeRules)
+    }
 }

@@ -1,82 +1,134 @@
-name: Static Analysis (Reviewdog)
+name: Static Analysis
 
+# PR 검증은 pr-validation.yml 이 한 번에 부르고, 이 워크플로의 두 job check 를
+# 브랜치 보호에서 required 로 직접 요구한다. concurrency 는 진입점에서 PR 단위로 건다.
+#
+# 트리거를 workflow_call 하나로 두는 것이 요점이다 — on: pull_request 를 함께 남기면
+# 같은 검증과 동일한 이름의 check 가 PR 마다 두 벌씩 돈다.
 on:
-  pull_request:
-    branches: [main]
+  workflow_call:
+    inputs:
+      pull_request_number:
+        required: false
+        default: 0
+        type: number
+      run_ktlint:
+        description: "영향 범위 Ktlint 실행 여부"
+        required: false
+        default: true
+        type: boolean
+      ktlint_tasks:
+        description: "신뢰된 영향도 계산기가 만든 Ktlint task 목록"
+        required: false
+        default: "ktlintCheck"
+        type: string
+      run_android_lint:
+        description: "영향 범위 Android Lint 실행 여부"
+        required: false
+        default: true
+        type: boolean
+      android_lint_tasks:
+        description: "신뢰된 영향도 계산기가 만든 Android Lint task 목록"
+        required: false
+        default: "lintDebug :app:processDebugMainManifest"
+        type: string
+      verify_manifest:
+        description: "app merged manifest 정책 검증 여부"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   ktlint:
     name: Check Code Quality (Ktlint)
+    if: inputs.run_ktlint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
-
-      - name: Run Ktlint
-        uses: ScaCap/action-ktlint@master
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-pr-review # PR 리뷰 댓글로 표시
-          android: true # Android 스타일 가이드 준수
-          fail_on_error: true # 에러 발견 시 빌드 실패
-          level: warning # Warning 이상은 댓글로 표시
-          ktlint_version: "1.8.0" # 로컬(libs.versions.toml)과 버전 통일
+          persist-credentials: false
 
-  android-lint:
-    name: Check Project Issues (Android Lint)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Clone repo
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
 
-      # fail-fast — secret 누락 시 Gradle 까지 가지 않고 즉시 실패
-      # secret 값은 echo 하지 않음 (env 로만 받아서 길이 검사). 누락 키 이름은 안전.
-      - name: Verify required secrets are set
-        env:
-          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
-        run: |
-          missing=""
-          [ -z "$GOOGLE_SERVICES_JSON_B64" ] && missing="$missing GOOGLE_SERVICES_JSON_B64"
-          if [ -n "$missing" ]; then
-            echo "::error::필수 secret 누락:$missing — Settings → Secrets and variables → Actions 에 등록"
-            exit 1
-          fi
-
-      # google-services plugin 이 app/google-services.json 을 요구. 파일은 .gitignore 라
-      # CI 환경엔 없음. base64 인코딩된 secret 으로 받아서 decode.
-      - name: Decode google-services.json
-        env:
-          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
-        run: |
-          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > app/google-services.json
-
-      # core/data 의 R.raw.service_account 컴파일 위해 stub raw 생성 (CI 런타임 미실행).
-      - name: Create stub service_account raw (CI only)
-        run: |
-          mkdir -p core/data/src/main/res/raw
-          printf '%s' '{"type":"service_account","project_id":"ci-stub"}' > core/data/src/main/res/raw/service_account
-
-      - name: Run Android Lint
-        run: ./gradlew lintDebug --continue --parallel
-
-      # 단일 모듈 (:app) 의 lint XML 을 Reviewdog 에 그대로 전달해 위반을 PR 인라인 코멘트로 띄운다.
-      # lintDebug 결과는 app/build/reports/lint-results-debug.xml 에 생성된다.
-      - name: Report Android Lint (Reviewdog)
-        if: always()
-        uses: dvdandroid/action-android-lint@master
+      # 캐싱 소유자는 setup-gradle 하나 — setup-java 의 cache: gradle 은 정책 테스트
+      # (supply-chain-policy.test.mjs)가 금지한다. wrapper 검증도 여기서 fail-closed.
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-pr-review
-          level: warning
-          lint_xml_file: app/build/reports/lint-results-debug.xml
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+
+      # ktlint 를 돌리는 자리는 여기 하나다. 종전에는 ScaCap/action-ktlint(reviewdog)가 PR diff 의
+      # 추가된 줄을, Gradle 태스크가 :app 만 각각 검사해 같은 규칙을 두 번 돌렸다. 루트 build.gradle.kts
+      # 가 모든 모듈에 ktlint 를 적용하므로 ktlintCheck 하나가 저장소 전체를 본다.
+      # 저장소 전체 검사는 유지한다 — 파일을 지우면서 남은 파일에 새로 발생하는 파일 단위
+      # 위반은 diff 필터로 보이지 않는다.
+      - name: Run Ktlint
+        env:
+          GRADLE_TASKS: ${{ inputs.ktlint_tasks }}
+        run: |
+          read -r -a tasks <<< "$GRADLE_TASKS"
+          ./gradlew "${tasks[@]}" --continue --parallel --build-cache
+
+      # 실패한 위치를 Actions 로그 수천 줄이 아니라 job summary 상단에서 바로 보게 한다.
+      # ktlint-gradle 이 모듈마다 남긴 checkstyle XML 을 읽으므로 검사가 다시 돌지 않는다.
+      - name: Summarize ktlint violations
+        if: always()
+        run: node .github/scripts/render-ktlint-summary.mjs
+
+  android-lint:
+    name: Check Project Issues (Android Lint)
+    if: inputs.run_android_lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+
+      - name: Set up CI-only app configuration
+        uses: ./.github/actions/setup-ci-config
+
+      - name: Run Android Lint and build merged manifest
+        env:
+          GRADLE_TASKS: ${{ inputs.android_lint_tasks }}
+        run: |
+          read -r -a tasks <<< "$GRADLE_TASKS"
+          ./gradlew "${tasks[@]}" --continue --parallel --build-cache
+
+      - name: Verify merged Android manifest policy
+        if: inputs.verify_manifest
+        run: >-
+          node .github/scripts/verify-android-manifest.mjs
+          app/build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml
+
+      # 모듈별 lint XML 을 job summary 한 곳에 모은다 — :feature/* · :core/* 위반이
+      # Actions step 로그(수만 줄)에 묻히지 않게 한다. 예전의 reviewdog 도커 액션은 설치 실패가
+      # 파이프 exit 에 묻혀 위반 0건에도 required check 를 red 로 만들었다 — 쓰지 않는다.
+      - name: Summarize Android Lint violations
+        if: always()
+        run: node .github/scripts/render-android-lint-summary.mjs

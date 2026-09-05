@@ -21,6 +21,12 @@ import kotlinx.coroutines.tasks.await
 class AuthManager(
     private val activity: ComponentActivity,
 ) {
+    private companion object {
+        // GitHub Pages(docs/) 에 게시된 문서. Play 콘솔의 개인정보처리방침 URL 과 같은 주소를 쓴다.
+        const val TERMS_OF_SERVICE_URL = "https://1hyok.github.io/SlowClock/terms.html"
+        const val PRIVACY_POLICY_URL = "https://1hyok.github.io/SlowClock/privacy.html"
+    }
+
     private val firebaseAuth = FirebaseAuth.getInstance()
     private lateinit var signInLauncher: ActivityResultLauncher<Intent>
 
@@ -128,7 +134,6 @@ class AuthManager(
                             listOf(
                                 "https://www.googleapis.com/auth/userinfo.profile", // 프로필 이름
                                 "https://www.googleapis.com/auth/userinfo.email", // 이메일
-                                "https://www.googleapis.com/auth/calendar", // 기존 캘린더
                             ),
                         ).build(),
                 )
@@ -139,8 +144,8 @@ class AuthManager(
                     .createSignInIntentBuilder()
                     .setAvailableProviders(providers)
                     .setTosAndPrivacyPolicyUrls(
-                        "https://example.com/terms.html",
-                        "https://example.com/privacy.html",
+                        TERMS_OF_SERVICE_URL,
+                        PRIVACY_POLICY_URL,
                     ).build()
 
             Log.d("AUTH", "구글 로그인 시작")

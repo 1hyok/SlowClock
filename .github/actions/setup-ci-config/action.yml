@@ -1,0 +1,12 @@
+name: Set up secretless CI app configuration
+description: Generate deterministic non-production Android configuration for validation jobs
+
+runs:
+  using: composite
+  steps:
+    - name: Generate CI-only app configuration
+      shell: bash
+      run: >-
+        node "$GITHUB_WORKSPACE/.github/scripts/create-ci-config.mjs"
+        --workspace "$GITHUB_WORKSPACE"
+        --github-env "$GITHUB_ENV"

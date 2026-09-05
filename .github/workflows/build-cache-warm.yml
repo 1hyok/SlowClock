@@ -1,0 +1,81 @@
+name: Build Cache Warm
+
+# PR 검증 job 이 같은 commit 의 같은 debug variant 를 각자 처음부터 컴파일하는 문제의 공급 측이다.
+# lint·unit-test·screenshot 은 --build-cache 로 읽을 준비가 돼 있지만, PR job 은 cache poisoning
+# 방지를 위해 전부 cache-read-only 라 아무도 캐시를 채우지 않는다.
+#
+# 이 워크플로가 main push 에서 유일한 writer 다. CodeQL 은 추출기가 컴파일러 호출을 관찰해야 해서
+# --build-cache 를 쓸 수 없으므로 워밍과 분석을 분리한다.
+#
+# 트리거를 캐시 키 입력으로 좁힌다. setup-gradle 의 basic 캐시는 키를 아래 파일들의 해시로 만들고
+# exact match 로 복원하면 저장을 건너뛰므로, 키가 그대로인 push 에서 도는 워밍은 저장이 원천적으로
+# 불가능한 run 이다. 이 목록은 setup-gradle 의 키 입력 정본(GRADLE_BUILD_FILE_PATTERNS)과 같아야
+# 하며 build-cache-policy.test.mjs 가 둘의 일치를 고정한다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.gradle*'
+      - '**/gradle-wrapper.properties'
+      - 'buildSrc/**/Versions.kt'
+      - 'buildSrc/**/Dependencies.kt'
+      - 'gradle/*.versions.toml'
+      - '**/versions.properties'
+  workflow_dispatch:
+
+# 워밍은 취소하지 않는다. main 은 PR 을 연달아 머지하는 브랜치라 cancel-in-progress 면
+# 마지막 push 를 뺀 전부가 중도에 죽고, 캐시를 저장하는 post 스텝까지 못 간다.
+concurrency:
+  group: build-cache-warm-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    name: Warm Gradle build cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # 이 저장소에서 cache-read-only: false 를 쓰는 유일한 자리다. 캐시 대상에는
+      # caches/build-cache-1 이 포함된다.
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          cache-read-only: false
+          validate-wrappers: true
+
+      - name: Set up CI-only app configuration
+        uses: ./.github/actions/setup-ci-config
+
+      # PR 이 실제로 돌리는 태스크와 같은 것을 돌려야 그 산출물이 재사용된다. 목록은
+      # lint.yml(ktlintCheck·lintDebug)과 unit-test.yml 의 태스크를 합친 것이다.
+      #
+      # screenshot 은 넣지 않는다 — docker 컨테이너 안에서 돌아 캐시 키에 들어가는 실행
+      # 환경이 러너와 갈릴 수 있고, 그 job 이 실제로 아끼는 컴파일 산출물은 여기서 이미 채워진다.
+      #
+      # --continue 는 main 이 깨져 있을 때도 통과한 만큼은 캐시에 남기기 위한 것이다.
+      # 워밍은 게이트가 아니므로 실패가 머지를 막지 않는다.
+      - name: Populate build cache with the tasks pull requests run
+        run: >-
+          ./gradlew
+          ktlintCheck
+          lintDebug
+          testDebugUnitTest
+          :app:compileDebugAndroidTestKotlin
+          --continue
+          --parallel
+          --build-cache

@@ -1,7 +1,7 @@
 name: Auto-close referenced issues on PR merge
 
 # GitHub 의 기본 자동 close 는 default branch 머지 시에만 발동.
-# 본 repo 의 stack PR 워크플로 (feat/A → feat/B → main) 에서는 closes #N 키워드가 있어도
+# 스택 PR (feat/A → feat/B → main) 에서는 closes #N 키워드가 있어도
 # 자동 close 미발동 → 매 PR 머지마다 수동 close 부담.
 #
 # 본 워크플로는 base 무관하게 PR merged 시점에 close 키워드를 파싱해 referenced issue 를 close.
@@ -19,9 +19,10 @@ jobs:
   close-referenced:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Close issues referenced by close keywords
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const pr = context.payload.pull_request;

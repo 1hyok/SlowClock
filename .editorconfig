@@ -4,3 +4,11 @@ root = true
 ktlint_code_style = ktlint_official
 ktlint_function_naming_ignore_when_annotated_with = Composable
 ktlint_standard_package-name = disabled
+# 기존 코드의 와일드카드 import 허용 목록 — 명시 import 로 정리한 뒤 제거 (#36)
+ij_kotlin_packages_to_use_import_on_demand = androidx.compose.material3.*,androidx.compose.foundation.layout.*,androidx.compose.runtime.*,androidx.compose.material.icons.filled.*,java.util.*,android.app.*
+# 전 모듈 ktlint 적용(#34) 시점의 기존 코드 위반 — 위반을 정리한 뒤 규칙을 다시 켠다 (#36). 새 코드는 규칙을 따를 것.
+ktlint_compose_modifier-missing-check = disabled
+ktlint_compose_parameter-naming = disabled
+ktlint_compose_vm-forwarding-check = disabled
+ktlint_compose_lambda-param-in-effect = disabled
+ktlint_compose_param-order-check = disabled

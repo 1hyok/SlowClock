@@ -4,11 +4,11 @@
 
 ## 1. google-services.json (Firebase 기본)
 - **위치:** `app/google-services.json`
-- Firebase 콘솔 → `slow-clock-scheduler` → 프로젝트 설정 → Android 앱(`com.example.slowclock`) → `google-services.json` 다운로드
+- Firebase 콘솔 → `slow-clock-scheduler` → 프로젝트 설정 → Android 앱(`com.ilhyok.slowclock`) → `google-services.json` 다운로드
 
-## 2. service_account (Vertex AI 전용)
-- **위치:** `core/data/src/main/res/raw/service_account` *(멀티모듈화로 `:app` → `:core:data`로 이동됨)*
-- Firebase 콘솔 → 서비스 계정 → 새 비공개 키 생성 → 다운로드 파일명을 `service_account`로
+## 2. release 서명 키
+- **위치:** 저장소 밖 (예: `~/slowclock-release.jks`). `local.properties` 에 `RELEASE_STORE_FILE`·`RELEASE_STORE_PASSWORD`·`RELEASE_KEY_ALIAS`·`RELEASE_KEY_PASSWORD` 4키 추가
+- 디버그 빌드에는 불필요. v1 에는 Vertex AI·Calendar 연동이 없어 서비스 계정 키도 불필요 (#34)
 
 ## 3. 디버그 SHA-1 등록 (Google 로그인)
 ```bash
@@ -21,10 +21,9 @@
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:lintDebug
-./gradlew ktlintCheck            # ktlintFormat 으로 자동수정
+./gradlew ktlintCheck            # 전 모듈. ktlintFormat 으로 자동수정
 ./gradlew :app:validateScreenshotTest   # baseline 갱신: updateScreenshotTest
 ```
 
 ## CI 시크릿 (GitHub Actions)
-- `GOOGLE_SERVICES_JSON_B64` — lint/unit-test/screenshot/release 공통
-- release 배포 시: `RELEASE_STORE_FILE_B64` · `RELEASE_STORE_PASSWORD` · `RELEASE_KEY_ALIAS` · `RELEASE_KEY_PASSWORD` · `FIREBASE_SERVICE_ACCOUNT_JSON`
+- PR 검증은 시크릿 없이 stub 설정으로 돈다. 릴리스 경로의 시크릿·환경 목록은 `docs/release/distribution.md`·`docs/play-release.md` 참조.

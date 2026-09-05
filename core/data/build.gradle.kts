@@ -27,12 +27,6 @@ dependencies {
 
     implementation(libs.firebase.auth)
 
-    // VertexAI (AI 추천 — 현재 debug 경로)
-    implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    implementation(libs.logging.interceptor)
-    implementation(libs.google.auth.library.oauth2.http)
-
     // Hilt: @Inject 생성자 Repository 의 Factory 가 본 모듈에서 생성되도록
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

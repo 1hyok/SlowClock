@@ -1,0 +1,268 @@
+name: Release Play Internal Track
+
+# Google Play 내부 테스트 트랙 전용 배포.
+#
+# Firebase App Distribution(release-distribution.yml)과 목적이 다르다. 그쪽은 QA·기획·디자인이
+# 쓰는 APK 채널이고 main push 마다 자동으로 나간다. 이쪽은 Play 로 나가는 AAB 채널이고 사람이
+# 실행을 시작한 뒤 environment 승인을 받아야만 움직인다. 두 채널은 서명 인증서가 다를 수 있어
+# 서로 위에 업데이트되지 않는다 — docs/play-release.md 의 채널 표를 정본으로 본다.
+#
+# production·open·closed track 으로 승격하는 step 은 이 파일에 없고, 업로드 스크립트에도 없다.
+# 승격은 Play Console 에서 사람이 한다.
+on:
+  workflow_dispatch:
+
+# Play 는 한 앱에 동시에 열린 edit 를 이어 붙이지 못한다. 두 run 이 겹치면 나중 commit 이
+# «edit 가 낡았다» 로 떨어지고 절반 올라간 상태가 남는다. cancel-in-progress 는 기본값(false)
+# 그대로 — 중도 취소는 그 미완료 edit 를 정리할 기회까지 없앤다.
+concurrency:
+  group: play-internal-track-upload
+
+# 최상단을 비워 두고 필요한 권한은 배포 job 에서만 연다 (#851).
+permissions: {}
+
+jobs:
+  publish:
+    name: Build AAB and Publish to Play Internal Track
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # 보호 규칙(required reviewer·deployment branch 제한·environment secret)은 워크플로 파일로
+    # 지정할 수 없다. 여긴 연결점만 만들고 실제 설정은 Settings → Environments 에서 한다.
+    # release-distribution 과 다른 environment 를 쓰는 이유는 Play 자격을 Firebase 자격과 분리해
+    # 두기 위해서다 — 한쪽이 털려도 다른 채널로 번지지 않는다.
+    environment: play-internal
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      pull-requests: read
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # environment 의 deployment branch 정책과 겹치는 이중 방호다. 정책이 실수로 풀려도
+      # 임의 ref 에서 upload key 를 만지지 못한다.
+      - name: Refuse to publish from anything but main
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Play internal track 배포는 main 에서만 실행한다 (현재: $GITHUB_REF)."
+            exit 1
+          fi
+
+      # 아직 Play Console·service account 준비가 끝나지 않았을 수 있다. 그 상태로 실행되면
+      # 빌드를 40분 돌린 뒤 업로드에서 죽는 대신, 여기서 무엇이 없는지 이름으로 알려주고 멈춘다.
+      # secret 값은 출력하지 않는다.
+      - name: Verify Play publishing configuration is set
+        env:
+          GCP_PLAY_SERVICE_ACCOUNT: ${{ secrets.GCP_PLAY_SERVICE_ACCOUNT }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          PLAY_PACKAGE_NAME: ${{ vars.PLAY_PACKAGE_NAME }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -z "$GCP_WORKLOAD_IDENTITY_PROVIDER" ] && missing="$missing GCP_WORKLOAD_IDENTITY_PROVIDER(secret)"
+          [ -z "$GCP_PLAY_SERVICE_ACCOUNT" ] && missing="$missing GCP_PLAY_SERVICE_ACCOUNT(secret)"
+          [ -z "$PLAY_PACKAGE_NAME" ] && missing="$missing PLAY_PACKAGE_NAME(variable)"
+          if [ -n "$missing" ]; then
+            echo "::error::Play 배포 설정이 아직 없다:$missing — docs/play-release.md 의 «자동화 사전 준비» 를 먼저 끝낼 것."
+            exit 1
+          fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+
+      - name: Set up release build configuration
+        id: release_config
+        uses: ./.github/actions/setup-release-config
+        with:
+          require: >-
+            GOOGLE_SERVICES_JSON_B64
+            RELEASE_STORE_FILE_B64 RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS
+            RELEASE_KEY_PASSWORD
+          google-services-json-b64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+          release-store-file-b64: ${{ secrets.RELEASE_STORE_FILE_B64 }}
+          release-store-password: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          release-key-alias: ${{ secrets.RELEASE_KEY_ALIAS }}
+          release-key-password: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          compose-local-properties: 'true'
+
+      # versionCode 판정은 빌드 «전» 이어야 한다 — 중복 code 를 AAB 를 만든 뒤에 발견하면
+      # 그 산출물은 통째로 버려진다. 그래서 여기서만 조회용 토큰을 먼저 받는다.
+      # create_credentials_file 을 끄고 access token 만 받으므로 Gradle 빌드에는 자격이 흐르지
+      # 않는다 (Firebase 경로가 GOOGLE_APPLICATION_CREDENTIALS 로 자격을 넘기는 것과 다르다).
+      - name: Authenticate to Google Cloud for the Play version probe
+        id: probe_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Read the highest versionCode Play already knows
+        id: play_latest
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.probe_auth.outputs.access_token }}
+          PLAY_PACKAGE_NAME: ${{ vars.PLAY_PACKAGE_NAME }}
+        run: node .github/scripts/play-internal-track.mjs latest
+
+      # 단조 증가의 정본. run_number·run_attempt 에서 값을 만들고 Play 의 현재 최댓값보다 크지
+      # 않으면 여기서 멈춘다. 이 워크플로가 Play 로 나가는 유일한 경로라 run_number 만으로
+      # 순서가 보장된다.
+      - name: Resolve the monotonically increasing versionCode
+        id: version_code
+        env:
+          PLAY_LATEST_VERSION_CODE: ${{ steps.play_latest.outputs.latest_version_code }}
+        run: node .github/scripts/resolve-play-version-code.mjs
+
+      - name: Load release metadata from the merged main PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR_BODY_FILE: ${{ runner.temp }}/main-release-pr-body.md
+        run: |
+          set -euo pipefail
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '[.[] | select(.base.ref == "main" and .merged_at != null)] | sort_by(.merged_at) | last | .body // empty' \
+            > "$RELEASE_PR_BODY_FILE"
+
+      - name: Prepare Play release notes
+        env:
+          SLOWCLOCK_VERSION_CODE: ${{ steps.version_code.outputs.version_code }}
+          RELEASE_NOTES_FILE: ${{ runner.temp }}/play-internal-release-notes.txt
+          RELEASE_PR_BODY_FILE: ${{ runner.temp }}/main-release-pr-body.md
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/play-internal-track.mjs notes "$RELEASE_NOTES_FILE"
+          {
+            echo '### Play internal track release notes'
+            echo '```'
+            cat "$RELEASE_NOTES_FILE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the signed release AAB
+        id: release_aab
+        env:
+          SLOWCLOCK_VERSION_CODE: ${{ steps.version_code.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          ./gradlew :app:bundleRelease --no-daemon
+          bundle_path="app/build/outputs/bundle/release/app-release.aab"
+          echo "path=$bundle_path" >> "$GITHUB_OUTPUT"
+          node .github/scripts/verify-release-attestation.mjs digest "$bundle_path" "$GITHUB_OUTPUT"
+
+      # 서명·필수 bundle 항목을 확인한다(R8 mapping 은 minify 를 켠 뒤에만 존재). 잘못 서명된 AAB 가 Play 까지 가서
+      # 거절당하는 대신 여기서 멈춘다.
+      - name: Verify the AAB signature and contents
+        run: bash scripts/verify-play-release-bundle.sh --skip-build
+
+      - name: Attest the exact signed AAB
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: ${{ steps.release_aab.outputs.path }}
+          show-summary: false
+
+      - name: Verify provenance and attestation subject digest
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          EXPECTED_SHA256: ${{ steps.release_aab.outputs.sha256 }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_AAB_PATH: ${{ steps.release_aab.outputs.path }}
+        run: |
+          set -euo pipefail
+          verification_file="$RUNNER_TEMP/verified-play-attestation.json"
+          gh attestation verify "$RELEASE_AAB_PATH" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$ATTESTATION_BUNDLE" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-play-internal.yml" \
+            --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --deny-self-hosted-runners \
+            --format json > "$verification_file"
+
+          node .github/scripts/verify-release-attestation.mjs \
+            verify "$RELEASE_AAB_PATH" "$EXPECTED_SHA256" "$verification_file"
+
+      # 빌드가 오래 걸리는 만큼 조회용 토큰은 이미 낡았다. 업로드에는 이 자리에서 새로 받은
+      # 단기 토큰만 쓴다 (#850 의 «업로드 직전 발급» 을 이 경로에도 그대로 적용).
+      - name: Authenticate to Google Cloud for the Play upload
+        id: upload_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Publish the attested AAB to the internal track
+        id: play_publish
+        env:
+          SLOWCLOCK_VERSION_CODE: ${{ steps.version_code.outputs.version_code }}
+          EXPECTED_SHA256: ${{ steps.release_aab.outputs.sha256 }}
+          PLAY_ACCESS_TOKEN: ${{ steps.upload_auth.outputs.access_token }}
+          PLAY_PACKAGE_NAME: ${{ vars.PLAY_PACKAGE_NAME }}
+          RELEASE_AAB_PATH: ${{ steps.release_aab.outputs.path }}
+          RELEASE_NOTES_FILE: ${{ runner.temp }}/play-internal-release-notes.txt
+        run: |
+          set -euo pipefail
+          node .github/scripts/verify-release-attestation.mjs \
+            assert "$RELEASE_AAB_PATH" "$EXPECTED_SHA256"
+          node .github/scripts/play-internal-track.mjs \
+            publish "$RELEASE_AAB_PATH" "$RELEASE_NOTES_FILE"
+
+      - name: Record the published release
+        env:
+          ATTESTATION_URL: ${{ steps.provenance.outputs.attestation-url }}
+          EDIT_ID: ${{ steps.play_publish.outputs.edit_id }}
+          EXPECTED_SHA256: ${{ steps.release_aab.outputs.sha256 }}
+          VERSION_CODE: ${{ steps.version_code.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Play internal track publish"
+            echo "- result: PASS"
+            echo "- track: internal"
+            echo "- versionCode: \`$VERSION_CODE\`"
+            echo "- source: \`$GITHUB_SHA\`"
+            echo "- artifact digest: \`sha256:$EXPECTED_SHA256\`"
+            echo "- attestation: $ATTESTATION_URL"
+            echo "- Play edit: \`$EDIT_ID\`"
+            echo "- run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # AAB·mapping 은 공개 저장소의 Actions artifact 로 나가면 안 된다. 러너에서도 지운다.
+      - name: Remove private release outputs
+        if: always()
+        run: |
+          rm -f \
+            app/build/outputs/bundle/release/app-release.aab \
+            app/build/outputs/mapping/release/mapping.txt \
+            app/google-services.json
+
+      - name: Remove release build configuration
+        if: always()
+        uses: ./.github/actions/cleanup-release-config
+        with:
+          keystore-path: ${{ steps.release_config.outputs.keystore-path }}

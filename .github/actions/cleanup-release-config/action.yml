@@ -1,0 +1,35 @@
+name: Remove release build configuration
+description: Delete the credential files setup-release-config created
+
+# 공개 저장소라 job 이 어떻게 끝나든 러너에 credential 을 남기지 않는다. if: always() 로 부를 것.
+
+inputs:
+  keystore-path:
+    description: setup-release-config 의 keystore-path output
+    required: false
+    default: ""
+  firebase-credentials-path:
+    description: setup-release-config 의 firebase-credentials-path output
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Remove release build files
+      shell: bash
+      env:
+        KEYSTORE_PATH: ${{ inputs.keystore-path }}
+        FIREBASE_CREDENTIALS_PATH: ${{ inputs.firebase-credentials-path }}
+      run: |
+        set -euo pipefail
+
+        rm -f app/google-services.json local.properties
+
+        if [ -n "$KEYSTORE_PATH" ]; then
+          rm -f "$KEYSTORE_PATH"
+        fi
+
+        if [ -n "$FIREBASE_CREDENTIALS_PATH" ]; then
+          rm -f "$FIREBASE_CREDENTIALS_PATH"
+        fi

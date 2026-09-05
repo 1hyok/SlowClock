@@ -1,0 +1,55 @@
+name: Submit PR Dependency Graph
+
+# workflow_run 은 default branch 의 검토된 workflow 정의로 실행된다. untrusted PR 코드는
+# checkout·실행하지 않고 Gradle action 이 만든 dependency graph artifact 만 제출한다.
+# upstream 은 dependency paths 가 바뀐 PR 에서만 실행되므로 artifact 없는 source PR 은
+# 이 후속 workflow 자체를 만들지 않는다.
+on:
+  workflow_run:
+    workflows: [Generate PR Dependency Graph]
+    types: [completed]
+
+concurrency:
+  group: submit-pr-dependency-graph-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  submit-pr-snapshot:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    name: Submit generated PR dependency graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require dependency graph artifact
+        id: dependency-graph-artifact
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const artifacts = await github.paginate(
+              github.rest.actions.listWorkflowRunArtifacts,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.payload.workflow_run.id,
+                per_page: 100,
+              },
+            );
+            const available = artifacts.some(
+              ({ expired, name }) => !expired && name.startsWith('dependency-graph_'),
+            );
+            core.setOutput('available', available ? 'true' : 'false');
+            if (!available) {
+              core.setFailed('Expected dependency graph artifact was not generated or has expired.');
+            }
+
+      - name: Download and submit dependency graph
+        if: steps.dependency-graph-artifact.outputs.available == 'true'
+        uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-disabled: true
+          dependency-graph: download-and-submit
+          dependency-graph-continue-on-failure: false

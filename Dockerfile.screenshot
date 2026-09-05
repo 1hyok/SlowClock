@@ -1,0 +1,54 @@
+# Compose Preview Screenshot Testing 의 baseline 통일 환경.
+#
+# anti-aliasing / font hinting / scale 등 host 환경 의존 렌더링 차이로
+# CI rendered PNG 를 baseline 으로 교체하는 ping-pong 발생 — 다른 프로젝트에서 실측된 사례.
+# 본 이미지에서 baseline 생성·검증을 동일하게 수행해 환경 차이 root fix.
+#
+# 빌드:
+#   docker build --platform linux/amd64 -t slowclock-screenshot:latest -f Dockerfile.screenshot .
+#
+# 로컬 baseline 갱신:
+#   docker run --rm --platform linux/amd64 -v "$PWD":/workspace -w /workspace slowclock-screenshot:latest \
+#     ./gradlew :app:updateScreenshotTest --rerun
+#
+# 로컬 baseline 검증:
+#   docker run --rm --platform linux/amd64 -v "$PWD":/workspace -w /workspace slowclock-screenshot:latest \
+#     ./gradlew :app:validateScreenshotTest
+
+FROM ubuntu:26.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    ANDROID_HOME=/opt/android-sdk \
+    ANDROID_SDK_ROOT=/opt/android-sdk \
+    PATH="/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:${PATH}" \
+    LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8
+
+# JDK 21 (Gradle JVM 17 이상 — AGP 8.7+ 요구), 한/영 폰트, locale.
+# Noto CJK 가 한글 렌더링 픽셀 결과를 고정한다.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        openjdk-21-jdk-headless \
+        wget unzip ca-certificates git \
+        fontconfig fonts-noto-cjk fonts-noto-color-emoji \
+        locales \
+    && locale-gen en_US.UTF-8 \
+    && update-locale LANG=en_US.UTF-8 \
+    && fc-cache -f \
+    && rm -rf /var/lib/apt/lists/*
+
+# Android SDK commandline tools — compileSdk 35 에 맞춘다. 버전 변경 시 각 모듈 build.gradle.kts 의 compileSdk 와 동기화 필요.
+RUN mkdir -p "$ANDROID_HOME/cmdline-tools" \
+    && cd "$ANDROID_HOME/cmdline-tools" \
+    && wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cli.zip \
+    && unzip -q cli.zip \
+    && mv cmdline-tools latest \
+    && rm cli.zip
+
+RUN yes | sdkmanager --licenses > /dev/null \
+    && sdkmanager --install \
+        "platforms;android-35" \
+        "build-tools;35.0.0" \
+        "platform-tools" \
+        > /dev/null
+
+WORKDIR /workspace

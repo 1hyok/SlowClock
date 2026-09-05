@@ -1,8 +1,32 @@
 name: Compose Preview Screenshot Test
 
+# PR 검증은 pr-validation.yml 이 한 번에 부르고, 이 워크플로의 job check 를
+# 브랜치 보호에서 required 로 직접 요구한다. concurrency 는 진입점에서 PR 단위로 건다.
+#
+# 트리거를 workflow_call 하나로 두는 것이 요점이다 — on: pull_request 를 함께 남기면
+# 같은 검증과 동일한 이름의 check 가 PR 마다 두 벌씩 돈다.
 on:
-  pull_request:
-    branches: [main]
+  workflow_call:
+    inputs:
+      pull_request_number:
+        required: false
+        default: 0
+        type: number
+      run_validation:
+        description: "false 이면 required check 이름을 유지한 채 무거운 검증을 건너뜀"
+        required: false
+        default: true
+        type: boolean
+      gradle_tasks:
+        description: "신뢰된 영향도 계산기가 만든 screenshot Gradle task 목록"
+        required: false
+        default: ":app:validateScreenshotTest"
+        type: string
+      screenshot_modules:
+        description: "영향받는 screenshot project path 목록"
+        required: false
+        default: ":app"
+        type: string
 
 permissions:
   contents: read
@@ -11,81 +35,118 @@ permissions:
 jobs:
   screenshot-test:
     name: Validate Compose Preview Screenshots
+    if: inputs.run_validation
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # baseline 을 가진 모듈의 정본. 종전에는 실행 태스크·아티팩트 경로·실패 안내가 각자
+    # 목록을 들고 있어, 모듈을 하나 늘리면 세 곳을 모두 고쳐야 했다 — 하나라도 빠지면
+    # 그 모듈은 «초록이지만 돌지 않는» 상태가 된다. 여기 한 줄만 늘리면 셋 다 따라온다.
+    env:
+      SCREENSHOT_MODULES: ${{ inputs.screenshot_modules }}
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'gradle'
+          persist-credentials: false
 
-      # :app 모듈은 google-services plugin 활성화 — processDebugGoogleServices 가 google-services.json 요구.
-      # CI 환경엔 실 키 없으므로 stub JSON 생성 (Firebase 호출 안 함, plugin 통과 목적).
-      # 실 분석/배포는 Firebase App Distribution 워크플로 에서 별도 secret 으로 처리.
-      - name: Create stub google-services.json (CI only)
+      # docker buildx + gha cache 로 Dockerfile.screenshot 빌드.
+      # 동일 이미지에서 baseline 생성·검증을 수행해 anti-aliasing/font/scale 등 host 환경 차이 root fix.
+      # Dockerfile 변경 없으면 cache 재사용 — 분당 단위 추가 비용.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Build screenshot image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile.screenshot
+          tags: slowclock-screenshot:latest
+          load: true
+          cache-from: type=gha,scope=screenshot
+          cache-to: type=gha,scope=screenshot,mode=max
+
+      - name: Set up CI-only app configuration
+        uses: ./.github/actions/setup-ci-config
+
+      # setup-gradle 의 공개 MIT cache provider 로 host 의 Gradle home 을 복원한 뒤
+      # 컨테이너 /root/.gradle 로 마운트한다. PR 은 cache poisoning 방지를 위해 읽기 전용이다.
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+
+      - name: Run validateScreenshotTest in container
+        env:
+          GRADLE_TASKS: ${{ inputs.gradle_tasks }}
         run: |
-          cat > app/google-services.json <<'EOF'
+          read -r -a tasks <<< "$GRADLE_TASKS"
+          docker run --rm \
+            -v "$PWD":/workspace \
+            -v "$HOME/.gradle":/root/.gradle \
+            -w /workspace \
+            slowclock-screenshot:latest \
+            ./gradlew "${tasks[@]}" \
+              --parallel --build-cache
+
+      # 컨테이너가 root 로 gradle 을 실행해 workspace · ~/.gradle 산출물이 root 소유가 된다.
+      # job 종료 시 'Post Restore Gradle cache'(캐시 저장)의 hashFiles/tar 가 runner 권한이라
+      # root 소유 파일에서 실패하므로, 소유권을 runner 로 복구한다.
+      - name: Restore workspace ownership for post steps
+        if: always()
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+          if [[ -e "$HOME/.gradle" ]]; then
+            sudo chown -R "$(id -u):$(id -g)" "$HOME/.gradle"
+          fi
+
+      # 아티팩트 경로도 같은 목록에서 만든다 — 여기만 빠지면 CI 가 빨개졌을 때 무엇이 어떻게
+      # 그려졌는지 볼 방법이 없다.
+      - name: Resolve screenshot result paths
+        id: screenshot-paths
+        if: failure()
+        run: |
           {
-            "project_info": {
-              "project_number": "000000000000",
-              "project_id": "slowclock-ci-stub",
-              "storage_bucket": "slowclock-ci-stub.appspot.com"
-            },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
-                  "android_client_info": {
-                    "package_name": "com.example.slowclock"
-                  }
-                },
-                "oauth_client": [],
-                "api_key": [
-                  { "current_key": "AIzaSyDfake_ci_only_no_real_value_xxxxxxxxxxx" }
-                ],
-                "services": {
-                  "appinvite_service": {
-                    "other_platform_oauth_client": []
-                  }
-                }
-              }
-            ],
-            "configuration_version": "1"
-          }
-          EOF
-
-      # VertexAIRepository 가 core/data 의 R.raw.service_account 를 참조 — 멀티모듈에서 raw 리소스가
-      # 없으면 R.raw 미생성으로 컴파일 실패. CI 는 실 키 불필요(런타임 미실행)라 stub raw 생성.
-      - name: Create stub service_account raw (CI only)
-        run: |
-          mkdir -p core/data/src/main/res/raw
-          printf '%s' '{"type":"service_account","project_id":"ci-stub"}' > core/data/src/main/res/raw/service_account
-
-      - name: Run validateScreenshotTest
-        run: ./gradlew :app:validateScreenshotTest --parallel
+            echo 'list<<EOF'
+            for m in $SCREENSHOT_MODULES; do
+              printf '%s/build/outputs/screenshotTest-results/\n' "$(echo "${m#:}" | tr ':' '/')"
+            done
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       # 실패 시 diff/rendered 이미지를 artifact 로 업로드 — 본인이 다운로드해 시각 차이 확인 가능
       - name: Upload screenshot diff on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: screenshot-test-results
-          path: |
-            app/build/outputs/screenshotTest-results/
+          path: ${{ steps.screenshot-paths.outputs.list }}
+          # 표준 보관 기간 7일 — 리포트·디버깅용 artifact 는 이 값 하나로 통일한다 (#1400).
           retention-days: 7
 
       # 실패 시 PR 에 artifact URL + 조치 가이드 자동 코멘트.
       # 같은 PR 의 재실행에서는 기존 코멘트를 update (marker 로 중복 누적 방지).
+      # baseline 생성 요청이 이미 들어왔으면 최신 라벨을 확인해 중복 안내를 남기지 않는다.
       - name: Comment artifact URL on PR (failure)
         if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
+            const baselineLabel = 'screenshot-baseline';
+            const labels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            if (labels.some(({ name }) => name === baselineLabel)) {
+              core.info(`${baselineLabel} 라벨이 있어 screenshot 실패 안내 댓글을 생략합니다.`);
+              return;
+            }
+
             const marker = '<!-- screenshot-fail-bot -->';
+            const modules = process.env.SCREENSHOT_MODULES.trim().split(/\s+/);
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
               marker,
@@ -96,13 +157,13 @@ jobs:
               '🔍 **확인 위치** (artifact zip 내부):',
               '- diff PNG: `preview/debug/diffs/...`',
               '- rendered PNG: `preview/debug/rendered/...` (CI 환경에서 새로 그린 결과)',
-              '- baseline PNG: repo `app/src/screenshotTestDebug/reference/...`',
+              `- baseline PNG: repo \`<module>/src/screenshotTestDebug/reference/...\` (${modules.map(m => `\`${m}\``).join(' · ')})`,
               '',
               '📝 **조치 가이드**:',
-              '- diff 가 anti-aliasing/font 미세 차이 → rendered PNG 를 baseline 으로 교체 후 commit/push',
-              '- 의미 있는 시각 변경 → 의도 확인 후 `./gradlew :app:updateScreenshotTest` 로 baseline 갱신 + commit/push',
+              '- 의도된 시각 변경 → 이 PR에 `screenshot-baseline` 라벨을 붙여 CI baseline 생성 요청',
+              '- diff 가 anti-aliasing/font 차이로 보이면 docker 환경 변경 여부 (Dockerfile.screenshot) 점검',
               '',
-              '근본 fix (docker 통일 baseline 환경) 는 별 epic.',
+              'CI ↔ 로컬 환경 차이는 본 워크플로의 container 단계가 root fix 한다 (docs/testing/screenshot.md 참조).',
             ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({

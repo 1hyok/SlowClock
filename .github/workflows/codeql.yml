@@ -1,0 +1,261 @@
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 19 * * 2'
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: "현재 ref 와 일치해야 하는 열린 PR 번호. 비우면 전체 분석"
+        required: false
+        default: 0
+        type: number
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.event.pull_request.number || inputs.pull_request_number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # required workflow 자체에 paths-ignore 를 걸면 분석 불필요 PR 의 CodeQL context 가
+  # Pending 으로 남는다. 작은 선행 job 이 전체 변경 경로를 확인하고, 아래 required job 을
+  # job-level if 로 skipped/success 처리한다. 분류 실패·빈 출력은 전체 분석으로 닫힌다.
+  classify-changes:
+    name: Classify CodeQL impact
+    if: github.event_name == 'pull_request' || inputs.pull_request_number > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      actions_required: ${{ steps.path-scope.outputs.codeql_actions || 'true' }}
+      javascript_typescript_required: ${{ steps.path-scope.outputs.codeql_javascript_typescript || 'true' }}
+      java_kotlin_required: ${{ steps.path-scope.outputs.codeql_java_kotlin || 'true' }}
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # 한도가 바닥인 채로 들어가면 이 분류 job 이 코드와 무관하게 빨개지고, fail-closed 라
+      # 무거운 분석 세 개가 전부 따라 돈다. 남은 quota 를 요약에 남기고, 부족하면 리셋까지
+      # 기다린다 (#1465). quota 스텝은 게이트가 아니라 관측·대기라 PR 사본으로 돌려도
+      # 통과시킬 수 있는 판정이 없다 — 이 job 은 이미 PR 사본의 분류 스크립트를 실행한다.
+      - name: Ensure GitHub API quota
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # 이 job 의 timeout 이 3분이라 기다릴 수 있는 창이 좁다.
+        run: node .github/scripts/ensure-api-quota.mjs ensure --max-wait 60
+
+      - name: Resolve language impact
+        id: path-scope
+        env:
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pull_request_number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::유효한 pull_request_number 가 필요합니다"
+            exit 1
+          fi
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            pull_request=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")
+            state=$(jq -r '.state' <<< "$pull_request")
+            head_sha=$(jq -r '.head.sha' <<< "$pull_request")
+            head_repository=$(jq -r '.head.repo.full_name' <<< "$pull_request")
+            if [ "$state" != "open" ] || [ "$head_repository" != "$GITHUB_REPOSITORY" ]; then
+              echo "::error::PR #$PR_NUMBER 는 이 저장소의 열린 PR이 아닙니다"
+              exit 1
+            fi
+            if [ "$GITHUB_SHA" != "$head_sha" ]; then
+              echo "::error::dispatch ref $GITHUB_SHA 가 PR #$PR_NUMBER head $head_sha 와 다릅니다"
+              exit 1
+            fi
+            CHANGED_FILES=$(jq -r '.changed_files' <<< "$pull_request")
+          elif [ -z "$CHANGED_FILES" ]; then
+            CHANGED_FILES=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.changed_files')
+          fi
+
+          if ! [[ "$CHANGED_FILES" =~ ^[0-9]+$ ]]; then
+            echo "::error::PR changed_files 값이 유효하지 않습니다: $CHANGED_FILES"
+            exit 1
+          fi
+
+          files_json="$RUNNER_TEMP/pull-request-files.json"
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" \
+            > "$files_json"
+          docs_only=$(env -u GH_TOKEN -u GITHUB_TOKEN \
+            node .github/scripts/classify-documentation-changes.mjs \
+            "$CHANGED_FILES" < "$files_json")
+          if [ "$docs_only" = "true" ]; then
+            echo "codeql_javascript_typescript=false" >> "$GITHUB_OUTPUT"
+          elif [ "$docs_only" = "false" ]; then
+            # 이 저장소의 런타임 JavaScript 는 CI/릴리스 자동화다. 문서 전용이 아닌
+            # 변경은 해당 자동화와 상호작용할 수 있으므로 JS 분석을 fail-open 하지 않는다.
+            echo "codeql_javascript_typescript=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::문서 변경 분류 결과가 유효하지 않습니다: $docs_only"
+            exit 1
+          fi
+          env -u GH_TOKEN -u GITHUB_TOKEN \
+            node .github/scripts/resolve-pr-impact.mjs "$files_json" \
+            | grep '^codeql_' >> "$GITHUB_OUTPUT"
+
+      # 실패가 «분류가 사실을 확인하고 거절함» 인지 «한도 소진» 인지 가른다 (#1465).
+      - name: Classify a failed gate as rate limit exhaustion
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/ensure-api-quota.mjs classify
+
+  analyze-actions:
+    name: Analyze (actions)
+    needs: classify-changes
+    if: ${{ !cancelled() && (needs.classify-changes.result != 'success' || needs.classify-changes.outputs.actions_required != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: actions
+          build-mode: none
+
+      - name: Analyze and upload CodeQL results
+        id: analyze
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: /language:actions
+
+      - name: Verify analyzed sources in the CodeQL database
+        env:
+          CODEQL_BUILD_MODE: none
+          CODEQL_DATABASE_LANGUAGE: actions
+          CODEQL_DATABASE_LOCATIONS: ${{ steps.analyze.outputs.db-locations }}
+          CODEQL_DISPLAY_LANGUAGE: actions
+          CODEQL_REQUIRED_PATH_FRAGMENT: .github/workflows/
+          CODEQL_SOURCE_EXTENSIONS: .yml,.yaml
+        run: node .github/scripts/verify-codeql-database.mjs
+
+  analyze-javascript-typescript:
+    name: Analyze (javascript-typescript)
+    needs: classify-changes
+    if: ${{ !cancelled() && (needs.classify-changes.result != 'success' || needs.classify-changes.outputs.javascript_typescript_required != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: javascript-typescript
+          build-mode: none
+
+      - name: Analyze and upload CodeQL results
+        id: analyze
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: /language:javascript-typescript
+
+      - name: Verify analyzed sources in the CodeQL database
+        env:
+          CODEQL_BUILD_MODE: none
+          # codeql-action의 db-locations output은 사용자 입력 alias가 아니라
+          # canonical extractor 이름(javascript)을 key로 사용한다.
+          CODEQL_DATABASE_LANGUAGE: javascript
+          CODEQL_DATABASE_LOCATIONS: ${{ steps.analyze.outputs.db-locations }}
+          CODEQL_DISPLAY_LANGUAGE: javascript-typescript
+          CODEQL_REQUIRED_PATH_FRAGMENT: .github/scripts/
+          CODEQL_SOURCE_EXTENSIONS: .js,.jsx,.mjs,.cjs,.ts,.tsx
+        run: node .github/scripts/verify-codeql-database.mjs
+
+  analyze-java-kotlin:
+    name: Analyze (java-kotlin)
+    needs: classify-changes
+    if: ${{ !cancelled() && (needs.classify-changes.result != 'success' || needs.classify-changes.outputs.java_kotlin_required != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # 읽기 전용이다 — push 에서도 쓰지 않는다. 이 job 은 --build-cache 를 쓸 수 없어
+      # build-cache-warm.yml 이 main 에 채운 캐시 키를 빈 엔트리로 선점해서는 안 된다.
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+
+      - name: Set up CI-only app configuration
+        uses: ./.github/actions/setup-ci-config
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      # Java/Kotlin extraction observes compiler invocations, so a clean manual build is the
+      # contract. 이 저장소의 모듈은 전부 Android 라이브러리/애플리케이션이라 compileDebugSources 하나로
+      # 모든 모듈의 Kotlin 이 컴파일된다. FROM-CACHE 로 넘어가면 컴파일러가 실행되지 않아 추출기가
+      # 소스를 담지 못하므로 Gradle build cache 플래그를 쓰지 않는다.
+      - name: Compile Android Kotlin sources
+        run: >-
+          ./gradlew compileDebugSources
+          --no-configuration-cache
+          --stacktrace
+          --console=plain
+
+      - name: Analyze and upload CodeQL results
+        id: analyze
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: /language:java-kotlin
+
+      - name: Verify analyzed sources in the CodeQL database
+        env:
+          CODEQL_BUILD_MODE: manual
+          CODEQL_DATABASE_LANGUAGE: java
+          CODEQL_DATABASE_LOCATIONS: ${{ steps.analyze.outputs.db-locations }}
+          CODEQL_DISPLAY_LANGUAGE: java-kotlin
+          CODEQL_REQUIRED_PATH_FRAGMENT: app/src/main/
+          CODEQL_SOURCE_EXTENSIONS: .kt
+        run: node .github/scripts/verify-codeql-database.mjs

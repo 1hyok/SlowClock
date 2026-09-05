@@ -1,0 +1,127 @@
+name: Set up release build configuration
+description: Verify the release secrets a job declares and materialise the build files they back
+
+# setup-ci-config 와 별개 action 이다. 그쪽은 실서비스 값이 없는 결정적 stub 을 만들어 PR 검증에
+# 쓰고, 이쪽은 승인 environment 뒤에서 실서비스 secret 을 다룬다. 두 경로가 한 action 으로
+# 섞이면 PR 검증이 실서비스 secret 을 참조할 여지가 생기므로 합치지 않는다.
+
+inputs:
+  require:
+    description: "검증할 secret 이름 목록 (공백 구분). 나열된 이름의 값이 비면 이름만 보고하고 실패한다."
+    required: true
+  google-services-json-b64:
+    description: GOOGLE_SERVICES_JSON_B64 — 주어지면 app/google-services.json 을 만든다
+    required: false
+    default: ""
+  release-store-file-b64:
+    description: RELEASE_STORE_FILE_B64 — 주어지면 release keystore 를 만든다
+    required: false
+    default: ""
+  release-store-password:
+    description: RELEASE_STORE_PASSWORD
+    required: false
+    default: ""
+  release-key-alias:
+    description: RELEASE_KEY_ALIAS
+    required: false
+    default: ""
+  release-key-password:
+    description: RELEASE_KEY_PASSWORD
+    required: false
+    default: ""
+  compose-local-properties:
+    description: "true 면 app/build.gradle.kts 의 signingConfigs.release 가 읽는 local.properties 를 만든다"
+    required: false
+    default: "false"
+
+outputs:
+  keystore-path:
+    description: decode 된 release keystore 경로 (만들지 않았으면 빈 값)
+    value: ${{ steps.materialise.outputs.keystore-path }}
+
+runs:
+  using: composite
+  steps:
+    # fail-fast — secret 누락 시 Gradle 까지 가지 않고 즉시 실패.
+    # secret 값은 echo 하지 않는다 (env 로만 받아 길이 검사). 누락 키 이름은 안전.
+    - name: Verify required secrets are set
+      shell: bash
+      env:
+        REQUIRE: ${{ inputs.require }}
+        GOOGLE_SERVICES_JSON_B64: ${{ inputs.google-services-json-b64 }}
+        RELEASE_STORE_FILE_B64: ${{ inputs.release-store-file-b64 }}
+        RELEASE_STORE_PASSWORD: ${{ inputs.release-store-password }}
+        RELEASE_KEY_ALIAS: ${{ inputs.release-key-alias }}
+        RELEASE_KEY_PASSWORD: ${{ inputs.release-key-password }}
+      run: |
+        set -euo pipefail
+
+        read -ra required_names <<< "$REQUIRE"
+        if [ "${#required_names[@]}" -eq 0 ]; then
+          echo "::error::require 가 비어 있다 — 검증할 secret 이름을 지정할 것"
+          exit 1
+        fi
+
+        missing=""
+        for name in "${required_names[@]}"; do
+          case "$name" in
+            GOOGLE_SERVICES_JSON_B64) value="$GOOGLE_SERVICES_JSON_B64" ;;
+            RELEASE_STORE_FILE_B64) value="$RELEASE_STORE_FILE_B64" ;;
+            RELEASE_STORE_PASSWORD) value="$RELEASE_STORE_PASSWORD" ;;
+            RELEASE_KEY_ALIAS) value="$RELEASE_KEY_ALIAS" ;;
+            RELEASE_KEY_PASSWORD) value="$RELEASE_KEY_PASSWORD" ;;
+            *)
+              echo "::error::이 action 이 모르는 secret 이름: $name"
+              exit 1
+              ;;
+          esac
+          if [ -z "$value" ]; then
+            missing="$missing $name"
+          fi
+        done
+
+        if [ -n "$missing" ]; then
+          echo "::error::필수 secret 누락:$missing — Settings → Environments 의 해당 environment 에 등록 (docs/release/distribution.md)"
+          exit 1
+        fi
+
+    # keystore·credential 은 workspace 밖 RUNNER_TEMP 에 둔다 — job 종료 시 러너와 함께 폐기되고
+    # actions/upload-artifact 의 workspace glob 에 딸려 올라갈 수 없다.
+    - name: Materialise release build files
+      id: materialise
+      shell: bash
+      env:
+        GOOGLE_SERVICES_JSON_B64: ${{ inputs.google-services-json-b64 }}
+        RELEASE_STORE_FILE_B64: ${{ inputs.release-store-file-b64 }}
+        RELEASE_STORE_PASSWORD: ${{ inputs.release-store-password }}
+        RELEASE_KEY_ALIAS: ${{ inputs.release-key-alias }}
+        RELEASE_KEY_PASSWORD: ${{ inputs.release-key-password }}
+        COMPOSE_LOCAL_PROPERTIES: ${{ inputs.compose-local-properties }}
+      run: |
+        set -euo pipefail
+
+        keystore_path=""
+
+        # google-services plugin 이 app/google-services.json 을 요구한다. 파일은 .gitignore 라
+        # CI 환경엔 없으므로 base64 secret 에서 복원한다.
+        if [ -n "$GOOGLE_SERVICES_JSON_B64" ]; then
+          printf '%s' "$GOOGLE_SERVICES_JSON_B64" | base64 -d > app/google-services.json
+        fi
+
+        if [ -n "$RELEASE_STORE_FILE_B64" ]; then
+          keystore_path="$RUNNER_TEMP/slowclock-release.jks"
+          printf '%s' "$RELEASE_STORE_FILE_B64" | base64 -d > "$keystore_path"
+        fi
+
+        if [ "$COMPOSE_LOCAL_PROPERTIES" = "true" ]; then
+          {
+            echo "RELEASE_STORE_FILE=$keystore_path"
+            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+          } > local.properties
+        fi
+
+        {
+          echo "keystore-path=$keystore_path"
+        } >> "$GITHUB_OUTPUT"

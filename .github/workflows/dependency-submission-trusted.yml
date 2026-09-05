@@ -1,0 +1,52 @@
+name: Submit Trusted Branch Dependency Graph
+
+# main 의 모든 새 SHA 에 신뢰된 base snapshot 을 직접 제출한다. PR dependency-review 는
+# base ref 와 head ref snapshot 을 짝지어 비교하므로 source-only push 도 최신 base SHA 가 필요하다.
+# PR artifact uploader 는 이 workflow 이름을 구독하지 않아 artifact 없는 후속 run 을 만들지 않는다.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: trusted-branch-dependency-submission-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  submit-trusted-branch:
+    name: Submit trusted branch dependency graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      # PR artifact 와 같은 correlator 를 써야 base·head snapshot 이 같은 비교 축에 들어간다.
+      GITHUB_DEPENDENCY_GRAPH_JOB_CORRELATOR: slowclock-gradle-dependency-graph
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Generate and submit dependency graph
+        uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          additional-arguments: --no-configuration-cache --stacktrace
+          cache-provider: basic
+          # 이 job 은 의존성만 해석하므로 저장할 build cache 산출물이 없다. 생략하면 액션
+          # 기본값으로 저장까지 하는데, 그 엔트리는 build-cache-warm.yml 이 채우려는 것과
+          # 같은 키를 쓴다. 3분이면 끝나는 이쪽이 13분 걸리는 워밍보다 먼저 키를 차지해
+          # 워밍의 저장이 통째로 버려진 실적이 있다 (#1480 — run #137·#138).
+          cache-read-only: true
+          dependency-graph: generate-and-submit
+          dependency-graph-continue-on-failure: false
+          validate-wrappers: true
+
