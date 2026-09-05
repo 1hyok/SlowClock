@@ -39,7 +39,10 @@ jobs:
       - name: Generate and submit dependency graph
         uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
-          additional-arguments: --no-configuration-cache --stacktrace
+          # dependency-graph 추출 플러그인은 org.gradle.parallel=true 에서 configurationMetrics 를
+          # 동시에 쓰다 "Can only append an element to the list once" 로 죽는다(#67, run 33955978958).
+          # 실패한 main snapshot 은 그 위에 올린 PR 의 dependency-review 를 재시도 창까지 굶긴다.
+          additional-arguments: --no-configuration-cache --no-parallel --stacktrace
           cache-provider: basic
           # 이 job 은 의존성만 해석하므로 저장할 build cache 산출물이 없다. 생략하면 액션
           # 기본값으로 저장까지 하는데, 그 엔트리는 build-cache-warm.yml 이 채우려는 것과
