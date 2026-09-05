@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.slowclock.android.application)
     alias(libs.plugins.slowclock.android.hilt)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.screenshot)
     alias(libs.plugins.firebase.app.distribution)
     alias(libs.plugins.google.services)
@@ -105,7 +106,11 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.navigation.compose)
+    // Navigation 3: 백스택은 앱이 소유하고 화면은 네비게이션 콜백만 받는다
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+    implementation(libs.kotlinx.serialization.core)
 
     // Firebase 초기화(Application)·Analytics·Firebase UI 로그인(AuthManager)
     implementation(platform(libs.firebase.bom))
