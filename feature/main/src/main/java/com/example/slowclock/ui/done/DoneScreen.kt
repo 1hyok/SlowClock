@@ -73,13 +73,13 @@ internal fun DoneContent(
         Text(
             text = "오늘의 일정",
             style = MaterialTheme.typography.headlineSmall,
-            color = Color(0xFF3A5CCC),
+            color = MaterialTheme.colorScheme.secondary,
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
         Text(
             text = formatter.format(Date()),
             fontSize = 16.sp,
-            color = Color.DarkGray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier =
                 Modifier
                     .padding(bottom = 16.dp)
@@ -97,7 +97,7 @@ internal fun DoneContent(
         }
 
         if (completed.isNotEmpty()) {
-            Section(title = "완료한 일정", icon = Icons.Default.CheckCircle, color = Color(0xFF3A5CCC)) {
+            Section(title = "완료한 일정", icon = Icons.Default.CheckCircle, color = MaterialTheme.colorScheme.secondary) {
                 completed.forEach {
                     ScheduleCard(
                         schedule = it,
@@ -110,7 +110,7 @@ internal fun DoneContent(
         }
 
         if (remaining.isNotEmpty()) {
-            Section(title = "남은 일정", icon = Icons.Default.Notifications, color = Color(0xFF3A5CCC)) {
+            Section(title = "남은 일정", icon = Icons.Default.Notifications, color = MaterialTheme.colorScheme.secondary) {
                 remaining.forEach {
                     ScheduleCard(
                         schedule = it,
@@ -127,7 +127,7 @@ internal fun DoneContent(
             text = "오늘 ${completed.size}개의 일정을 완료했어요!",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.align(Alignment.CenterHorizontally),
-            color = Color.DarkGray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         LinearProgressIndicator(
@@ -138,7 +138,7 @@ internal fun DoneContent(
                     completed.size.toFloat() / (completed.size + remaining.size)
                 }
             },
-            color = Color(0xFF00A152),
+            color = MaterialTheme.colorScheme.tertiary,
             modifier =
                 Modifier
                     .padding(top = 8.dp)
@@ -159,7 +159,7 @@ fun Section(
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FB)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -180,7 +180,7 @@ fun ScheduleCard(
     completed: Boolean,
     onClick: (Schedule) -> Unit,
 ) {
-    val cardColor = if (completed) Color(0xFFE0F8E0) else Color(0xFFEAF1FF)
+    val cardColor = if (completed) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
 
     Card(
         modifier =
@@ -218,7 +218,7 @@ fun ScheduleCard(
             if (completed) {
                 Text(
                     text = "완료",
-                    color = Color(0xFF00A152),
+                    color = MaterialTheme.colorScheme.tertiary,
                     fontWeight = FontWeight.Bold,
                 )
             }

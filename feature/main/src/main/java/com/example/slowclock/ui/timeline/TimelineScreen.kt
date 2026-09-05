@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight.Companion.Bold
@@ -83,7 +83,7 @@ internal fun TimelineContent(
             Text(
                 text = "일정 타임라인",
                 fontSize = 20.sp,
-                color = Color.Blue,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = Bold,
                 modifier =
                     Modifier
@@ -93,7 +93,7 @@ internal fun TimelineContent(
             Text(
                 text = formatter.format(selectedDate.time),
                 fontSize = 15.sp,
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier =
                     Modifier
                         .align(Alignment.CenterHorizontally)

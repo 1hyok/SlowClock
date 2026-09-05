@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.slowclock.data.model.Schedule
@@ -42,7 +41,7 @@ fun SharedRemindersSection(
                 .padding(vertical = 8.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor = Color(0xFFE3F2FD),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
             ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -64,7 +63,7 @@ fun SharedRemindersSection(
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = if (schedule.completed) "완료됨" else "미완료",
-                                    tint = if (schedule.completed) Color(0xFF388E3C) else Color.Red,
+                                    tint = if (schedule.completed) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
@@ -72,14 +71,14 @@ fun SharedRemindersSection(
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = if (schedule.completed) "완료됨" else "미완료",
-                                tint = if (schedule.completed) Color(0xFF388E3C) else Color.Red,
+                                tint = if (schedule.completed) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
                         Text(
                             text = if (schedule.completed) "완료됨" else "미완료",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (schedule.completed) Color(0xFF388E3C) else Color.Red,
+                            color = if (schedule.completed) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                             modifier = Modifier.padding(start = 4.dp, end = 8.dp),
                         )
                         Text(

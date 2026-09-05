@@ -18,7 +18,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.slowclock.data.model.Recommendation
@@ -54,9 +53,9 @@ fun ADHDRecommendation(
                         Modifier
                             .fillMaxWidth()
                             .padding(vertical = 6.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    border = BorderStroke(1.dp, Color(0xFF1A73E8)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -68,18 +67,18 @@ fun ADHDRecommendation(
                             Text(
                                 text = item.title,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color.Black,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
                                 text = item.type, // 필요한 경우 실제 시간 추가 가능
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color.Gray,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp,
                             )
                         }
 
                         TextButton(onClick = { onSelectRecommendation(item.title) }) {
-                            Text(text = "추가", fontSize = 16.sp, color = Color.Black)
+                            Text(text = "추가", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }

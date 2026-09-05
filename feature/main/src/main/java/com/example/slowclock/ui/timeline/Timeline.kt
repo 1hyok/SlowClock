@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -50,7 +51,7 @@ fun Timeline(
     ) {
         // 전체 세로선: Box 전체 높이를 따라 고정
         Divider(
-            color = Color(0xFF3A5CCC),
+            color = MaterialTheme.colorScheme.secondary,
             modifier =
                 Modifier
                     .width(2.dp)
@@ -76,7 +77,7 @@ fun Timeline(
                             Modifier
                                 .size(10.dp)
                                 .align(Alignment.Center)
-                                .background(Color(0xFF3A5CCC), shape = CircleShape),
+                                .background(MaterialTheme.colorScheme.secondary, shape = CircleShape),
                     )
 
                     val alignStart = index % 2 == 0
@@ -86,10 +87,15 @@ fun Timeline(
                                 .align(if (alignStart) Alignment.CenterStart else Alignment.CenterEnd)
                                 .padding(horizontal = 40.dp),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (item.completed) Color.Transparent else Color(0xFF1A73E8)),
+                        border = BorderStroke(1.dp, if (item.completed) Color.Transparent else MaterialTheme.colorScheme.primary),
                         colors =
                             CardDefaults.cardColors(
-                                containerColor = if (item.completed) Color(0xFFE6F4EA) else Color.White,
+                                containerColor =
+                                    if (item.completed) {
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    },
                             ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                     ) {
@@ -102,7 +108,7 @@ fun Timeline(
                             Text(
                                 text = timeFormat.format(item.startTime.toDate()),
                                 fontSize = 12.sp,
-                                color = Color.Gray,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
