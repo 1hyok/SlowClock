@@ -551,15 +551,15 @@ test('the Gradle wrapper JAR and distribution stay on the reviewed official chec
 
   assert.match(
     properties,
-    /^distributionUrl=https\\:\/\/services\.gradle\.org\/distributions\/gradle-8\.13-bin\.zip$/m,
+    /^distributionUrl=https\\:\/\/services\.gradle\.org\/distributions\/gradle-9\.5\.0-bin\.zip$/m,
   );
   assert.match(
     properties,
-    /^distributionSha256Sum=20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78$/m,
+    /^distributionSha256Sum=553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746$/m,
   );
   assert.match(properties, /^validateDistributionUrl=true$/m);
   assert.equal(
     createHash('sha256').update(wrapperJar).digest('hex'),
-    'e996d452d2645e70c01c11143ca2d3742734a28da2bf61f25c82bdc288c9e637',
+    '497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7',
   );
 });
