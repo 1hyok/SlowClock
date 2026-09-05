@@ -13,7 +13,7 @@
 </head>
 <body>
 <h1>느린 시계 (SlowClock) 개인정보처리방침</h1>
-<p>시행일: 2026년 9월 5일</p>
+<p>시행일: 2026년 9월 6일</p>
 <p>느린 시계(이하 "앱")는 개인정보 보호법 등 관련 법령을 준수하며, 이용자의 개인정보를 다음과 같이 처리합니다.</p>
 
 <h2>1. 처리하는 개인정보 항목과 수집 방법</h2>
@@ -24,6 +24,7 @@
   <tr><td>가족 그룹 정보</td><td>가족 그룹을 만들거나 참여할 때</td><td>그룹 이름, 구성원의 계정 식별자, 공유 코드</td></tr>
   <tr><td>기기 정보</td><td>앱을 설치·실행할 때</td><td>푸시 알림 전송용 기기 토큰(FCM 토큰), 앱 버전, 운영체제 버전</td></tr>
   <tr><td>이용 통계</td><td>앱을 사용할 때</td><td>화면 이동·기능 사용 이벤트 등 비식별 사용 통계(Firebase Analytics)</td></tr>
+  <tr><td>진단 정보</td><td>앱이 비정상 종료될 때</td><td>오류 발생 지점(스택 트레이스), 기기 모델, 운영체제 버전, 앱 버전, 오류 직전의 앱 상태(Firebase Crashlytics)</td></tr>
 </table>
 <p>앱은 위치 정보, 연락처, 통화 기록, 사진·파일을 수집하지 않습니다.</p>
 
@@ -36,13 +37,14 @@
 </ul>
 
 <h2>3. 보유 및 이용 기간</h2>
+<p>비정상 종료 기록은 계정과 연결하지 않으며 Firebase Crashlytics 가 90일 뒤 자동으로 지웁니다.</p>
 <p>수집한 개인정보는 회원 탈퇴(계정 삭제) 요청 시 지체 없이 파기합니다. 다만 관련 법령에 따라 보존이 필요한 경우 해당 기간 동안 보관합니다. 삭제 요청은 아래 문의처로 보내 주시면 7일 이내에 처리합니다.</p>
 
 <h2>4. 개인정보의 제3자 제공과 처리 위탁</h2>
 <p>앱은 이용자의 동의 없이 개인정보를 제3자에게 제공하지 않습니다. 다음 서비스에 저장·처리를 위탁합니다.</p>
 <table>
   <tr><th>수탁자</th><th>위탁 업무</th><th>보관 위치</th></tr>
-  <tr><td>Google LLC (Firebase)</td><td>인증(Firebase Authentication), 데이터 저장(Cloud Firestore), 푸시 알림(Firebase Cloud Messaging), 이용 통계(Firebase Analytics), 서버 함수(Cloud Functions)</td><td>미국(us-central1) 등 Google Cloud 리전</td></tr>
+  <tr><td>Google LLC (Firebase)</td><td>인증(Firebase Authentication), 데이터 저장(Cloud Firestore), 푸시 알림(Firebase Cloud Messaging), 이용 통계(Firebase Analytics), 오류 수집(Firebase Crashlytics), 서버 함수(Cloud Functions)</td><td>미국(us-central1) 등 Google Cloud 리전</td></tr>
 </table>
 <p>가족 그룹에 참여하면 같은 그룹의 구성원에게 이용자의 이름과 일정이 공유됩니다. 공유 코드는 본인이 직접 전달한 사람만 사용할 수 있습니다.</p>
 

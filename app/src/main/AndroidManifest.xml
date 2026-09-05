@@ -34,6 +34,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SlowClock">
+
+        <!-- 크래시 수집은 릴리스 빌드에서만 켠다. 값은 buildTypes 의 manifestPlaceholders 가 넣는다(#98). -->
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="${crashlyticsCollectionEnabled}" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
