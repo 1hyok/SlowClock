@@ -81,7 +81,7 @@ android {
         release {
             manifestPlaceholders["crashlyticsCollectionEnabled"] = true
             // v1 은 R8 을 켜지 않는다 — Firestore 가 리플렉션으로 매핑하는 data/model 클래스에 keep 규칙이 없고,
-            // 난독화 산출물을 기기에서 검증한 적이 없다. 켜는 작업은 별도 이슈로 다룬다.
+            // 난독화 산출물을 기기에서 검증한 적이 없다. 켜는 작업은 #106 에서 다룬다.
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
