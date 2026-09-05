@@ -3,7 +3,6 @@ package com.example.slowclock
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
@@ -18,7 +17,6 @@ import androidx.lifecycle.lifecycleScope
 import com.example.slowclock.auth.AuthManager
 import com.example.slowclock.data.DummyDataManager
 import com.example.slowclock.navigation.AppNavigation
-import com.example.slowclock.notification.ForegroundService
 import com.example.slowclock.notification.requestExactAlarmPermissionIfNeeded
 import com.example.slowclock.ui.theme.SlowClockTheme
 import com.firebase.ui.auth.AuthUI
@@ -110,10 +108,6 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermission() // 알림 권한 요청
         requestExactAlarmPermissionIfNeeded(this) // 알림 권한 요청
         createNotificationChannel() // ← 반드시 호출 필요
-
-        // NotificationChannel 생성  ForegroundService에서 알림 사용을 위해
-        val serviceIntent = Intent(this, ForegroundService::class.java)
-        ContextCompat.startForegroundService(this, serviceIntent)
     }
 
     private fun addDummyData() {

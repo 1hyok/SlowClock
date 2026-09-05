@@ -26,8 +26,42 @@ Firebase App Distribution 과 Google Play 의 목적을 분리하고, 첫 Play �
 - 서비스 계정 키를 APK 에 내장하던 Vertex AI 경로는 제거됐다.
 - 개인정보처리방침·이용약관: `https://1hyok.github.io/SlowClock/privacy.html` · `https://1hyok.github.io/SlowClock/terms.html` (저장소 `docs/`, GitHub Pages). Play 콘솔 앱 콘텐츠의 개인정보처리방침 URL 에 같은 주소를 쓴다.
 - 광고 ID 권한(`AD_ID`·`ACCESS_ADSERVICES_*`)은 manifest 에서 제거했다. 데이터 보안 양식에서 광고 ID 수집은 「아니오」다.
-- 권한 선언 양식: `SCHEDULE_EXACT_ALARM`(알람 앱 핵심 기능), `USE_FULL_SCREEN_INTENT`(알람 전체 화면), 포그라운드 서비스 유형 `dataSync`·`shortService`.
+- 권한 선언 양식: `SCHEDULE_EXACT_ALARM`(알람 앱 핵심 기능), `USE_FULL_SCREEN_INTENT`(알람 전체 화면). 포그라운드 서비스는 `shortService` 유형의 `AlarmTriggerService` 하나뿐이라 유형 선언 대상이 아니다. 상시 알림을 띄우던 `dataSync` 서비스는 #47 에서 제거했다.
 - release 빌드는 R8 을 켜지 않는다(`isMinifyEnabled = false`). Firestore 리플렉션 매핑에 keep 규칙이 없고 난독화 산출물을 기기에서 검증하지 않았기 때문이다. 켜는 작업은 별도 이슈로 다루고, 그때 [preflight 리포트](../.github/scripts/render-release-aab-report.mjs) 의 mapping 단언을 되돌린다.
+
+## 스토어 등록 정보와 앱 콘텐츠 선언 (#47)
+
+스토어 등록 정보 문안과 이미지는 [`docs/play/listing.md`](play/listing.md), [`docs/play/ic_launcher_512.png`](play/ic_launcher_512.png), [`docs/play/feature_graphic_1024x500.png`](play/feature_graphic_1024x500.png) 에 있다. 스크린샷은 로그인된 기기가 필요해 촬영 절차만 적어 두었다.
+
+콘솔 「정책 및 프로그램 → 앱 콘텐츠」 의 답안. 앱이 실제로 하는 일과 [`docs/privacy.html`](privacy.html) 에 맞춰 적었고, 코드가 바뀌면 이 표부터 고친다.
+
+| 항목 | 답 | 근거 |
+|---|---|---|
+| 개인정보처리방침 URL | `https://1hyok.me/SlowClock/privacy.html` | GitHub Pages. github.io 주소는 이 도메인으로 리다이렉트된다 |
+| 광고 | 광고 없음 | 광고 SDK 없음, `AD_ID` 권한 제거 |
+| 앱 액세스 | 일부 기능 제한(로그인 필요). 안내문: "Google 계정으로 로그인하면 모든 기능을 쓸 수 있습니다. 별도의 테스트 계정이나 자격 증명은 필요 없습니다." | Firebase UI Google 로그인만 제공 |
+| 콘텐츠 등급 | 앱 유형 「유틸리티·생산성·커뮤니케이션·기타」. 폭력·성적 내용·욕설·약물·도박 전부 「아니오」. 사용자 간 상호작용 「예」(가족 그룹에서 일정과 이름 공유), 개인정보 공유 「예」(이름·일정을 본인이 초대한 가족과 공유), 위치 공유 「아니오」, 디지털 구매 「아니오」 | 가족 그룹 기능 |
+| 타겟층 | 18세 이상만 선택. 어린이 대상 아님 | 어르신·보호자용 앱 |
+| 뉴스 앱 | 아니오 | 정보 화면이 외부 의료 기사 링크를 보여 주지만 뉴스 앱은 아니다 |
+| 정부 앱 | 아니오 | |
+| 금융 기능 | 없음 | |
+| 건강 | 해당 없음으로 답한다. 의료 기기·건강 데이터·건강 기록 기능이 없다. 정보 화면의 의료 기사 링크가 「건강 관련 콘텐츠」 로 분류되면 그 항목만 「예」 로 바꾼다 | jsoup 으로 메디컬타임즈 기사 목록을 읽어 링크로 보여 준다 |
+| 데이터 보안: 수집 | 개인 정보(이름, 이메일 주소, 사용자 ID), 앱 활동(앱 상호작용, 기타 사용자 생성 콘텐츠: 일정·메모·그룹 이름), 기기 또는 기타 ID(FCM 토큰, Firebase 설치 ID) | Firebase Auth·Firestore·FCM·Analytics |
+| 데이터 보안: 공유 | 제3자 공유 없음. Firebase 는 서비스 제공업체. 가족 그룹 공유는 사용자가 시작한 행동 | privacy.html 4절 |
+| 데이터 보안: 처리 | 전송 중 암호화 「예」. 계정 삭제 요청 방법 「예」: 앱 안 내 정보 화면과 `https://1hyok.me/SlowClock/delete-account.html`(#46) | HTTPS, #46 |
+| 데이터 보안: 목적 | 개인 정보·앱 활동·기기 ID 모두 「앱 기능」. 앱 상호작용은 「분석」 추가 | Analytics 는 광고 ID 없이 사용 |
+| 광고 ID | 아니오 | manifest `tools:node="remove"` |
+| 권한 선언 | `SCHEDULE_EXACT_ALARM`: 핵심 기능이 알람인 앱(정해진 시각에 일정 알람). `USE_FULL_SCREEN_INTENT`: 알람 전체 화면. 포그라운드 서비스: `shortService` 만 사용 | manifest |
+| 사진·동영상 권한 | 해당 없음 | 미디어 권한 없음 |
+
+### 스크린샷 촬영 절차
+
+휴대전화 스크린샷은 2장 이상 8장 이하, 9:16 비율, 1080×2400 PNG 로 낸다. 로그인된 기기가 필요하다.
+
+1. 에뮬레이터 `Pixel_7_Claude_QA`(1080×2400, Play Store 이미지)에 Google 계정으로 로그인한다.
+2. `./gradlew :app:installDebug` 로 설치하고 앱을 열어 Google 로그인을 마친다. 더미 데이터가 자동으로 들어간다.
+3. 화면마다 `adb exec-out screencap -p > docs/play/screenshot-<n>.png` 로 찍는다. 순서: 메인(오늘 일정과 현재 할 일), 알람 전체 화면, 일정 추가, 가족 그룹 관리, 완료한 일.
+4. 개인 정보(이메일·이름)가 보이는 화면은 테스트 계정으로 찍는다.
 
 ## AAB 빌드와 로컬 검증
 
