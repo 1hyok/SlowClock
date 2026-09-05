@@ -1,10 +1,15 @@
 package com.example.slowclock.ui.recommendation
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,14 +19,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.slowclock.data.model.Recommendation
-import com.example.slowclock.ui.recommendation.components.ADHDRecommendation
-import com.example.slowclock.ui.recommendation.components.ElderlyRecommendation
-import com.example.slowclock.ui.recommendation.components.StudentRecommendation
+import com.example.slowclock.ui.common.components.ScreenHeader
+import com.example.slowclock.ui.recommendation.components.RecommendationList
 
-private enum class RecommendationGroup {
-    ELDERLY,
-    ADHD,
-    STUDENT,
+private enum class RecommendationGroup(
+    val label: String,
+    val type: String,
+) {
+    ELDERLY("어르신", "노인"),
+    ADHD("ADHD", "ADHD"),
+    STUDENT("학생", "학생"),
 }
 
 private val allRecommendations =
@@ -49,6 +56,9 @@ private val allRecommendations =
 /**
  * 일정 추천 화면. 서버 상태가 없어 ViewModel 을 두지 않는다. 고른 제목은 [onSelectRecommendation]
  * 으로 넘기고, 어느 화면에 돌려줄지는 NavGraph 가 정한다.
+ *
+ * 무리 고르기는 칩으로 둔다. 종전에는 세 개가 모두 꽉 찬 버튼이라 어느 것이 지금 보고 있는
+ * 목록인지 알 수 없었다(#109).
  */
 @Composable
 fun RecommendationScreen(
@@ -56,41 +66,45 @@ fun RecommendationScreen(
     modifier: Modifier = Modifier,
 ) {
     var group by rememberSaveable { mutableStateOf(RecommendationGroup.ELDERLY) }
+    val shown = allRecommendations.filter { it.type == group.type || it.type == "일반" }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Row(modifier = Modifier.padding(8.dp)) {
-            Button(onClick = { group = RecommendationGroup.ELDERLY }, modifier = Modifier.padding(4.dp)) {
-                Text(text = "노인")
-            }
-            Button(onClick = { group = RecommendationGroup.ADHD }, modifier = Modifier.padding(4.dp)) {
-                Text(text = "ADHD")
-            }
-            Button(onClick = { group = RecommendationGroup.STUDENT }, modifier = Modifier.padding(4.dp)) {
-                Text(text = "학생")
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+    ) {
+        ScreenHeader(title = "추천 일정", subtitle = "고르면 일정 제목으로 들어갑니다")
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            RecommendationGroup.entries.forEach { entry ->
+                FilterChip(
+                    selected = group == entry,
+                    onClick = { group = entry },
+                    shape = MaterialTheme.shapes.small,
+                    colors =
+                        FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                    label = {
+                        Text(
+                            text = entry.label,
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    },
+                    modifier = Modifier.heightIn(min = 52.dp),
+                )
             }
         }
 
-        when (group) {
-            RecommendationGroup.ELDERLY -> {
-                ElderlyRecommendation(
-                    list = allRecommendations,
-                    onSelectRecommendation = onSelectRecommendation,
-                )
-            }
-
-            RecommendationGroup.ADHD -> {
-                ADHDRecommendation(
-                    list = allRecommendations,
-                    onSelectRecommendation = onSelectRecommendation,
-                )
-            }
-
-            RecommendationGroup.STUDENT -> {
-                StudentRecommendation(
-                    list = allRecommendations,
-                    onSelectRecommendation = onSelectRecommendation,
-                )
-            }
-        }
+        RecommendationList(
+            recommendations = shown,
+            onSelectRecommendation = onSelectRecommendation,
+        )
     }
 }

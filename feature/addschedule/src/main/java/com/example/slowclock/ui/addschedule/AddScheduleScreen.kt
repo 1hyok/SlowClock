@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -126,7 +125,7 @@ internal fun AddScheduleContent(
                 Button(
                     onClick = { onIntent(AddScheduleIntent.Save) },
                     enabled = state.canSave,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = MaterialTheme.shapes.medium,
                     // 글자 크기를 키운 기기에서 높이를 고정하면 버튼 글자가 잘린다(#107).
                     modifier =
                         Modifier

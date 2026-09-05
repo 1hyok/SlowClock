@@ -1,6 +1,7 @@
 package com.example.slowclock.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -93,6 +94,7 @@ fun AppNavigation(
 
     Scaffold(
         modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             // 탭 화면에서만 보인다. 상세 화면에 탭이 남아 있으면 그 자리에서 탭을 눌렀을 때
             // 어디로 가는지 알 수 없다.

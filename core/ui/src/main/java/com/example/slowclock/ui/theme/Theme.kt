@@ -2,20 +2,24 @@ package com.example.slowclock.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
 /**
- * 역할별 토큰 배정. 화면은 이 토큰만 쓴다.
- * - primary: 주요 동작·강조(파랑), primaryContainer: 파란 카드 배경
- * - secondary: 제목·타임라인 선, tertiary: 완료 상태(초록)
- * - error: 오류·미완료(빨강)
- * - surfaceContainer 계열: 카드 배경. 라이트는 흰 배경 위 회색 계조, 다크는 배경보다 밝은 계조다.
+ * 역할별 토큰 배정. 화면은 이 토큰만 쓴다. 뜻 하나에 색 하나다(#109).
+ * - primary(남색): 주요 동작, 앱 제목, 선택 상태
+ * - secondary(주황): 지금 해야 할 일. 화면에서 가장 먼저 보여야 하는 자리에만 쓴다
+ * - tertiary(초록): 끝낸 일
+ * - error(빨강): 오류
+ * - background 는 따뜻한 종이색, surface 는 흰색이다. 카드가 배경에서 저절로 갈린다
  *
  * 다크는 라이트의 역할을 뒤집지 않는다. 뒤집으면 연한 컨테이너가 진한 색 덩어리가 되어 화면을
  * 지배한다. 다크의 컨테이너는 배경에 가까운 어두운 톤이고 그 위 글자만 밝다.
@@ -24,74 +28,87 @@ import androidx.core.view.WindowCompat
  */
 private val LightColorScheme =
     lightColorScheme(
-        primary = BluePrimary,
-        onPrimary = BlueOnPrimary,
-        primaryContainer = BlueContainer,
-        onPrimaryContainer = OnBlueContainer,
-        secondary = BlueDeep,
-        onSecondary = BlueOnPrimary,
-        secondaryContainer = BlueContainerSoft,
-        onSecondaryContainer = OnBlueContainerSoft,
-        tertiary = GreenSuccess,
-        onTertiary = BlueOnPrimary,
-        tertiaryContainer = GreenContainer,
-        onTertiaryContainer = OnGreenContainer,
+        primary = InkBlue,
+        onPrimary = OnInkBlue,
+        primaryContainer = InkBlueContainer,
+        onPrimaryContainer = OnInkBlueContainer,
+        secondary = EmberOrange,
+        onSecondary = OnEmberOrange,
+        secondaryContainer = EmberContainer,
+        onSecondaryContainer = OnEmberContainer,
+        tertiary = LeafGreen,
+        onTertiary = OnLeafGreen,
+        tertiaryContainer = LeafContainer,
+        onTertiaryContainer = OnLeafContainer,
         error = RedError,
-        onError = BlueOnPrimary,
+        onError = OnRedError,
         errorContainer = RedContainer,
         onErrorContainer = OnRedContainer,
-        background = Surface,
-        onBackground = TextPrimary,
-        surface = Surface,
-        onSurface = TextPrimary,
-        surfaceVariant = SurfaceVariantLight,
-        onSurfaceVariant = TextSecondary,
-        surfaceContainerLowest = SurfaceContainerLowest,
-        surfaceContainerLow = SurfaceContainerLow,
-        surfaceContainer = SurfaceContainer,
-        surfaceContainerHigh = SurfaceContainerHigh,
-        surfaceContainerHighest = SurfaceContainerHighest,
-        outline = Outline,
-        outlineVariant = OutlineVariant,
-        inverseSurface = SurfaceDark,
-        inverseOnSurface = TextPrimaryDark,
-        inversePrimary = BlueLight,
+        background = PaperBackground,
+        onBackground = InkPrimary,
+        surface = PaperSurface,
+        onSurface = InkPrimary,
+        surfaceVariant = PaperVariant,
+        onSurfaceVariant = InkSecondary,
+        surfaceContainerLowest = PaperContainerLowest,
+        surfaceContainerLow = PaperContainerLow,
+        surfaceContainer = PaperContainer,
+        surfaceContainerHigh = PaperContainerHigh,
+        surfaceContainerHighest = PaperContainerHighest,
+        outline = InkOutline,
+        outlineVariant = InkOutlineVariant,
+        inverseSurface = NightSurface,
+        inverseOnSurface = InkPrimaryDark,
+        inversePrimary = InkBlueLight,
     )
 
 private val DarkColorScheme =
     darkColorScheme(
-        primary = BlueLight,
-        onPrimary = OnBlueDark,
-        primaryContainer = BlueContainerDark,
-        onPrimaryContainer = OnBlueContainerDark,
-        secondary = BlueSoftDark,
-        onSecondary = OnBlueSoftDark,
-        secondaryContainer = BlueContainerSoftDark,
-        onSecondaryContainer = OnBlueContainerSoftDark,
-        tertiary = GreenLight,
-        onTertiary = OnGreenDark,
-        tertiaryContainer = GreenContainerDark,
-        onTertiaryContainer = OnGreenContainerDark,
+        primary = InkBlueLight,
+        onPrimary = OnInkBlueDark,
+        primaryContainer = InkBlueContainerDark,
+        onPrimaryContainer = OnInkBlueContainerDark,
+        secondary = EmberLight,
+        onSecondary = OnEmberDark,
+        secondaryContainer = EmberContainerDark,
+        onSecondaryContainer = OnEmberContainerDark,
+        tertiary = LeafLight,
+        onTertiary = OnLeafDark,
+        tertiaryContainer = LeafContainerDark,
+        onTertiaryContainer = OnLeafContainerDark,
         error = RedLight,
         onError = OnRedDark,
         errorContainer = RedContainerDark,
         onErrorContainer = OnRedContainerDark,
-        background = SurfaceDark,
-        onBackground = TextPrimaryDark,
-        surface = SurfaceDark,
-        onSurface = TextPrimaryDark,
-        surfaceVariant = SurfaceVariantDark,
-        onSurfaceVariant = TextSecondaryDark,
-        surfaceContainerLowest = SurfaceContainerLowestDark,
-        surfaceContainerLow = SurfaceContainerLowDark,
-        surfaceContainer = SurfaceContainerDark,
-        surfaceContainerHigh = SurfaceContainerHighDark,
-        surfaceContainerHighest = SurfaceContainerHighestDark,
-        outline = OutlineDark,
-        outlineVariant = OutlineVariantDark,
-        inverseSurface = Surface,
-        inverseOnSurface = TextPrimary,
-        inversePrimary = BluePrimary,
+        background = NightBackground,
+        onBackground = InkPrimaryDark,
+        surface = NightSurface,
+        onSurface = InkPrimaryDark,
+        surfaceVariant = NightVariant,
+        onSurfaceVariant = InkSecondaryDark,
+        surfaceContainerLowest = NightContainerLowest,
+        surfaceContainerLow = NightContainerLow,
+        surfaceContainer = NightContainer,
+        surfaceContainerHigh = NightContainerHigh,
+        surfaceContainerHighest = NightContainerHighest,
+        outline = InkOutlineDark,
+        outlineVariant = InkOutlineVariantDark,
+        inverseSurface = PaperSurface,
+        inverseOnSurface = InkPrimary,
+        inversePrimary = InkBlue,
+    )
+
+/**
+ * 모서리 반경 한 벌. 종전에는 화면마다 12·16dp 가 섞여 있었다.
+ * 넉넉한 반경이 화면을 부드럽게 만들고, 큰 덩어리일수록 더 둥글다.
+ */
+private val SlowClockShapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(8.dp),
+        small = RoundedCornerShape(12.dp),
+        medium = RoundedCornerShape(20.dp),
+        large = RoundedCornerShape(28.dp),
+        extraLarge = RoundedCornerShape(36.dp),
     )
 
 @Composable
@@ -114,6 +131,7 @@ fun SlowClockTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
+        shapes = SlowClockShapes,
         content = content,
     )
 }

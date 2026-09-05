@@ -104,6 +104,7 @@ jobs:
             // screenshot-baseline-policy.test.mjs 를 함께 늘린다.
             const roots = [
               'app/src/screenshotTestDebug/reference/',
+              'feature/main/src/screenshotTestDebug/reference/',
             ];
             const artifact = path.resolve(process.env.ARTIFACT_DIR);
             const filesPath = path.join(artifact, 'files.json');

@@ -3,51 +3,46 @@ package com.example.slowclock.ui.main
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLocale
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.SignInPrompt
+import com.example.slowclock.ui.common.components.rememberDayText
 import com.example.slowclock.ui.common.dialog.DeleteConfirmDialog
-import com.example.slowclock.ui.main.components.CurrentTaskSection
+import com.example.slowclock.ui.main.components.DayHeader
 import com.example.slowclock.ui.main.components.EmptyStateCard
+import com.example.slowclock.ui.main.components.NowCard
 import com.example.slowclock.ui.main.components.ScheduleDetailDialog
 import com.example.slowclock.ui.main.components.SharedRemindersSection
 import com.example.slowclock.ui.main.components.TodayScheduleSection
 import com.example.slowclock.ui.mvi.ObserveSignal
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 /** 메인 화면(stateful). 네비게이션 콜백만 받고 나머지는 [MainIntent] 로 보낸다. */
 @Composable
@@ -81,7 +76,12 @@ fun MainScreen(
     )
 }
 
-/** 메인 화면(stateless). 프리뷰·스크린샷 테스트 진입점이다. */
+/**
+ * 메인 화면(stateless). 프리뷰·스크린샷 테스트 진입점이다.
+ *
+ * 위에서 아래로 날짜와 진행 상황, 지금 할 일, 오늘의 일정, 공유 일정 순이다. 앱을 켠 사람이
+ * 가장 먼저 알고 싶은 것을 가장 위에 가장 크게 둔다(#109).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MainContent(
@@ -95,9 +95,13 @@ internal fun MainContent(
     modifier: Modifier = Modifier,
 ) {
     val isSignedOut = state.isSignedInKnown && state.currentUserId.isBlank()
-    val dateFormat = remember { SimpleDateFormat("yyyy년 M월 d일 EEEE", Locale.KOREAN) }
-    val locale = LocalLocale.current.platformLocale
-    val timeFormat = remember(locale) { SimpleDateFormat("HH:mm", locale) }
+    val dateText = rememberDayText(Date())
+    // 지금 할 일은 위에 크게 나오므로 아래 목록에서 뺀다. 같은 일정이 한 화면에 두 번 보이면
+    // 두 개인지 하나인지 알 수 없다(#109).
+    val listedSchedules =
+        remember(state.todaySchedules, state.currentSchedule) {
+            state.todaySchedules.filterNot { it.id == state.currentSchedule?.id }
+        }
 
     state.selectedScheduleForDetail?.let { schedule ->
         ScheduleDetailDialog(
@@ -131,60 +135,51 @@ internal fun MainContent(
 
     Scaffold(
         modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         text = "느린시계",
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                     )
                 },
                 actions = {
-                    IconButton(
-                        onClick = onNavigateToProfile,
-                        modifier = Modifier.size(56.dp),
-                    ) {
+                    IconButton(onClick = onNavigateToProfile, modifier = Modifier.size(56.dp)) {
                         Icon(
-                            Icons.Default.Person,
+                            Icons.Outlined.Person,
                             contentDescription = "내 정보",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(30.dp),
                         )
                     }
-                    IconButton(
-                        onClick = onNavigateToSettings,
-                        modifier = Modifier.size(56.dp),
-                    ) {
+                    IconButton(onClick = onNavigateToSettings, modifier = Modifier.size(56.dp)) {
                         Icon(
-                            Icons.Default.Settings,
+                            Icons.Outlined.Settings,
                             contentDescription = "설정",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(30.dp),
                         )
                     }
                 },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
+                        containerColor = MaterialTheme.colorScheme.background,
                     ),
             )
         },
         floatingActionButton = {
             if (isSignedOut) return@Scaffold
-            FloatingActionButton(
+            // 동그란 「+」 하나로는 무엇이 더해지는지 알 수 없다. 글자를 함께 둔다(#109).
+            ExtendedFloatingActionButton(
                 onClick = onAddSchedule,
                 containerColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(72.dp),
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "일정 추가",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(36.dp),
-                )
-            }
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                icon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(30.dp)) },
+                text = { Text(text = "일정 추가", style = MaterialTheme.typography.titleMedium) },
+            )
         },
     ) { paddingValues ->
         LazyColumn(
@@ -195,16 +190,14 @@ internal fun MainContent(
                     .background(MaterialTheme.colorScheme.background),
             // 아래 여백은 떠 있는 추가 버튼이 마지막 항목을 가리지 않게 둔다. 글꼴을 키우면 버튼도
             // 커져 더 많이 가린다.
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 140.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             item {
-                Text(
-                    text = dateFormat.format(Date()),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
+                DayHeader(
+                    dateText = dateText,
+                    completedCount = state.completedCount,
+                    totalCount = state.totalCount,
                 )
             }
 
@@ -215,19 +208,22 @@ internal fun MainContent(
 
             state.currentSchedule?.let { schedule ->
                 item {
-                    CurrentTaskSection(
+                    NowCard(
                         schedule = schedule,
                         onShowDetail = { onIntent(MainIntent.ShowDetail(schedule.id)) },
+                        onComplete = { onIntent(MainIntent.ToggleComplete(schedule.id)) },
                     )
                 }
             }
 
-            item {
-                TodayScheduleSection(
-                    schedules = state.todaySchedules,
-                    onToggleComplete = { onIntent(MainIntent.ToggleComplete(it)) },
-                    onShowDetail = { onIntent(MainIntent.ShowDetail(it)) },
-                )
+            if (listedSchedules.isNotEmpty()) {
+                item {
+                    TodayScheduleSection(
+                        schedules = listedSchedules,
+                        onToggleComplete = { onIntent(MainIntent.ToggleComplete(it)) },
+                        onShowDetail = { onIntent(MainIntent.ShowDetail(it)) },
+                    )
+                }
             }
 
             if (state.sharedReminders.isNotEmpty()) {
@@ -235,7 +231,7 @@ internal fun MainContent(
                     SharedRemindersSection(
                         sharedReminders = state.sharedReminders,
                         currentUserUid = state.currentUserId.ifBlank { null },
-                        timeFormat = timeFormat,
+                        ownerNames = state.sharedReminderOwners,
                         onToggleComplete = { onIntent(MainIntent.ToggleSharedReminderComplete(it)) },
                     )
                 }
@@ -270,6 +266,7 @@ private fun ExactAlarmNoticeDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         title = { Text(text = "알람을 정시에 울리려면", style = MaterialTheme.typography.headlineSmall) },
         text = {
             Text(
