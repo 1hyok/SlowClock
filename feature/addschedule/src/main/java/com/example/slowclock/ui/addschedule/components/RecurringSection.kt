@@ -33,9 +33,10 @@ fun RecurringSection(
     recurringType: String,
     onRecurringChange: (Boolean) -> Unit,
     onRecurringTypeChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {

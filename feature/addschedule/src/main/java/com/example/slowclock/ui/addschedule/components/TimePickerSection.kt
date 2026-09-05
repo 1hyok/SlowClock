@@ -38,8 +38,9 @@ import java.util.Locale
 fun TimePickerSection(
     selectedTime: Calendar,
     endTime: Calendar?,
-    onTimeSelected: (Calendar) -> Unit,
-    onEndTimeSelected: (Calendar?) -> Unit,
+    onTimeSelect: (Calendar) -> Unit,
+    onEndTimeSelect: (Calendar?) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val timeFormat = SimpleDateFormat("a h:mm", Locale.KOREAN)
 
@@ -52,7 +53,7 @@ fun TimePickerSection(
 
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -79,7 +80,7 @@ fun TimePickerSection(
                         value = hour,
                         onValueChange = {
                             hour = it.filter { c -> c.isDigit() }.take(2)
-                            updateCalendarTime(hour, minute)?.let(onTimeSelected)
+                            updateCalendarTime(hour, minute)?.let(onTimeSelect)
                         },
                         label = { Text("시") },
                         modifier = Modifier.weight(1f),
@@ -92,7 +93,7 @@ fun TimePickerSection(
                         value = minute,
                         onValueChange = {
                             minute = it.filter { c -> c.isDigit() }.take(2)
-                            updateCalendarTime(hour, minute)?.let(onTimeSelected)
+                            updateCalendarTime(hour, minute)?.let(onTimeSelect)
                         },
                         label = { Text("분") },
                         modifier = Modifier.weight(1f),
@@ -124,7 +125,7 @@ fun TimePickerSection(
                         value = endHour,
                         onValueChange = {
                             endHour = it.filter { c -> c.isDigit() }.take(2)
-                            updateCalendarTime(endHour, endMinute)?.let(onEndTimeSelected)
+                            updateCalendarTime(endHour, endMinute)?.let(onEndTimeSelect)
                         },
                         label = { Text("시") },
                         modifier = Modifier.weight(1f),
@@ -137,7 +138,7 @@ fun TimePickerSection(
                         value = endMinute,
                         onValueChange = {
                             endMinute = it.filter { c -> c.isDigit() }.take(2)
-                            updateCalendarTime(endHour, endMinute)?.let(onEndTimeSelected)
+                            updateCalendarTime(endHour, endMinute)?.let(onEndTimeSelect)
                         },
                         label = { Text("분") },
                         modifier = Modifier.weight(1f),

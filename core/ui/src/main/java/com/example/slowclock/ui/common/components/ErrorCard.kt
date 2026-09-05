@@ -30,12 +30,13 @@ import com.example.slowclock.util.AppError
 @Composable
 fun ErrorCard(
     error: AppError,
+    modifier: Modifier = Modifier,
     canRetry: Boolean = false,
     onRetry: (() -> Unit)? = null,
     onDismiss: (() -> Unit)? = null,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors =
             CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer,

@@ -37,6 +37,7 @@ import java.util.Locale
 fun CurrentTaskSection(
     schedule: Schedule,
     onShowDetail: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val timeFormat = SimpleDateFormat("a h:mm", Locale.KOREAN)
     val currentTime = System.currentTimeMillis()
@@ -52,7 +53,7 @@ fun CurrentTaskSection(
             timeFormat.format(schedule.startTime.toDate())
         }
 
-    Column {
+    Column(modifier = modifier) {
         // 섹션 헤더
         Row(
             verticalAlignment = Alignment.CenterVertically,

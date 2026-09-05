@@ -21,11 +21,11 @@ import androidx.core.net.toUri
 internal const val MEDICAL_NEWS_URL = "https://www.medicaltimes.com/Main/News/List.html?MainCate=6&SubCate=79"
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     Card(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .clickable {
