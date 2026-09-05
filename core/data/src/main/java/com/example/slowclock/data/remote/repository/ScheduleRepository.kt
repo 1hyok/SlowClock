@@ -5,7 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.example.slowclock.data.FirestoreDB
 import com.example.slowclock.data.model.Schedule
-import com.example.slowclock.notification.GuardianNotifier
+import com.example.slowclock.data.notification.Notifier
 import com.example.slowclock.util.AppError
 import com.example.slowclock.util.toAppError
 import com.google.firebase.Timestamp
@@ -23,7 +23,9 @@ import javax.inject.Inject
  */
 class ScheduleRepository
     @Inject
-    constructor() {
+    constructor(
+        private val notifier: Notifier,
+    ) {
         private val auth = FirebaseAuth.getInstance()
         private val schedulesCollection = FirestoreDB.schedules
 
@@ -436,17 +438,17 @@ class ScheduleRepository
                 val uid = userDoc.getString("id") ?: continue
                 if (uid == currentUid) continue // Skip self
                 val fcmToken = userDoc.getString("fcmToken") ?: continue
-                GuardianNotifier.sendReminderToUser(context, fcmToken, title, message)
+                notifier.sendReminderToUser(context, fcmToken, title, message)
             }
 
-            // Optimized: send to all tokens at once (if GuardianNotifier supports it)
+            // Optimized: send to all tokens at once via Notifier
             val tokens =
                 users
                     .filter { it.id != currentUid }
                     .mapNotNull { it.getString("fcmToken") }
                     .filter { it.isNotBlank() }
             if (tokens.isNotEmpty()) {
-                GuardianNotifier.sendReminderToUsers(context, tokens, title, message)
+                notifier.sendReminderToUsers(context, tokens, title, message)
             }
         }
 
@@ -478,7 +480,7 @@ class ScheduleRepository
         ) {
             val tokens = getFcmTokensByShareCode(shareCode)
             if (tokens.isNotEmpty()) {
-                GuardianNotifier.sendReminderToUsers(context, tokens, title, message)
+                notifier.sendReminderToUsers(context, tokens, title, message)
             }
         }
     }

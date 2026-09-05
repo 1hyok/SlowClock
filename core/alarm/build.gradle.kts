@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -21,8 +23,11 @@ android {
 
 dependencies {
     api(project(":core:model"))
+    implementation(project(":core:data")) // Notifier 인터페이스 구현 (역결합 제거)
     implementation(libs.androidx.core.ktx)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth)
     implementation(libs.volley)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 }

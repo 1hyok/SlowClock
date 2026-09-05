@@ -4,19 +4,20 @@ import android.content.Context
 import android.util.Log
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
+import com.example.slowclock.data.notification.Notifier
 import org.json.JSONObject
 import java.lang.reflect.Method
 
-object GuardianNotifier {
+object GuardianNotifier : Notifier {
     // Replace with your deployed Cloud Function URL
     private const val CLOUD_FUNCTION_URL = "https://us-central1-slow-clock-scheduler.cloudfunctions.net/sendFcmNotification"
 
-    fun sendReminderToUser(
+    override fun sendReminderToUser(
         context: Context,
         fcmToken: String,
         title: String,
         message: String,
-        shareCode: String? = null,
+        shareCode: String?,
     ) {
         val json =
             JSONObject().apply {
@@ -45,12 +46,12 @@ object GuardianNotifier {
         Volley.newRequestQueue(context).add(request)
     }
 
-    fun sendReminderToUsers(
+    override fun sendReminderToUsers(
         context: Context,
         fcmTokens: List<String>,
         title: String,
         message: String,
-        shareCode: String? = null,
+        shareCode: String?,
     ) {
         for (token in fcmTokens) {
             sendReminderToUser(context, token, title, message, shareCode)

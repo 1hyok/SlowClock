@@ -1,0 +1,10 @@
+# .mailmap — git author 정규화
+#
+# 아래 표시 이름들은 모두 동일 인물(정일혁, dnfjddk2@gmail.com)의 커밋입니다.
+# 초기에 git user.name 이 시기마다 달라 author 가 4개로 분산됐습니다:
+#   explodeTheComputer · Dive on fish · Zach · 일혁  →  정일혁
+#
+# 이메일이 모두 같으므로 아래 한 줄이 4개를 전부 "정일혁" 으로 정규화합니다.
+# (커밋 히스토리·SHA 는 바뀌지 않으며, git shortlog / log --use-mailmap / blame 의
+#  표시에만 적용됩니다. GitHub 은 .mailmap 을 반영하지 않습니다.)
+정일혁 <dnfjddk2@gmail.com>

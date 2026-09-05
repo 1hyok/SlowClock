@@ -3,7 +3,7 @@ package com.example.slowclock.data.remote.repository
 import android.content.Context
 import com.example.slowclock.data.FirestoreDB
 import com.example.slowclock.data.model.User
-import com.example.slowclock.notification.GuardianNotifier
+import com.example.slowclock.data.notification.Notifier
 import com.example.slowclock.util.GroupIdHelper
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -17,7 +17,9 @@ import javax.inject.Inject
  */
 class UserRepository
     @Inject
-    constructor() {
+    constructor(
+        private val notifier: Notifier,
+    ) {
         private val auth = FirebaseAuth.getInstance()
         private val usersCollection = FirestoreDB.users
 
@@ -117,7 +119,7 @@ class UserRepository
         ) {
             fetchFamilyTokens(groupId) { tokens ->
                 tokens.forEach { token ->
-                    GuardianNotifier.sendReminderToUser(
+                    notifier.sendReminderToUser(
                         context = context,
                         fcmToken = token,
                         title = "가족 일정 알림",
