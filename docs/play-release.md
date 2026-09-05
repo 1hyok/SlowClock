@@ -48,7 +48,7 @@ Firebase App Distribution 과 Google Play 의 목적을 분리하고, 첫 Play �
 | 금융 기능 | 없음 | |
 | 건강 | 해당 없음. 의료 기기·건강 데이터·건강 기록 기능이 없고, 건강 관련 콘텐츠도 앱 안에 없다 | 외부 사이트로 나가는 링크뿐(#51 에서 스크래핑 제거) |
 | 데이터 보안: 수집 | 개인 정보(이름, 이메일 주소, 사용자 ID), 앱 활동(앱 상호작용, 기타 사용자 생성 콘텐츠: 일정·메모·그룹 이름), 기기 또는 기타 ID(FCM 토큰, Firebase 설치 ID) | Firebase Auth·Firestore·FCM·Analytics |
-| 데이터 보안: 공유 | 제3자 공유 없음. Firebase 는 서비스 제공업체. 가족 그룹 공유는 사용자가 시작한 행동 | privacy.html 4절 |
+| 데이터 보안: 공유 | 제3자 공유 없음. Firebase 는 서비스 제공업체. 가족 그룹 공유는 사용자가 시작한 행동 | privacy.html 4절, [firestore.md](firestore.md) 의 컬렉션 표 |
 | 데이터 보안: 처리 | 전송 중 암호화 「예」. 계정 삭제 요청 방법 「예」: 앱 안 내 정보 화면과 `https://1hyok.me/SlowClock/delete-account.html`(#46) | HTTPS, #46 |
 | 데이터 보안: 목적 | 개인 정보·앱 활동·기기 ID 모두 「앱 기능」. 앱 상호작용은 「분석」 추가 | Analytics 는 광고 ID 없이 사용 |
 | 광고 ID | 아니오 | manifest `tools:node="remove"` |

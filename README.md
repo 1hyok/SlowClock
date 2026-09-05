@@ -74,4 +74,5 @@ GitHub Actions 파이프라인은 Afternote-FE 의 것을 1인 운영에 맞게 
 - Google Play 내부 테스트 트랙(수동 실행): [docs/play-release.md](docs/play-release.md)
 - screenshot baseline 은 CI 컨테이너에서 만든다(`screenshot-baseline` 라벨): [docs/testing/screenshot.md](docs/testing/screenshot.md)
 - 외부 설정(GitHub environment·secret, GCP WIF, Firebase 앱, Pages, 브랜치 보호): [docs/release/ci-setup.md](docs/release/ci-setup.md)
+- Firestore 데이터 경계와 보안 규칙 운용: [docs/firestore.md](docs/firestore.md)
 - 워크플로 정책은 `.github/scripts/*.test.mjs` 에 고정돼 있다. 워크플로를 고치면 `node --test .github/scripts/*.test.mjs` 와 `scripts/repository-quality.sh` 를 먼저 돌린다.
