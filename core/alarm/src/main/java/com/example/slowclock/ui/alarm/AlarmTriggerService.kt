@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
@@ -55,8 +56,11 @@ class AlarmTriggerService : Service() {
         // 그래서 새 id 를 쓴다(#122).
         private const val CHANNEL_ID = "alarm_ringing_v2"
 
+        /** 종전 채널. 오디오 속성이 없어 알람 소리로 취급되지 않았다. 남아 있으면 지운다. */
+        private const val LEGACY_CHANNEL_ID = "alarm_notification_channel"
+
         /** 아무도 끄지 않아도 이만큼 지나면 멈춘다. 배터리를 계속 태우지 않기 위해서다. */
-        private const val MAX_RINGING_MILLIS = 2 * 60 * 1000L
+        private const val MAX_RINGING_MILLIS = 5 * 60 * 1000L
 
         /** 끊었다 이었다 하는 진동. 0 은 시작까지의 대기다. */
         private val VIBRATION_PATTERN = longArrayOf(0, 800, 600)
@@ -195,6 +199,12 @@ class AlarmTriggerService : Service() {
 
     private fun startSound() {
         stopSound()
+        // 알람 볼륨이 0 이면 소리를 포기하고 진동만 남긴다. 무음으로 두면 재생 자원만 쓴다.
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (audio.getStreamVolume(AudioManager.STREAM_ALARM) == 0) {
+            Log.w(TAG, "알람 볼륨이 0 이라 진동만 울린다")
+            return
+        }
         val uri =
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -269,24 +279,24 @@ class AlarmTriggerService : Service() {
     }
 
     private fun createChannel() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // 채널은 소리도 진동도 내지 않는다. 둘 다 이 서비스가 알람 용도로 직접 내므로,
+        // 채널까지 울리면 소리가 두 겹으로 겹치고 채널 쪽은 알람 볼륨을 타지도 않는다(#122).
         val channel =
             NotificationChannel(CHANNEL_ID, "알람", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "정해 둔 시각에 울리는 알람"
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                enableVibration(true)
+                enableVibration(false)
                 enableLights(true)
                 setBypassDnd(true)
-                setSound(
-                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
-                    AudioAttributes
-                        .Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                )
+                setSound(null, null)
             }
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
+
+        // 옛 채널은 오디오 속성 없이 만들어져 알람이 아니라 알림 소리로 취급됐다. 채널은 만든 뒤
+        // 고칠 수 없으므로 새 id 로 갈아탔고, 남은 것은 사용자 설정 화면에서 지운다.
+        runCatching { manager.deleteNotificationChannel(LEGACY_CHANNEL_ID) }
     }
 
     override fun onDestroy() {

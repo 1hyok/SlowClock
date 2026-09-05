@@ -87,7 +87,13 @@ object ScheduleAlarmHelper {
 
         try {
             if (canScheduleExact(alarmManager)) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+                // setAlarmClock 은 절전에 가장 강하고, 백그라운드에서 포그라운드 서비스를 시작할 수
+                // 있는 예외가 문서에 명시된 몇 안 되는 API 다. 상태 표시줄에 다음 알람 아이콘이
+                // 떠서 사용자가 「걸려 있다」 를 눈으로 확인할 수도 있다(#122).
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(triggerTime, showAlarmIntent(context)),
+                    pendingIntent,
+                )
             } else {
                 // 정시 허용이 없을 때의 차선. 몇 분 늦을 수 있지만 절전 상태에서도 울린다.
                 alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
@@ -146,6 +152,19 @@ object ScheduleAlarmHelper {
 
     private fun canScheduleExact(alarmManager: AlarmManager): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+
+    /** 상태 표시줄의 알람 아이콘을 눌렀을 때 열리는 화면. 앱의 메인으로 보낸다. */
+    private fun showAlarmIntent(context: Context): PendingIntent? =
+        context.packageManager
+            .getLaunchIntentForPackage(context.packageName)
+            ?.let { launch ->
+                PendingIntent.getActivity(
+                    context,
+                    0,
+                    launch,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
 
     private fun requestCodeOf(
         scheduleId: String,
