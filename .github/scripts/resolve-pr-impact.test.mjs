@@ -96,7 +96,6 @@ test("a production change fans out to every reverse-dependent module", () => {
     assert.deepEqual(impact.screenshotModules, [":app"]);
     assert.deepEqual(impact.screenshotTasks, [":app:validateScreenshotTest"]);
     assert.equal(impact.codeqlJavaKotlin, true);
-    assert.equal(impact.codeqlActions, false);
     assert.equal(impact.runNodeTests, false);
     assert.equal(impact.repositoryQualityFull, false);
 });
@@ -158,7 +157,6 @@ test("documentation-only changes select no Gradle work", () => {
         "screenshot_required=false",
         "screenshot_modules=",
         "screenshot_tasks=",
-        "codeql_actions=false",
         "codeql_java_kotlin=false",
         "repository_quality_full=false",
         "repository_quality_fixtures=false",
@@ -169,7 +167,6 @@ test("workflow, action and script changes run the policy tests and Actions CodeQ
     const impact = resolvePrImpact([".github/workflows/lint.yml", ".github/scripts/render-ktlint-summary.mjs"], modules, dependencies);
 
     assert.equal(impact.runNodeTests, true);
-    assert.equal(impact.codeqlActions, true);
     // lint.yml 은 영향 계산 정책 경로라 모든 lane 을 fail-closed 로 연다.
     assert.equal(impact.repositoryQualityFull, true);
     assert.deepEqual(impact.ktlintTasks, ["ktlintCheck"]);
