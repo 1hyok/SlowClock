@@ -9,6 +9,7 @@ android {
 
 dependencies {
     api(project(":core:model"))
+    testImplementation(libs.junit)
     implementation(project(":core:data")) // Notifier 인터페이스 구현 (역결합 제거)
     implementation(libs.androidx.core.ktx)
     implementation(libs.firebase.messaging)
