@@ -12,7 +12,6 @@ import java.util.*
 
 object ScheduleAlarmHelper {
     private const val TAG = "ScheduleAlarmHelper"
-    private const val END_ALARM_OFFSET = 9999
 
     /**
      * 스케줄에 대한 알람을 예약합니다.
@@ -31,10 +30,11 @@ object ScheduleAlarmHelper {
         val now = System.currentTimeMillis()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        // 알람 권한 확인 (Android 12+)
+        // Android 12 부터 정시 알람은 따로 허용받아야 한다. 허용이 없다고 알람을 아예 걸지 않으면
+        // 그 일정은 소리 없이 지나간다. 앱이 사용자에게 「몇 분 늦게 울릴 수 있다」 고 안내하므로
+        // 늦더라도 울리게 부정확 알람으로 건다(#117).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-            Log.w(TAG, "정확한 알람 권한이 없습니다. 설정에서 권한을 허용해주세요.")
-            return
+            Log.w(TAG, "정시 알람 권한이 없어 부정확 알람으로 겁니다.")
         }
 
         // 시작 시간 알람 예약
@@ -136,18 +136,13 @@ object ScheduleAlarmHelper {
         triggerTime: Long,
         pendingIntent: PendingIntent,
     ) {
-        when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-            }
-
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT -> {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-            }
-
-            else -> {
-                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-            }
+        val canBeExact =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+        if (canBeExact) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+        } else {
+            // 정시 허용이 없을 때의 차선. 몇 분 늦을 수 있지만 절전 상태에서도 울린다.
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
         }
     }
 
@@ -203,9 +198,16 @@ object ScheduleAlarmHelper {
     }
 
     /**
-     * RequestCode 생성 함수들
+     * 알람 자리를 가리키는 번호. 시작은 짝수, 종료는 홀수로 만든다.
+     *
+     * 종전에는 종료 번호가 시작 번호에 9999 를 더한 값이었다. 어떤 일정의 해시가 다른 일정의
+     * 해시보다 정확히 9999 크면 두 알람이 같은 자리를 써서, 나중에 건 쪽이 앞의 것을 덮어쓰고
+     * 하나를 취소하면 다른 하나도 사라졌다. 사용자에게는 알람이 안 울린 것으로만 보인다(#117).
+     *
+     * 홀짝으로 갈라 두면 시작과 종료가 서로 겹치는 일은 구조적으로 사라진다. 남는 것은 서로 다른
+     * 일정 id 의 해시가 같은 경우인데, 이는 32비트 번호를 쓰는 한 피할 수 없다.
      */
-    private fun generateStartRequestCode(scheduleId: String): Int = scheduleId.hashCode()
+    internal fun generateStartRequestCode(scheduleId: String): Int = scheduleId.hashCode() * 2
 
-    private fun generateEndRequestCode(scheduleId: String): Int = scheduleId.hashCode() + END_ALARM_OFFSET
+    internal fun generateEndRequestCode(scheduleId: String): Int = scheduleId.hashCode() * 2 + 1
 }
