@@ -55,9 +55,8 @@ object ScheduleAlarmHelper {
         isFullScreen: Boolean,
     ) {
         schedule.startTime.toDate().time.takeIf { it > now }?.let { triggerTime ->
-            val intent = createAlarmIntent(context, schedule, "시작", isFullScreen)
             val requestCode = generateStartRequestCode(schedule.id)
-            val pendingIntent = createPendingIntent(context, intent, requestCode)
+            val pendingIntent = createAlarmPendingIntent(context, schedule, "시작", isFullScreen, requestCode)
 
             try {
                 setExactAlarm(alarmManager, triggerTime, pendingIntent)
@@ -81,9 +80,8 @@ object ScheduleAlarmHelper {
         isFullScreen: Boolean,
     ) {
         schedule.endTime?.toDate()?.time?.takeIf { it > now }?.let { triggerTime ->
-            val intent = createAlarmIntent(context, schedule, "종료", isFullScreen)
             val requestCode = generateEndRequestCode(schedule.id)
-            val pendingIntent = createPendingIntent(context, intent, requestCode)
+            val pendingIntent = createAlarmPendingIntent(context, schedule, "종료", isFullScreen, requestCode)
 
             try {
                 setExactAlarm(alarmManager, triggerTime, pendingIntent)
@@ -97,36 +95,34 @@ object ScheduleAlarmHelper {
     }
 
     /**
-     * 알람 Intent를 생성합니다.
+     * 알람이 걸릴 자리를 가리키는 PendingIntent.
+     *
+     * Intent 를 만드는 자리와 PendingIntent 를 만드는 자리를 붙여 둔다. 둘을 다른 함수로 나눠
+     * 두면 정적 분석이 대상 컴포넌트를 따라가지 못해 «암시적 PendingIntent» 로 본다. 실제로는
+     * [AlarmReceiver] 로 못박혀 있고 FLAG_IMMUTABLE 이라 받는 쪽이 고칠 수도 없다(#117).
      */
-    private fun createAlarmIntent(
+    private fun createAlarmPendingIntent(
         context: Context,
         schedule: Schedule,
         type: String,
         isFullScreen: Boolean,
-    ): Intent =
-        Intent(context, AlarmReceiver::class.java).apply {
-            putExtra("title", "${schedule.title} ($type)")
-            putExtra("desc", schedule.description)
-            putExtra("isFullScreen", isFullScreen)
-            putExtra("scheduleId", schedule.id)
-            putExtra("alarmType", type)
-        }
-
-    /**
-     * PendingIntent를 생성합니다.
-     */
-    private fun createPendingIntent(
-        context: Context,
-        intent: Intent,
         requestCode: Int,
-    ): PendingIntent =
-        PendingIntent.getBroadcast(
+    ): PendingIntent {
+        val intent =
+            Intent(context, AlarmReceiver::class.java).apply {
+                putExtra("title", "${schedule.title} ($type)")
+                putExtra("desc", schedule.description)
+                putExtra("isFullScreen", isFullScreen)
+                putExtra("scheduleId", schedule.id)
+                putExtra("alarmType", type)
+            }
+        return PendingIntent.getBroadcast(
             context,
             requestCode,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+    }
 
     /**
      * 정확한 알람을 설정합니다.
@@ -173,20 +169,15 @@ object ScheduleAlarmHelper {
         type: String,
     ) {
         try {
-            val intent =
-                Intent(context, AlarmReceiver::class.java).apply {
-                    putExtra("title", "${schedule.title} ($type)")
-                    putExtra("desc", schedule.description)
-                    putExtra("scheduleId", schedule.id)
-                    putExtra("alarmType", type)
-                }
-
+            // 예약할 때와 같은 자리 번호·같은 대상이면 취소가 맞는다. extras 는 대상 판정에
+            // 들어가지 않으므로 예약과 같은 함수를 그대로 쓴다.
             val pendingIntent =
-                PendingIntent.getBroadcast(
-                    context,
-                    requestCode,
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                createAlarmPendingIntent(
+                    context = context,
+                    schedule = schedule,
+                    type = type,
+                    isFullScreen = true,
+                    requestCode = requestCode,
                 )
 
             alarmManager.cancel(pendingIntent)
