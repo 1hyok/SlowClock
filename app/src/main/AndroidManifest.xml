@@ -7,7 +7,18 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- 알람이 울리는 동안 소리를 재생하는 포그라운드 서비스의 타입 권한. 없으면
+         startForeground 가 SecurityException 으로 죽는다(#122). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- 알람 시각을 정확히 지키기 위한 권한. USE_EXACT_ALARM 은 알람이 본업인 앱에 자동으로
+         부여되고 사용자가 회수할 수 없으며, 앱을 오래 안 열어도 대기 버킷이 RESTRICTED 로
+         떨어지지 않게 한다. 고령자가 앱을 열지 않고 알람만 받는 이 앱에 필요하다(#122).
+         SCHEDULE_EXACT_ALARM 은 USE_EXACT_ALARM 이 없는 API 32 기기에만 쓴다. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
@@ -57,9 +68,12 @@
             android:showOnLockScreen="true"
             android:turnScreenOn="true" />
 
+        <!-- 알람이 울리는 동안 소리를 재생한다. shortService 는 시간 제한이 있고 배경 오디오의
+             문턱 아래라 알람에 맞지 않는다(#122). -->
         <service
             android:name=".ui.alarm.AlarmTriggerService"
-            android:foregroundServiceType="shortService" />
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <service
             android:name=".notification.FCMService"
@@ -69,8 +83,9 @@
             </intent-filter>
         </service>
 
-        <receiver android:name=".receiver.AlarmReceiver" />
-        <receiver android:name=".receiver.AlarmDismissReceiver" />
+        <receiver
+            android:name=".receiver.AlarmReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

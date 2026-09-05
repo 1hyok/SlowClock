@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  이 모듈의 코드가 직접 쓰는 권한을 여기에 적는다. 앱 manifest 에만 적어 두면 이 모듈을 따로
+  검사할 때 «권한 없이 호출한다» 로 잡힌다. 병합 결과는 앱 manifest 와 같다(#122).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 알람이 울리는 동안 진동한다. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- 화면이 꺼져 있어도 소리를 이어 간다. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- 알람을 울리는 포그라운드 서비스와 그 타입. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+</manifest>

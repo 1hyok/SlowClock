@@ -12,9 +12,16 @@ export const ALLOWED_PERMISSIONS = new Set([
   'android.permission.ACCESS_NETWORK_STATE',
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
+  // 알람이 울리는 동안 소리를 재생하는 포그라운드 서비스의 타입 권한. 이것이 없으면
+  // startForeground 가 SecurityException 으로 죽는다 (#122).
+  'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
   'android.permission.INTERNET',
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.SCHEDULE_EXACT_ALARM',
+  // 알람이 본업인 앱에 자동으로 부여되고 사용자가 회수할 수 없다. 앱을 오래 안 열어도 대기
+  // 버킷이 RESTRICTED 로 떨어지지 않게 해, 고령 사용자가 앱을 열지 않아도 알람이 계속 울린다.
+  // Play 는 알람·타이머 앱에 이 권한을 명시적으로 허용한다 (#122).
+  'android.permission.USE_EXACT_ALARM',
   'android.permission.USE_FULL_SCREEN_INTENT',
   'android.permission.VIBRATE',
   'android.permission.WAKE_LOCK',
