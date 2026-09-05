@@ -34,7 +34,7 @@ android {
     // namespace(R 클래스·소스 패키지)는 그대로 두고 applicationId 만 Play 등록용으로 바꾼다.
     // Play 는 com.example.* 패키지를 거부하며, Firebase Android 앱은 이 applicationId 로 등록돼 있다.
     namespace = "com.example.slowclock"
-    compileSdk = 35
+    compileSdk = 36
 
     // Compose Preview Screenshot Testing (alpha) 활성화
     experimentalProperties["android.experimental.enableScreenshotTest"] = true
@@ -42,7 +42,7 @@ android {
     defaultConfig {
         applicationId = "com.ilhyok.slowclock"
         minSdk = 32
-        targetSdk = 35
+        targetSdk = 36
         versionCode = resolveSlowClockVersionCode(System.getenv(slowClockVersionCodeEnv))
         versionName = "1.0"
 
