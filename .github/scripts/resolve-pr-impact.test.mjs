@@ -205,6 +205,24 @@ test("screenshot infrastructure changes validate every screenshot module", () =>
     }
 });
 
+test("Firestore 규칙 파일은 Android 검증을 강제하지 않는다", () => {
+    // 규칙은 전용 워크플로가 에뮬레이터로 검증한다. 여기서 전체 lane 을 켜면 규칙 한 줄 고칠 때마다
+    // Android 빌드가 통째로 돈다.
+    for (const filePath of [
+        "firestore.rules",
+        "firestore.indexes.json",
+        "firebase.json",
+        "firestore-tests/rules.test.mjs",
+    ]) {
+        const impact = resolvePrImpact([filePath], modules, dependencies);
+
+        assert.equal(impact.repositoryQualityFull, false, filePath);
+        assert.deepEqual(impact.ktlintTasks, [], filePath);
+        assert.deepEqual(impact.screenshotTasks, [], filePath);
+        assert.deepEqual(impact.unitTestTasks, [], filePath);
+    }
+});
+
 test("an unrecognised top-level path fails closed to full validation", () => {
     const impact = resolvePrImpact(["tools/new-thing.sh"], modules, dependencies);
 
