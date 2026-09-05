@@ -8,8 +8,11 @@ on:
     branches: [main]
 
 concurrency:
+  # SHA 마다 snapshot 이 있어야 그 SHA 를 base 로 삼은 PR 의 dependency-review 가 비교를 한다.
+  # 진행 중인 실행을 취소하면 그 커밋의 snapshot 이 비고, 그 위에 올린 PR 이 base 0건 경고로
+  # 재시도 창(1200초)을 다 쓰고 실패한다(#72, run 33958807941). 겹쳐 도는 비용이 더 싸다.
   group: trusted-branch-dependency-submission-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
