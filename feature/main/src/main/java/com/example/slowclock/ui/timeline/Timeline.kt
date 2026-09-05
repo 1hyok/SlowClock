@@ -24,16 +24,17 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.slowclock.data.model.Schedule
 import java.text.SimpleDateFormat
-import java.util.Locale
 
 @Composable
 fun Timeline(
@@ -42,7 +43,10 @@ fun Timeline(
     modifier: Modifier = Modifier,
 ) {
     val sortedItems = items.sortedBy { it.startTime.seconds }
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    // 로케일은 관측 가능한 CompositionLocal 로 읽는다. Locale.getDefault() 는 사용자가 로케일을
+    // 바꿔도 재구성되지 않는다(lint NonObservableLocale).
+    val locale = LocalLocale.current.platformLocale
+    val timeFormat = remember(locale) { SimpleDateFormat("HH:mm", locale) }
 
     Box(
         modifier =

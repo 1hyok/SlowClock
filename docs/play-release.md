@@ -21,7 +21,7 @@ Firebase App Distribution 과 Google Play 의 목적을 분리하고, 첫 Play �
 
 ## 출시 전 앱 상태 (#34 에서 정리)
 
-- · 는 36 이다(#45). Play 는 2026-08-31 부터 신규 앱과 업데이트에 Android 16(API 36) 타겟을 요구한다. 근거: [Google Play 의 타겟 API 수준 요구사항](https://developer.android.com/google/play/requirements/target-sdk). Android 16 동작 변경 중 이 앱에 닿는 것은 edge-to-edge 강제(이미  사용)와 predictive back 기본 활성화(Navigation Compose 사용,  미사용)뿐이다.
+- `targetSdk` 는 36, `compileSdk` 는 37 이다(#45, #37). Play 는 2026-08-31 부터 신규 앱과 업데이트에 Android 16(API 36) 타겟을 요구한다. 근거: [Google Play 의 타겟 API 수준 요구사항](https://developer.android.com/google/play/requirements/target-sdk). Android 16 동작 변경 중 이 앱에 닿는 것은 edge-to-edge 강제(이미 `enableEdgeToEdge` 사용)와 predictive back 기본 활성화뿐이다. 후자는 알람 전체화면 Activity 의 `onBackPressed` 재정의를 무력화하므로 #65 에서 `OnBackInvokedDispatcher` 로 옮긴다. compileSdk 37 은 androidx.core 1.19.0 의 요구(AAR 메타데이터 minCompileSdk=37)이며 런타임 동작은 targetSdk 가 정한다.
 - `applicationId` 는 `com.ilhyok.slowclock`. Firebase Android 앱과 `google-services.json` 도 이 패키지로 등록돼 있다.
 - Google 로그인 스코프는 `userinfo.profile`·`userinfo.email` 뿐이다. 민감 스코프(Calendar)를 빼서 OAuth 검증 심사 대상이 아니다.
 - 서비스 계정 키를 APK 에 내장하던 Vertex AI 경로는 제거됐다.
