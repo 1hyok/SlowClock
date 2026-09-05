@@ -1,5 +1,6 @@
 package com.example.slowclock.core.alarm
 
+import android.app.AlarmManager
 import android.content.Context
 import com.example.slowclock.data.model.Schedule
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -22,5 +23,14 @@ class AlarmScheduler
 
         fun cancel(schedule: Schedule) {
             ScheduleAlarmHelper.cancelAlarm(context, schedule)
+        }
+
+        /**
+         * 정시 알람을 걸 수 있는지. Android 12 부터 사용자가 설정에서 따로 허용해야 한다.
+         * false 면 화면이 먼저 이유를 설명하고 사용자가 원할 때만 설정으로 보낸다(#83).
+         */
+        fun canScheduleExactAlarms(): Boolean {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            return alarmManager.canScheduleExactAlarms()
         }
     }

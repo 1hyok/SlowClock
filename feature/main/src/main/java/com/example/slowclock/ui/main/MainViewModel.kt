@@ -41,6 +41,11 @@ class MainViewModel
 
         init {
             dispatch(MainReducerEvent.UserResolved(authRepository.currentUid.orEmpty()))
+            // 정확한 알람 권한이 없으면 첫 진입에 한 번만 이유를 설명한다. 설정으로 보내는 건
+            // 사용자가 「설정 열기」 를 눌렀을 때다(#83).
+            if (!alarmScheduler.canScheduleExactAlarms() && !settingsRepository.hasSeenExactAlarmNotice()) {
+                dispatch(MainReducerEvent.ExactAlarmNoticeShown)
+            }
             observeTodaySchedules()
             observeSharedReminders()
         }
@@ -86,6 +91,20 @@ class MainViewModel
 
                 MainIntent.ConsumeError -> {
                     dispatch(MainReducerEvent.ErrorConsumed)
+                }
+
+                MainIntent.OpenExactAlarmSettings -> {
+                    settingsRepository.markExactAlarmNoticeSeen()
+                    dispatch(MainReducerEvent.ExactAlarmSettingsRequested)
+                }
+
+                MainIntent.DismissExactAlarmNotice -> {
+                    settingsRepository.markExactAlarmNoticeSeen()
+                    dispatch(MainReducerEvent.ExactAlarmNoticeDismissed)
+                }
+
+                MainIntent.ConsumeExactAlarmSettingsRequest -> {
+                    dispatch(MainReducerEvent.ExactAlarmSettingsRequestConsumed)
                 }
             }
         }
@@ -163,6 +182,22 @@ class MainViewModel
 
                 MainReducerEvent.ErrorConsumed -> {
                     state.copy(error = null, canRetry = false)
+                }
+
+                MainReducerEvent.ExactAlarmNoticeShown -> {
+                    state.copy(showExactAlarmNotice = true)
+                }
+
+                MainReducerEvent.ExactAlarmNoticeDismissed -> {
+                    state.copy(showExactAlarmNotice = false)
+                }
+
+                MainReducerEvent.ExactAlarmSettingsRequested -> {
+                    state.copy(showExactAlarmNotice = false, openExactAlarmSettings = Unit)
+                }
+
+                MainReducerEvent.ExactAlarmSettingsRequestConsumed -> {
+                    state.copy(openExactAlarmSettings = null)
                 }
             }
 
