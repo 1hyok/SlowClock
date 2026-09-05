@@ -42,21 +42,37 @@ test("the packaged baseline paths come from the same module list", () => {
     assert.match(generate, /src\/screenshotTestDebug\/reference/);
 });
 
-test("the apply lane accepts only the reference roots of modules that declare screenshot tests", async () => {
+test("the apply lane accepts only reference roots that belong to real modules", async () => {
     // apply 는 PR tree 를 checkout 하지 않고 artifact 의 PNG 만 커밋한다. 허용 경로가 실제
-    // screenshotTest 소스셋과 어긋나면 새 모듈의 골든이 조용히 거절되거나, 반대로 아무
-    // 경로나 커밋된다. 모듈 목록은 settings.gradle.kts 에서 읽어 손으로 적은 목록과 대조한다.
+    // 모듈과 어긋나면 아무 경로에나 커밋할 수 있게 된다. 모듈 목록은 settings.gradle.kts 에서
+    // 읽어 손으로 적은 목록과 대조한다.
+    //
+    // 정확히 같기를 요구하지는 않는다. 이 lane 은 기본 브랜치의 워크플로를 읽으므로 새 모듈의
+    // 경로는 그 모듈에 미리보기를 붙이는 PR 보다 먼저 올라와 있어야 한다. 그래서 아직
+    // screenshotTest 소스셋이 없는 모듈의 경로를 미리 적어 두는 것을 허용한다. 생성되는 PNG 가
+    // 없으니 허용 범위는 넓어지지 않는다(#111).
     const modules = await inspectModules(repoRoot);
-    const expected = modules
+    const withScreenshots = modules
         .filter(({ screenshot }) => screenshot)
         .map(({ directory }) => `${directory}/src/screenshotTestDebug/reference/`)
         .sort();
-    assert.ok(expected.length > 0, "screenshotTest 소스셋을 가진 모듈을 하나도 못 찾았다");
+    assert.ok(withScreenshots.length > 0, "screenshotTest 소스셋을 가진 모듈을 하나도 못 찾았다");
+
+    const allowedByModule = new Set(
+        modules.map(({ directory }) => `${directory}/src/screenshotTestDebug/reference/`),
+    );
 
     const rootsBlock = /const roots = \[\n((?:\s+'[^']+',\n)+)\s+\];/.exec(apply)?.[1];
     assert.ok(rootsBlock, "apply 워크플로의 roots 목록을 찾지 못했다");
     const declared = [...rootsBlock.matchAll(/'([^']+)'/g)].map((match) => match[1]).sort();
-    assert.deepEqual(declared, expected);
+
+    for (const root of withScreenshots) {
+        assert.ok(declared.includes(root), `미리보기가 있는 모듈의 경로가 빠졌다: ${root}`);
+    }
+    for (const root of declared) {
+        assert.ok(allowedByModule.has(root), `저장소에 없는 모듈의 경로다: ${root}`);
+    }
+    assert.equal(new Set(declared).size, declared.length, "중복된 경로가 있다");
 });
 
 test("a run that can generate nothing fails loudly", () => {
