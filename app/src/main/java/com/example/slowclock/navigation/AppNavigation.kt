@@ -15,7 +15,6 @@ import androidx.navigation.navArgument
 import com.example.slowclock.ui.addschedule.AddScheduleScreen
 import com.example.slowclock.ui.common.components.BottomNavigationBar
 import com.example.slowclock.ui.done.DoneScreen
-import com.example.slowclock.ui.information.InformationScreen
 import com.example.slowclock.ui.main.MainScreen
 import com.example.slowclock.ui.main.MainViewModel
 import com.example.slowclock.ui.profile.ProfileScreen
@@ -83,12 +82,8 @@ fun AppNavigation(
                     mainViewModel = mainViewModel,
                 )
             }
-            composable("information") {
-                InformationScreen()
-            }
-
             composable("timeline") { TimelineScreen(mainViewModel) }
-            composable("settings") { SettingsScreen(navController = navController) }
+            composable("settings") { SettingsScreen() }
 
             composable(
                 route = "add_schedule",
