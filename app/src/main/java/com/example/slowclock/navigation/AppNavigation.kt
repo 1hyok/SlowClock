@@ -7,11 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.slowclock.ui.addschedule.AddScheduleScreen
 import com.example.slowclock.ui.common.components.BottomNavigationBar
 import com.example.slowclock.ui.done.DoneScreen
@@ -19,6 +17,7 @@ import com.example.slowclock.ui.main.MainScreen
 import com.example.slowclock.ui.profile.ProfileScreen
 import com.example.slowclock.ui.recommendation.RecommendationScreen
 import com.example.slowclock.ui.settings.SettingsScreen
+import com.example.slowclock.ui.settings.SettingsScreenShareCode
 import com.example.slowclock.ui.timeline.TimelineScreen
 
 @Composable
@@ -115,7 +114,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             }
 
             composable("settings_share_code") {
-                com.example.slowclock.ui.settings.SettingsScreenShareCode(
+                SettingsScreenShareCode(
                     onReturn = { navController.popBackStack() },
                 )
             }
