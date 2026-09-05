@@ -45,9 +45,6 @@ on:
       screenshot_tasks:
         description: "영향받는 screenshot 검증 task 목록"
         value: ${{ jobs.repository-quality.outputs.screenshot_tasks }}
-      codeql_actions:
-        description: "Actions CodeQL 분석이 필요한지 여부"
-        value: ${{ jobs.repository-quality.outputs.codeql_actions }}
       codeql_java_kotlin:
         description: "Java/Kotlin CodeQL 분석이 필요한지 여부"
         value: ${{ jobs.repository-quality.outputs.codeql_java_kotlin }}
@@ -81,7 +78,6 @@ jobs:
       screenshot_required: ${{ steps.classify-documentation-changes.outputs.screenshot_required }}
       screenshot_modules: ${{ steps.classify-documentation-changes.outputs.screenshot_modules }}
       screenshot_tasks: ${{ steps.classify-documentation-changes.outputs.screenshot_tasks }}
-      codeql_actions: ${{ steps.classify-documentation-changes.outputs.codeql_actions }}
       codeql_java_kotlin: ${{ steps.classify-documentation-changes.outputs.codeql_java_kotlin }}
     steps:
       - name: Clone repo

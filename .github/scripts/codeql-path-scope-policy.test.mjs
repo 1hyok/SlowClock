@@ -33,7 +33,6 @@ test("CodeQL classifies every PR file by language and defaults to full analysis"
     assert.match(classifier, /classify-documentation-changes\.mjs/);
     assert.match(classifier, /docs_only=.*classify-documentation-changes\.mjs/s);
     assert.match(classifier, /resolve-pr-impact\.mjs/);
-    assert.match(classifier, /actions_required: \$\{\{ steps\.path-scope\.outputs\.codeql_actions \|\| 'true' \}\}/);
     assert.match(classifier, /javascript_typescript_required: \$\{\{ steps\.path-scope\.outputs\.codeql_javascript_typescript \|\| 'true' \}\}/);
     assert.match(classifier, /java_kotlin_required: \$\{\{ steps\.path-scope\.outputs\.codeql_java_kotlin \|\| 'true' \}\}/);
     assert.match(classifier, /codeql_javascript_typescript=false/);
@@ -51,7 +50,9 @@ test("CodeQL preserves all required context names and skips only an unaffected l
     const actions = jobBlock(source, "analyze-actions", "analyze-javascript-typescript");
     const javascript = jobBlock(source, "analyze-javascript-typescript", "analyze-java-kotlin");
     const kotlin = jobBlock(source, "analyze-java-kotlin");
-    const actionsFailClosed = /if: \$\{\{ !cancelled\(\) && \(needs\.classify-changes\.result != 'success' \|\| needs\.classify-changes\.outputs\.actions_required != 'false'\) \}\}/;
+    // actions 분석은 건너뛰지 않는다. 건너뛰면 코드 스캐닝이 모으는 검사가 «설정을
+    // 못 찾았다» 로 실패해, 새 경고 없는 PR 이 빨개진다(#119).
+    const actionsAlwaysRuns = /if: \$\{\{ !cancelled\(\) \}\}/;
     const javascriptFailClosed = /if: \$\{\{ !cancelled\(\) && \(needs\.classify-changes\.result != 'success' \|\| needs\.classify-changes\.outputs\.javascript_typescript_required != 'false'\) \}\}/;
     const kotlinFailClosed = /if: \$\{\{ !cancelled\(\) && \(needs\.classify-changes\.result != 'success' \|\| needs\.classify-changes\.outputs\.java_kotlin_required != 'false'\) \}\}/;
 
@@ -61,7 +62,8 @@ test("CodeQL preserves all required context names and skips only an unaffected l
     assert.match(actions, /^\s{4}needs: classify-changes$/m);
     assert.match(javascript, /^\s{4}needs: classify-changes$/m);
     assert.match(kotlin, /^\s{4}needs: classify-changes$/m);
-    assert.match(actions, actionsFailClosed);
+    assert.match(actions, actionsAlwaysRuns);
+    assert.doesNotMatch(actions, /actions_required/);
     assert.match(javascript, javascriptFailClosed);
     assert.match(kotlin, kotlinFailClosed);
     assert.match(actions, /security-events: write/);

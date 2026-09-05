@@ -34,7 +34,6 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      actions_required: ${{ steps.path-scope.outputs.codeql_actions || 'true' }}
       javascript_typescript_required: ${{ steps.path-scope.outputs.codeql_javascript_typescript || 'true' }}
       java_kotlin_required: ${{ steps.path-scope.outputs.codeql_java_kotlin || 'true' }}
     steps:
@@ -121,7 +120,11 @@ jobs:
   analyze-actions:
     name: Analyze (actions)
     needs: classify-changes
-    if: ${{ !cancelled() && (needs.classify-changes.result != 'success' || needs.classify-changes.outputs.actions_required != 'false') }}
+    # 이 분석만 건너뛰지 않는다. 코드 스캐닝이 모으는 CodeQL 검사는 기본 브랜치에 있던 설정이
+    # 이 PR 에서 안 돌면 «configuration not found» 로 실패한다. 앱 코드만 고친 PR 이 새 경고
+    # 하나 없이 빨개져 진짜 실패와 구별되지 않았다(#119). 대상이 워크플로 파일 몇 개뿐이라
+    # 늘 돌려도 아끼는 값이 크지 않다. 무거운 자바·코틀린과 자바스크립트 분석은 그대로 가른다.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
