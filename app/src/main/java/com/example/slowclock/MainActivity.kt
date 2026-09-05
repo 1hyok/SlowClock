@@ -12,11 +12,16 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.slowclock.auth.AuthManager
+import com.example.slowclock.data.model.ThemeMode
 import com.example.slowclock.data.remote.repository.AuthRepository
+import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.navigation.AppNavigation
 import com.example.slowclock.ui.theme.SlowClockTheme
@@ -34,6 +39,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var authRepository: AuthRepository
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
     private fun handleNewInstallation() {
         val prefs = getSharedPreferences("app_state", MODE_PRIVATE)
@@ -86,7 +94,16 @@ class MainActivity : ComponentActivity() {
 
             enableEdgeToEdge()
             setContent {
-                SlowClockTheme {
+                // 테마는 사용자가 정보 화면에서 고른 값을 따른다. 기본은 기기 설정이다.
+                val themeMode by settingsRepository.observeThemeMode().collectAsStateWithLifecycle(ThemeMode.SYSTEM)
+                SlowClockTheme(
+                    darkTheme =
+                        when (themeMode) {
+                            ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                            ThemeMode.LIGHT -> false
+                            ThemeMode.DARK -> true
+                        },
+                ) {
                     AppNavigation()
                 }
             }

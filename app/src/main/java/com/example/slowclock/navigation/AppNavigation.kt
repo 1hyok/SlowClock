@@ -86,15 +86,19 @@ fun AppNavigation(modifier: Modifier = Modifier) {
     val backStack = rememberNavBackStack(MainKey)
     // 추천 화면이 고른 제목. 일정 추가 entry 를 바꾸지 않고 전달하므로 그 화면의 ViewModel 이 유지된다.
     var recommendedTitle by rememberSaveable { mutableStateOf<String?>(null) }
-    val currentRoute = backStack.lastOrNull()?.tabRoute() ?: ""
+    val currentRoute = backStack.lastOrNull()?.tabRoute()
 
     Scaffold(
         modifier = modifier,
         bottomBar = {
-            BottomNavigationBar(
-                currentRoute = currentRoute,
-                onNavigate = { route -> tabKeys[route]?.let(backStack::showTab) },
-            )
+            // 탭 화면에서만 보인다. 상세 화면에 탭이 남아 있으면 그 자리에서 탭을 눌렀을 때
+            // 어디로 가는지 알 수 없다.
+            if (currentRoute != null) {
+                BottomNavigationBar(
+                    currentRoute = currentRoute,
+                    onNavigate = { route -> tabKeys[route]?.let(backStack::showTab) },
+                )
+            }
         },
     ) { innerPadding ->
         NavDisplay(

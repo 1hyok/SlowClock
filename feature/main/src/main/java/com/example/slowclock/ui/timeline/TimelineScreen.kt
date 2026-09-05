@@ -9,7 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,7 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.ui.common.components.EmptyState
 import com.example.slowclock.ui.common.components.ErrorCard
+import com.example.slowclock.ui.common.components.ScreenHeader
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -58,7 +61,7 @@ internal fun TimelineContent(
         modifier =
             modifier
                 .fillMaxSize()
-                .padding(top = 50.dp),
+                .padding(horizontal = 16.dp),
     ) {
         Column(
             modifier =
@@ -80,24 +83,10 @@ internal fun TimelineContent(
                         }
                     },
         ) {
-            Text(
-                text = "일정 타임라인",
-                fontSize = 20.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = Bold,
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .clickable { showDatePicker(context, selectedDate, onIntent) },
-            )
-            Text(
-                text = formatter.format(selectedDate.time),
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .clickable { showDatePicker(context, selectedDate, onIntent) },
+            ScreenHeader(
+                title = "일정 타임라인",
+                subtitle = formatter.format(selectedDate.time),
+                modifier = Modifier.clickable { showDatePicker(context, selectedDate, onIntent) },
             )
 
             state.error?.let { error ->
@@ -109,10 +98,18 @@ internal fun TimelineContent(
                 )
             }
 
-            Timeline(
-                items = state.schedules,
-                height = this@BoxWithConstraints.maxHeight,
-            )
+            if (state.schedules.isEmpty()) {
+                EmptyState(
+                    icon = Icons.Outlined.Schedule,
+                    title = "이 날은 일정이 없습니다",
+                    description = "좌우로 넘기거나 날짜를 눌러 다른 날을 볼 수 있습니다",
+                )
+            } else {
+                Timeline(
+                    items = state.schedules,
+                    height = this@BoxWithConstraints.maxHeight,
+                )
+            }
         }
     }
 }

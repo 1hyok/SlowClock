@@ -29,29 +29,17 @@ fun BottomNavigationBar(
             NavItem("settings", Icons.AutoMirrored.Filled.Article, "정보"),
         )
 
+    // 색은 테마가 정한다. 항목마다 tint 를 손으로 주면 다크에서 선택 표시와 글자가 따로 논다.
     NavigationBar(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.primary,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         items.forEach { item ->
-            val selected = currentRoute == item.route
             NavigationBarItem(
-                selected = selected,
+                selected = currentRoute == item.route,
                 onClick = { onNavigate(item.route) },
-                icon = {
-                    Icon(
-                        item.icon,
-                        contentDescription = item.label,
-                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                label = {
-                    Text(
-                        item.label,
-                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
+                icon = { Icon(item.icon, contentDescription = null) },
+                label = { Text(item.label, style = MaterialTheme.typography.labelLarge) },
             )
         }
     }
