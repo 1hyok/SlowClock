@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -97,15 +98,17 @@ fun CurrentTaskSection(
             Box(
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                // 왼쪽 강조 바 (더 두껍게)
-                Box(
-                    modifier =
-                        Modifier
-                            .width(6.dp) // 4dp → 6dp
-                            .height(80.dp) // 60dp → 80dp
-                            .background(MaterialTheme.colorScheme.tertiary) // 하드코딩 색상 제거
-                            .align(Alignment.CenterStart),
-                )
+                // 왼쪽 강조 바. 높이를 고정하면 글자가 커져 카드가 길어질 때 바만 짧게 남는다(#107).
+                // 바깥 Box 가 카드 크기를 그대로 받고, 안쪽 바가 그 높이를 채운다.
+                Box(modifier = Modifier.matchParentSize()) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .width(6.dp)
+                                .fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.tertiary),
+                    )
+                }
 
                 Row(
                     modifier =
