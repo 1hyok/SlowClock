@@ -1,8 +1,8 @@
 package com.example.slowclock.notification
 
 import com.example.slowclock.data.notification.Notifier
+import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 
@@ -13,7 +13,7 @@ import dagger.hilt.components.SingletonComponent
  */
 @Module
 @InstallIn(SingletonComponent::class)
-object NotifierModule {
-    @Provides
-    fun provideNotifier(): Notifier = GuardianNotifier
+abstract class NotifierModule {
+    @Binds
+    abstract fun bindNotifier(impl: GuardianNotifier): Notifier
 }

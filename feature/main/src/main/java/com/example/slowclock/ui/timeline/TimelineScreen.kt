@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,74 +23,63 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight.Companion.Bold
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.slowclock.ui.main.MainViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.ui.common.components.ErrorCard
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+private const val SWIPE_THRESHOLD_PX = 100f
+
+/** 타임라인 화면(stateful). */
 @Composable
 fun TimelineScreen(
-    viewModel: MainViewModel,
+    modifier: Modifier = Modifier,
+    viewModel: TimelineViewModel = hiltViewModel(),
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    TimelineContent(state = state, onIntent = viewModel::onIntent, modifier = modifier)
+}
+
+/** 타임라인 화면(stateless). 날짜 선택은 DatePickerDialog, 좌우 스와이프로 하루씩 이동한다. */
+@Composable
+internal fun TimelineContent(
+    state: TimelineUiState,
+    onIntent: (TimelineIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    // Calendar 및 날짜 수정 Method
-    // 0000년 00월 00일 Format
     val formatter = remember { SimpleDateFormat("yyyy년 MM월 dd일", Locale.KOREA) }
-
-    // 드래그 중첩 방지
     var hasSwiped by remember { mutableStateOf(false) }
+    val selectedDate = state.selectedDate
 
-    // Timeline 날짜 선택 및 이동
-    var calendar = remember { Calendar.getInstance() }
-    val date = remember { mutableStateOf(formatter.format(calendar.time)) }
-
-    val datePickerDialog =
-        DatePickerDialog(
-            context,
-            { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
-                calendar.set(year, month, dayOfMonth)
-                date.value = formatter.format(calendar.time)
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH),
-        )
-
-    val uiState by viewModel.uiState.collectAsState()
-    val filteredSchedules =
-        uiState.todaySchedules.filter { schedule ->
-            val scheduleDate = formatter.format(schedule.startTime.toDate())
-            scheduleDate == date.value
-        }
-
-    // Timeline Screen 컨텐츠
-    BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(top = 50.dp)) {
+    BoxWithConstraints(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(top = 50.dp),
+    ) {
         Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
-                            onDragStart = {
-                                hasSwiped = false
-                            },
+                            onDragStart = { hasSwiped = false },
                         ) { _, dragAmount ->
                             if (!hasSwiped) {
-                                if (dragAmount > 100) {
-                                    calendar.add(Calendar.DAY_OF_MONTH, -1)
-                                    date.value = formatter.format(calendar.time)
+                                if (dragAmount > SWIPE_THRESHOLD_PX) {
+                                    onIntent(TimelineIntent.PreviousDay)
                                     hasSwiped = true
-                                } else if (dragAmount < -100) {
-                                    calendar.add(Calendar.DAY_OF_MONTH, 1)
-                                    date.value = formatter.format(calendar.time)
+                                } else if (dragAmount < -SWIPE_THRESHOLD_PX) {
+                                    onIntent(TimelineIntent.NextDay)
                                     hasSwiped = true
                                 }
                             }
                         }
                     },
         ) {
-            // 제목 Text
             Text(
                 text = "일정 타임라인",
                 fontSize = 20.sp,
@@ -100,28 +88,47 @@ fun TimelineScreen(
                 modifier =
                     Modifier
                         .align(Alignment.CenterHorizontally)
-                        .clickable {
-                            datePickerDialog.show()
-                        },
+                        .clickable { showDatePicker(context, selectedDate, onIntent) },
             )
-            // Timeline 날짜 Text
             Text(
-                text = date.value,
+                text = formatter.format(selectedDate.time),
                 fontSize = 15.sp,
                 color = Color.Gray,
                 modifier =
                     Modifier
                         .align(Alignment.CenterHorizontally)
-                        .clickable {
-                            datePickerDialog.show()
-                        },
+                        .clickable { showDatePicker(context, selectedDate, onIntent) },
             )
-            // Default : 오늘 날짜, 이후 캘린더 조작 혹은 버튼 클릭으로 날짜 변경 가능
+
+            state.error?.let { error ->
+                ErrorCard(
+                    error = error,
+                    canRetry = true,
+                    onRetry = { onIntent(TimelineIntent.Retry) },
+                    onDismiss = { onIntent(TimelineIntent.ConsumeError) },
+                )
+            }
 
             Timeline(
-                items = filteredSchedules, // Items : DB에서 사용자의 해당 날짜에 존재하는 일정들을 가져와서 사용
+                items = state.schedules,
                 height = this@BoxWithConstraints.maxHeight,
             )
         }
     }
+}
+
+private fun showDatePicker(
+    context: android.content.Context,
+    selectedDate: Calendar,
+    onIntent: (TimelineIntent) -> Unit,
+) {
+    DatePickerDialog(
+        context,
+        { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
+            onIntent(TimelineIntent.SelectDate(year, month, dayOfMonth))
+        },
+        selectedDate.get(Calendar.YEAR),
+        selectedDate.get(Calendar.MONTH),
+        selectedDate.get(Calendar.DAY_OF_MONTH),
+    ).show()
 }

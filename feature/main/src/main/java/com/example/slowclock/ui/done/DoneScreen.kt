@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/slowclock/ui/done/DoneScreen.kt
 package com.example.slowclock.ui.done
 
 import androidx.compose.foundation.clickable
@@ -24,8 +23,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,25 +33,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.slowclock.data.model.Schedule
-import com.example.slowclock.ui.main.MainViewModel
+import com.example.slowclock.ui.common.components.ErrorCard
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** 완료 화면(stateful). */
 @Composable
-fun DoneScreen(mainViewModel: MainViewModel) {
-    val uiState by mainViewModel.uiState.collectAsState()
+fun DoneScreen(
+    modifier: Modifier = Modifier,
+    viewModel: DoneViewModel = hiltViewModel(),
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    DoneContent(state = state, onIntent = viewModel::onIntent, modifier = modifier)
+}
 
-    val completed = uiState.todaySchedules.filter { it.completed }
-    val remaining = uiState.todaySchedules.filter { !it.completed }
-
-    val formatter = SimpleDateFormat("yyyy년 M월 d일 EEEE", Locale.KOREAN)
-    val timeFormatter = SimpleDateFormat("a h:mm", Locale.KOREAN)
+/** 완료 화면(stateless). 프리뷰·스크린샷 테스트 진입점이다. */
+@Composable
+internal fun DoneContent(
+    state: DoneUiState,
+    onIntent: (DoneIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val completed = state.completed
+    val remaining = state.remaining
+    val formatter = remember { SimpleDateFormat("yyyy년 M월 d일 EEEE", Locale.KOREAN) }
+    val timeFormatter = remember { SimpleDateFormat("a h:mm", Locale.KOREAN) }
 
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
@@ -74,6 +87,15 @@ fun DoneScreen(mainViewModel: MainViewModel) {
             textAlign = TextAlign.Center,
         )
 
+        state.error?.let { error ->
+            ErrorCard(
+                error = error,
+                canRetry = true,
+                onRetry = { onIntent(DoneIntent.Retry) },
+                onDismiss = { onIntent(DoneIntent.ConsumeError) },
+            )
+        }
+
         if (completed.isNotEmpty()) {
             Section(title = "완료한 일정", icon = Icons.Default.CheckCircle, color = Color(0xFF3A5CCC)) {
                 completed.forEach {
@@ -81,9 +103,7 @@ fun DoneScreen(mainViewModel: MainViewModel) {
                         schedule = it,
                         timeFormatter = timeFormatter,
                         completed = true,
-                        onClick = { schedule ->
-                            mainViewModel.toggleScheduleComplete(schedule.id)
-                        },
+                        onClick = { schedule -> onIntent(DoneIntent.ToggleComplete(schedule.id)) },
                     )
                 }
             }
@@ -96,9 +116,7 @@ fun DoneScreen(mainViewModel: MainViewModel) {
                         schedule = it,
                         timeFormatter = timeFormatter,
                         completed = false,
-                        onClick = { schedule ->
-                            mainViewModel.toggleScheduleComplete(schedule.id)
-                        },
+                        onClick = { schedule -> onIntent(DoneIntent.ToggleComplete(schedule.id)) },
                     )
                 }
             }
@@ -112,7 +130,6 @@ fun DoneScreen(mainViewModel: MainViewModel) {
             color = Color.DarkGray,
         )
 
-        // 🔥 수정된 LinearProgressIndicator
         LinearProgressIndicator(
             progress = {
                 if ((completed.size + remaining.size) == 0) {

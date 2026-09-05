@@ -1,6 +1,5 @@
 package com.example.slowclock.data.remote.repository
 
-import android.content.Context
 import com.example.slowclock.data.FirestoreCollections
 import com.example.slowclock.data.model.FamilyGroup
 import com.example.slowclock.data.notification.Notifier
@@ -156,7 +155,6 @@ class FamilyGroupRepository
 
         // 5. 그룹 전체에게 FCM 알림 발송
         suspend fun sendAlertToGroup(
-            context: Context,
             groupId: String,
             title: String,
             message: String,
@@ -164,7 +162,6 @@ class FamilyGroupRepository
             val tokens = fetchGroupMembersFcmTokens(groupId)
             tokens.forEach { token ->
                 notifier.sendReminderToUser(
-                    context = context,
                     fcmToken = token,
                     title = title,
                     message = message,

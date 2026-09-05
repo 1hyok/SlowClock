@@ -16,17 +16,13 @@ import com.example.slowclock.ui.addschedule.AddScheduleScreen
 import com.example.slowclock.ui.common.components.BottomNavigationBar
 import com.example.slowclock.ui.done.DoneScreen
 import com.example.slowclock.ui.main.MainScreen
-import com.example.slowclock.ui.main.MainViewModel
 import com.example.slowclock.ui.profile.ProfileScreen
 import com.example.slowclock.ui.recommendation.RecommendationScreen
 import com.example.slowclock.ui.settings.SettingsScreen
 import com.example.slowclock.ui.timeline.TimelineScreen
 
 @Composable
-fun AppNavigation(
-    modifier: Modifier = Modifier,
-    mainViewModel: MainViewModel = hiltViewModel(),
-) {
+fun AppNavigation(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
     val currentRoute by navController.currentBackStackEntryFlow.collectAsState(
         initial = navController.currentBackStackEntry,
@@ -48,15 +44,7 @@ fun AppNavigation(
             modifier = Modifier.padding(innerPadding),
         ) {
             composable("main") {
-                val result =
-                    navController.currentBackStackEntry
-                        ?.savedStateHandle
-                        ?.get<Boolean>("schedule_added")
-
-                // 🔥 MainViewModel을 직접 전달
                 MainScreen(
-                    viewModel = mainViewModel, // 명시적으로 전달
-                    shouldRefresh = result == true,
                     onAddSchedule = {
                         navController.navigate("add_schedule")
                     },
@@ -69,20 +57,11 @@ fun AppNavigation(
                     onNavigateToSettings = {
                         navController.navigate("settings_share_code")
                     },
-                    onRefreshHandled = {
-                        navController.currentBackStackEntry
-                            ?.savedStateHandle
-                            ?.remove<Boolean>("schedule_added")
-                    },
                 )
             }
 
-            composable("done") {
-                DoneScreen(
-                    mainViewModel = mainViewModel,
-                )
-            }
-            composable("timeline") { TimelineScreen(mainViewModel) }
+            composable("done") { DoneScreen() }
+            composable("timeline") { TimelineScreen() }
             composable("settings") { SettingsScreen() }
 
             composable(
@@ -95,14 +74,7 @@ fun AppNavigation(
 
                 AddScheduleScreen(
                     initialTitle = initialTitle,
-                    onNavigateBack = { success ->
-                        if (success) {
-                            navController.previousBackStackEntry
-                                ?.savedStateHandle
-                                ?.set("schedule_added", true)
-                        }
-                        navController.popBackStack()
-                    },
+                    onNavigateBack = { navController.popBackStack() },
                     onNavigateToRecommendation = {
                         navController.navigate("recommendation")
                     },
@@ -113,16 +85,10 @@ fun AppNavigation(
                 val scheduleId = backStackEntry.arguments?.getString("scheduleId") ?: ""
                 AddScheduleScreen(
                     scheduleId = scheduleId,
-                    onNavigateBack = { success ->
-                        if (success) {
-                            navController.previousBackStackEntry
-                                ?.savedStateHandle
-                                ?.set("schedule_added", true)
-                        } else {
-                            navController.navigate("main") {
-                                popUpTo("main") { inclusive = false }
-                                launchSingleTop = true
-                            }
+                    onNavigateBack = {
+                        navController.navigate("main") {
+                            popUpTo("main") { inclusive = false }
+                            launchSingleTop = true
                         }
                     },
                     onNavigateToRecommendation = {

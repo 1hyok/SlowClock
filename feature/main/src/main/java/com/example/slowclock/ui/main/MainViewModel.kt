@@ -1,41 +1,31 @@
-// app/src/main/java/com/example/slowclock/ui/main/MainViewModel.kt
 package com.example.slowclock.ui.main
 
-import android.content.Context
 import android.util.Log
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.slowclock.data.model.Schedule
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
+import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
-import com.example.slowclock.util.AppError
+import com.example.slowclock.ui.mvi.MviViewModel
+import com.example.slowclock.util.toAppError
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.Date
 import javax.inject.Inject
 
-data class MainUiState(
-    val todaySchedules: List<Schedule> = emptyList(),
-    val sharedReminders: List<Schedule> = emptyList(), // 공유 일정
-    val currentSchedule: Schedule? = null,
-    val completedCount: Int = 0,
-    val totalCount: Int = 0,
-    val isLoading: Boolean = false,
-    val error: AppError? = null, // String → AppError 변경
-    val selectedScheduleForDetail: Schedule? = null,
-    val canRetry: Boolean = false, // 재시도 가능 여부 추가
-    val showDeleteConfirmDialog: Boolean = false,
-    val scheduleToDelete: Schedule? = null,
-    val sharedReminderOwners: Map<String, String> = emptyMap(), // userId -> name
-    val currentUserId: String = "",
-)
-
+/**
+ * 메인 화면. 오늘 일정은 Firestore 리스너로 받는다. 완료 토글·삭제는 낙관적으로 먼저 반영하고,
+ * 실패하면 리스너가 서버 상태로 되돌린다. 공유 일정은 기기에 저장된 공유 코드가 바뀔 때마다
+ * 다시 구독한다.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class MainViewModel
     @Inject
@@ -43,386 +33,246 @@ class MainViewModel
         private val scheduleRepository: ScheduleRepository,
         private val userRepository: UserRepository,
         private val authRepository: AuthRepository,
-    ) : ViewModel() {
-        private var sharedRemindersJob: Job? = null
-
-        private val _uiState = MutableStateFlow(MainUiState())
-        val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+        private val settingsRepository: SettingsRepository,
+    ) : MviViewModel<MainIntent, MainUiState, MainReducerEvent>(MainUiState()) {
+        private var scheduleJob: Job? = null
 
         init {
-            _uiState.value = _uiState.value.copy(currentUserId = authRepository.currentUid.orEmpty())
-            loadSchedules(Calendar.getInstance())
+            dispatch(MainReducerEvent.UserResolved(authRepository.currentUid.orEmpty()))
+            observeTodaySchedules()
+            observeSharedReminders()
         }
 
-        fun loadSchedules(calendar: Calendar) {
-            val scheduleDate = calendar.clone() as Calendar
-            scheduleDate.set(Calendar.HOUR_OF_DAY, 0)
-            scheduleDate.set(Calendar.MINUTE, 0)
-            scheduleDate.set(Calendar.SECOND, 0)
-            scheduleDate.set(Calendar.MILLISECOND, 0)
-            viewModelScope.launch {
-                _uiState.value =
-                    _uiState.value.copy(
-                        isLoading = true,
-                        error = null,
-                        canRetry = false,
-                    )
+        override fun onIntent(intent: MainIntent) {
+            when (intent) {
+                MainIntent.Retry -> {
+                    dispatch(MainReducerEvent.ErrorConsumed)
+                    observeTodaySchedules()
+                }
 
-                try {
-                    when (val result = scheduleRepository.getSchedulesForDate(scheduleDate)) {
-                        is ScheduleRepository.ScheduleResult.Success -> {
-                            val schedules = result.data
-                            val currentTime = System.currentTimeMillis()
+                is MainIntent.ToggleComplete -> {
+                    toggleComplete(intent.scheduleId)
+                }
 
-                            val currentSchedule =
-                                schedules
-                                    .filter { !it.completed }
-                                    .let { incompleteSchedules ->
-                                        // 1단계: 현재 진행 중인 일정들
-                                        val ongoingSchedules =
-                                            incompleteSchedules.filter { schedule ->
-                                                val startTime = schedule.startTime.toDate().time
-                                                val endTime =
-                                                    schedule.endTime?.toDate()?.time
-                                                        ?: (startTime + 60 * 60 * 1000)
-                                                currentTime >= startTime && currentTime <= endTime
-                                            }
+                is MainIntent.ShowDetail -> {
+                    currentState.todaySchedules
+                        .find { it.id == intent.scheduleId }
+                        ?.let { dispatch(MainReducerEvent.DetailShown(it)) }
+                }
 
-                                        if (ongoingSchedules.isNotEmpty()) {
-                                            // 진행 중: 끝나는 시간 빠른 순
-                                            ongoingSchedules.minByOrNull { schedule ->
-                                                schedule.endTime?.toDate()?.time
-                                                    ?: (schedule.startTime.toDate().time + 60 * 60 * 1000)
-                                            }
-                                        } else {
-                                            // 진행 중 없음: 시작 시간 빠른 순 → 끝나는 시간 빠른 순
-                                            incompleteSchedules
-                                                .filter { it.startTime.toDate().time > currentTime }
-                                                .sortedWith(
-                                                    compareBy<Schedule> { it.startTime.toDate().time }
-                                                        .thenBy { schedule ->
-                                                            schedule.endTime?.toDate()?.time
-                                                                ?: (schedule.startTime.toDate().time + 60 * 60 * 1000)
-                                                        },
-                                                ).firstOrNull()
-                                        }
-                                    }
+                MainIntent.HideDetail -> {
+                    dispatch(MainReducerEvent.DetailHidden)
+                }
 
-                            _uiState.value =
-                                MainUiState(
-                                    todaySchedules = schedules,
-                                    currentSchedule = currentSchedule,
-                                    completedCount = schedules.count { it.completed },
-                                    totalCount = schedules.size,
-                                    isLoading = false,
-                                )
+                is MainIntent.RequestDelete -> {
+                    currentState.todaySchedules
+                        .find { it.id == intent.scheduleId }
+                        ?.let { dispatch(MainReducerEvent.DeleteRequested(it)) }
+                }
 
-                            Log.d("MainViewModel", "일정 로드 성공: ${schedules.size}개")
-                        }
+                MainIntent.DismissDelete -> {
+                    dispatch(MainReducerEvent.DeleteDismissed)
+                }
 
-                        is ScheduleRepository.ScheduleResult.Error -> {
-                            Log.e("MainViewModel", "일정 로드 실패: ${result.error.message}")
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    isLoading = false,
-                                    error = result.error,
-                                    canRetry = true, // 재시도 가능
-                                )
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("MainViewModel", "예상치 못한 에러", e)
-                    _uiState.value =
-                        _uiState.value.copy(
-                            isLoading = false,
-                            error = AppError.GeneralError("일정을 불러오는 중 문제가 발생했습니다"),
-                            canRetry = true,
-                        )
+                MainIntent.ConfirmDelete -> {
+                    deleteSchedule()
+                }
+
+                is MainIntent.ToggleSharedReminderComplete -> {
+                    toggleSharedReminderComplete(intent.scheduleId)
+                }
+
+                MainIntent.ConsumeError -> {
+                    dispatch(MainReducerEvent.ErrorConsumed)
                 }
             }
         }
 
-        fun toggleScheduleComplete(scheduleId: String) {
+        override fun reduce(
+            state: MainUiState,
+            event: MainReducerEvent,
+        ): MainUiState =
+            when (event) {
+                is MainReducerEvent.UserResolved -> {
+                    state.copy(currentUserId = event.userId)
+                }
+
+                MainReducerEvent.Loading -> {
+                    state.copy(isLoading = true, error = null, canRetry = false)
+                }
+
+                is MainReducerEvent.SchedulesLoaded -> {
+                    state.withSchedules(event.schedules, event.nowMillis).copy(isLoading = false, error = null)
+                }
+
+                is MainReducerEvent.LoadFailed -> {
+                    state.copy(isLoading = false, error = event.error, canRetry = event.canRetry)
+                }
+
+                is MainReducerEvent.CompletionToggled -> {
+                    state.withSchedules(
+                        state.todaySchedules.map { if (it.id == event.scheduleId) it.copy(completed = !it.completed) else it },
+                        event.nowMillis,
+                    )
+                }
+
+                is MainReducerEvent.DetailShown -> {
+                    state.copy(selectedScheduleForDetail = event.schedule)
+                }
+
+                MainReducerEvent.DetailHidden -> {
+                    state.copy(selectedScheduleForDetail = null)
+                }
+
+                is MainReducerEvent.DeleteRequested -> {
+                    state.copy(scheduleToDelete = event.schedule)
+                }
+
+                MainReducerEvent.DeleteDismissed -> {
+                    state.copy(scheduleToDelete = null)
+                }
+
+                MainReducerEvent.Deleting -> {
+                    state.copy(isLoading = true, error = null, scheduleToDelete = null)
+                }
+
+                is MainReducerEvent.Deleted -> {
+                    state
+                        .withSchedules(state.todaySchedules.filter { it.id != event.scheduleId }, event.nowMillis)
+                        .copy(isLoading = false)
+                }
+
+                is MainReducerEvent.SharedRemindersLoaded -> {
+                    state.copy(sharedReminders = event.reminders)
+                }
+
+                is MainReducerEvent.SharedReminderOwnersLoaded -> {
+                    state.copy(sharedReminderOwners = event.owners)
+                }
+
+                is MainReducerEvent.SharedReminderToggled -> {
+                    state.copy(
+                        sharedReminders =
+                            state.sharedReminders.map {
+                                if (it.id == event.scheduleId) it.copy(completed = !it.completed) else it
+                            },
+                    )
+                }
+
+                MainReducerEvent.ErrorConsumed -> {
+                    state.copy(error = null, canRetry = false)
+                }
+            }
+
+        private fun MainUiState.withSchedules(
+            schedules: List<Schedule>,
+            nowMillis: Long,
+        ): MainUiState =
+            copy(
+                todaySchedules = schedules,
+                currentSchedule = selectCurrentSchedule(schedules, nowMillis),
+                completedCount = schedules.count { it.completed },
+                totalCount = schedules.size,
+            )
+
+        private fun observeTodaySchedules() {
+            scheduleJob?.cancel()
+            scheduleJob =
+                viewModelScope.launch {
+                    dispatch(MainReducerEvent.Loading)
+                    scheduleRepository
+                        .observeSchedulesForDate(Calendar.getInstance())
+                        .catch { e ->
+                            Log.e(TAG, "일정 구독 실패", e)
+                            dispatch(MainReducerEvent.LoadFailed(e.toAppError(), canRetry = true))
+                        }.collect { schedules ->
+                            dispatch(MainReducerEvent.SchedulesLoaded(schedules, System.currentTimeMillis()))
+                        }
+                }
+        }
+
+        private fun observeSharedReminders() {
             viewModelScope.launch {
-                val schedule = _uiState.value.todaySchedules.find { it.id == scheduleId }
-                schedule?.let {
-                    // 낙관적 업데이트 (즉시 UI 변경)
-                    val updatedSchedules =
-                        _uiState.value.todaySchedules.map { s ->
-                            if (s.id == scheduleId) s.copy(completed = !s.completed) else s
+                settingsRepository
+                    .observeShareCode()
+                    .flatMapLatest { shareCode ->
+                        if (shareCode.isNullOrBlank()) {
+                            flowOf(emptyList())
+                        } else {
+                            scheduleRepository.observeSchedulesBySharedCode(shareCode).catch { e ->
+                                Log.e(TAG, "공유 일정 구독 실패", e)
+                                emit(emptyList())
+                            }
                         }
-
-                    val currentTime = System.currentTimeMillis()
-                    val currentSchedule =
-                        updatedSchedules.firstOrNull { schedule ->
-                            !schedule.completed &&
-                                schedule.startTime.toDate().time <= currentTime &&
-                                (schedule.endTime?.toDate()?.time ?: Long.MAX_VALUE) > currentTime
-                        }
-
-                    _uiState.value =
-                        _uiState.value.copy(
-                            todaySchedules = updatedSchedules,
-                            currentSchedule = currentSchedule,
-                            completedCount = updatedSchedules.count { it.completed },
-                        )
-
-                    // 서버 업데이트
-                    when (
-                        val result =
-                            scheduleRepository.markScheduleAsCompleted(scheduleId, !it.completed)
-                    ) {
-                        is ScheduleRepository.ScheduleResult.Success -> {
-                            Log.d("MainViewModel", "완료 상태 변경 성공")
-                        }
-
-                        is ScheduleRepository.ScheduleResult.Error -> {
-                            Log.e("MainViewModel", "완료 상태 변경 실패: ${result.error.message}")
-                            // 실패 시 원래 상태로 복구
-                            loadSchedules(Calendar.getInstance())
-
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    error = result.error,
-                                    canRetry = false,
-                                )
-                        }
+                    }.collect { reminders ->
+                        val today = Calendar.getInstance()
+                        val todayReminders = reminders.filter { it.startTime.toDate().isSameDay(today) }
+                        dispatch(MainReducerEvent.SharedRemindersLoaded(todayReminders))
+                        val ownerIds = todayReminders.map { it.userId }.filter { it.isNotBlank() }.distinct()
+                        dispatch(MainReducerEvent.SharedReminderOwnersLoaded(userRepository.getUserNames(ownerIds)))
                     }
+            }
+        }
+
+        private fun toggleComplete(scheduleId: String) {
+            val schedule = currentState.todaySchedules.find { it.id == scheduleId } ?: return
+            dispatch(MainReducerEvent.CompletionToggled(scheduleId, System.currentTimeMillis()))
+            viewModelScope.launch {
+                val result = scheduleRepository.markScheduleAsCompleted(scheduleId, !schedule.completed)
+                if (result is ScheduleRepository.ScheduleResult.Error) {
+                    Log.e(TAG, "완료 상태 변경 실패: ${result.error.message}")
+                    dispatch(MainReducerEvent.LoadFailed(result.error, canRetry = false))
                 }
             }
         }
 
-        fun showScheduleDetail(scheduleId: String) {
-            val schedule = _uiState.value.todaySchedules.find { it.id == scheduleId }
-            _uiState.value = _uiState.value.copy(selectedScheduleForDetail = schedule)
-        }
-
-        fun hideScheduleDetail() {
-            _uiState.value = _uiState.value.copy(selectedScheduleForDetail = null)
-        }
-
-        fun clearError() {
-            _uiState.value = _uiState.value.copy(error = null, canRetry = false)
-        }
-
-        fun retryLastAction() {
-            clearError()
-            loadSchedules(Calendar.getInstance())
-        }
-
-        fun showDeleteConfirmDialog(scheduleId: String) {
-            val schedule = _uiState.value.todaySchedules.find { it.id == scheduleId }
-            _uiState.value =
-                _uiState.value.copy(
-                    showDeleteConfirmDialog = true,
-                    scheduleToDelete = schedule,
-                )
-        }
-
-        fun hideDeleteConfirmDialog() {
-            _uiState.value =
-                _uiState.value.copy(
-                    showDeleteConfirmDialog = false,
-                    scheduleToDelete = null,
-                )
-        }
-
-        fun deleteSchedule(scheduleId: String) {
+        private fun deleteSchedule() {
+            val schedule = currentState.scheduleToDelete ?: return
+            dispatch(MainReducerEvent.Deleting)
             viewModelScope.launch {
-                _uiState.value =
-                    _uiState.value.copy(
-                        isLoading = true,
-                        error = null,
-                        showDeleteConfirmDialog = false,
-                        scheduleToDelete = null,
-                    )
-
-                when (val result = scheduleRepository.deleteSchedule(scheduleId)) {
+                when (val result = scheduleRepository.deleteSchedule(schedule.id)) {
                     is ScheduleRepository.ScheduleResult.Success -> {
-                        Log.d("MainViewModel", "일정 삭제 성공")
-                        // 목록에서 제거
-                        val updatedSchedules =
-                            _uiState.value.todaySchedules.filter { it.id != scheduleId }
-                        _uiState.value =
-                            _uiState.value.copy(
-                                todaySchedules = updatedSchedules,
-                                totalCount = updatedSchedules.size,
-                                completedCount = updatedSchedules.count { it.completed },
-                                isLoading = false,
-                            )
+                        dispatch(MainReducerEvent.Deleted(schedule.id, System.currentTimeMillis()))
                     }
 
                     is ScheduleRepository.ScheduleResult.Error -> {
-                        Log.e("MainViewModel", "일정 삭제 실패: ${result.error.message}")
-                        _uiState.value =
-                            _uiState.value.copy(
-                                isLoading = false,
-                                error = result.error,
-                                canRetry = true,
+                        Log.e(TAG, "일정 삭제 실패: ${result.error.message}")
+                        dispatch(MainReducerEvent.LoadFailed(result.error, canRetry = true))
+                    }
+                }
+            }
+        }
+
+        private fun toggleSharedReminderComplete(scheduleId: String) {
+            val reminder = currentState.sharedReminders.find { it.id == scheduleId } ?: return
+            dispatch(MainReducerEvent.SharedReminderToggled(scheduleId))
+            viewModelScope.launch {
+                when (val result = scheduleRepository.markScheduleAsCompleted(scheduleId, !reminder.completed)) {
+                    is ScheduleRepository.ScheduleResult.Success -> {
+                        if (reminder.sharedCode.isNotBlank()) {
+                            val nowCompleted = !reminder.completed
+                            scheduleRepository.sendNotificationToShareCodeMembers(
+                                shareCode = reminder.sharedCode,
+                                title = if (nowCompleted) "일정이 완료됨" else "일정이 미완료로 변경됨",
+                                message = "${reminder.title} 일정이 ${if (nowCompleted) "완료" else "미완료"} 처리되었습니다.",
                             )
+                        }
+                    }
+
+                    is ScheduleRepository.ScheduleResult.Error -> {
+                        dispatch(MainReducerEvent.LoadFailed(result.error, canRetry = false))
                     }
                 }
             }
         }
 
-        fun observeSharedReminders(shareCode: String?) {
-            if (shareCode.isNullOrBlank()) return
-            sharedRemindersJob?.cancel()
-            sharedRemindersJob =
-                viewModelScope.launch {
-                    scheduleRepository.observeSchedulesBySharedCode(shareCode).collectLatest { reminders ->
-                        // Filter reminders to only include those with startTime on today's date
-                        val today = java.util.Calendar.getInstance()
-                        val filteredReminders =
-                            reminders.filter { schedule ->
-                                val cal =
-                                    java.util.Calendar
-                                        .getInstance()
-                                        .apply { time = schedule.startTime.toDate() }
-                                cal.get(java.util.Calendar.YEAR) == today.get(java.util.Calendar.YEAR) &&
-                                    cal.get(java.util.Calendar.DAY_OF_YEAR) == today.get(java.util.Calendar.DAY_OF_YEAR)
-                            }
-                        _uiState.value = _uiState.value.copy(sharedReminders = filteredReminders)
-                        // Optionally update owner names if needed
-                        val userIds = filteredReminders.map { it.userId }.filter { it.isNotBlank() }.distinct()
-                        val ownerMap = userRepository.getUserNames(userIds)
-                        _uiState.value = _uiState.value.copy(sharedReminderOwners = ownerMap)
-                    }
-                }
+        private companion object {
+            const val TAG = "MainViewModel"
         }
-
-        fun toggleSharedReminderComplete(
-            scheduleId: String,
-            context: Context,
-        ) {
-            viewModelScope.launch {
-                val schedule = _uiState.value.sharedReminders.find { it.id == scheduleId }
-                schedule?.let {
-                    // Optimistic update
-                    val updatedReminders =
-                        _uiState.value.sharedReminders.map { s ->
-                            if (s.id == scheduleId) s.copy(completed = !s.completed) else s
-                        }
-                    _uiState.value = _uiState.value.copy(sharedReminders = updatedReminders)
-
-                    // Update in Firestore
-                    when (
-                        val result =
-                            scheduleRepository.markScheduleAsCompleted(scheduleId, !it.completed)
-                    ) {
-                        is ScheduleRepository.ScheduleResult.Success -> {
-                            // Send FCM notification to shareCode members
-                            if (it.sharedCode.isNotBlank()) {
-                                val title = if (!it.completed) "일정이 완료됨" else "일정이 미완료로 변경됨"
-                                val message =
-                                    "${it.title} 일정이 ${if (!it.completed) "완료" else "미완료"} 처리되었습니다."
-                                scheduleRepository.sendNotificationToShareCodeMembers(
-                                    context,
-                                    it.sharedCode,
-                                    title,
-                                    message,
-                                )
-                            }
-                        }
-
-                        is ScheduleRepository.ScheduleResult.Error -> {
-                            // On error, reload shared reminders to revert
-                            val shareCode = it.sharedCode
-                            if (shareCode.isNotBlank()) {
-                                observeSharedReminders(shareCode)
-                            }
-                            _uiState.value =
-                                _uiState.value.copy(
-                                    error = result.error,
-                                    canRetry = false,
-                                )
-                        }
-                    }
-                }
-            }
-        }
-
-        suspend fun notifyShareCodeMembersForSchedule(
-            context: Context,
-            schedule: Schedule,
-            type: String,
-        ) {
-            if (schedule.sharedCode.isBlank()) return
-            val (title, message) =
-                when (type) {
-                    "create" -> "새 일정이 추가되었습니다" to "${schedule.title} 일정이 추가되었습니다."
-                    "edit" -> "일정이 수정되었습니다" to "${schedule.title} 일정이 수정되었습니다."
-                    "delete" -> "일정이 삭제되었습니다" to "${schedule.title} 일정이 삭제되었습니다."
-                    else -> return
-                }
-            scheduleRepository.sendNotificationToShareCodeMembers(context, schedule.sharedCode, title, message)
-        }
-
-        fun addSharedSchedule(
-            schedule: Schedule,
-            context: Context,
-        ) = viewModelScope.launch {
-            val result = scheduleRepository.addSchedule(schedule)
-            if (result is ScheduleRepository.ScheduleResult.Success) {
-                notifyShareCodeMembersForSchedule(context, schedule, "create")
-            }
-        }
-
-        fun updateSharedSchedule(
-            schedule: Schedule,
-            context: Context,
-        ) = viewModelScope.launch {
-            val result = scheduleRepository.updateSchedule(schedule)
-            if (result is ScheduleRepository.ScheduleResult.Success) {
-                notifyShareCodeMembersForSchedule(context, schedule, "edit")
-            }
-        }
-
-        fun deleteSharedSchedule(
-            schedule: Schedule,
-            context: Context,
-        ) = viewModelScope.launch {
-            val result = scheduleRepository.deleteSchedule(schedule.id)
-            if (result is ScheduleRepository.ScheduleResult.Success) {
-                notifyShareCodeMembersForSchedule(context, schedule, "delete")
-            }
-        }
-
-        fun sendTestFcm(context: Context) {
-            viewModelScope.launch {
-                val fcmToken = userRepository.getCurrentUserFcmToken()
-                if (fcmToken == null) {
-                    Log.e("TestFCM", "FCM 토큰이 없습니다.")
-                    return@launch
-                }
-                com.example.slowclock.notification.GuardianNotifier.sendReminderToUser(
-                    context,
-                    fcmToken,
-                    "FCM 테스트",
-                    "이것은 테스트 메시지입니다.",
-                )
-            }
-        }
-
-        // --- ShareCode Watcher Logic ---
-        fun addShareCodeWatcher(
-            context: Context,
-            shareCode: String,
-        ) {
-            viewModelScope.launch {
-                val registered = userRepository.registerShareCodeWatcher(shareCode)
-                Log.d("ShareCodeWatcher", "watcher registered=$registered shareCode=$shareCode")
-                android.widget.Toast
-                    .makeText(
-                        context,
-                        if (registered) "Watcher added!" else "Failed to add watcher",
-                        android.widget.Toast.LENGTH_SHORT,
-                    ).show()
-            }
-        }
-
-        fun removeShareCodeWatcher(shareCode: String) {
-            viewModelScope.launch { userRepository.unregisterShareCodeWatcher(shareCode) }
-        }
-        // --- End ShareCode Watcher Logic ---
     }
+
+private fun Date.isSameDay(other: Calendar): Boolean {
+    val calendar = Calendar.getInstance().apply { time = this@isSameDay }
+    return calendar.get(Calendar.YEAR) == other.get(Calendar.YEAR) &&
+        calendar.get(Calendar.DAY_OF_YEAR) == other.get(Calendar.DAY_OF_YEAR)
+}
