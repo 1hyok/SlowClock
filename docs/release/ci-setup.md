@@ -2,7 +2,7 @@
 
 워크플로가 참조하는 외부 설정의 정본. 워크플로 파일만으로는 만들 수 없는 것(environment, secret, WIF, Firebase 앱 등록, 브랜치 보호)을 여기서 관리한다. 값은 저장소에 넣지 않는다. 이름과 만드는 방법만 적는다.
 
-## 상태 (2026-09-05)
+## 상태 (2026-09-05, PR #39 머지 뒤 갱신)
 
 | 항목 | 상태 |
 |---|---|
@@ -10,12 +10,12 @@
 | Firebase App Distribution 그룹 `slowclock` + 테스터 | 완료 |
 | Google Cloud API 활성화 (`sts`, `androidpublisher`, `iamcredentials`, `firebaseappdistribution`) | 완료 |
 | GitHub environment `release-distribution`, `play-internal` (deployment branch `main`) | 완료 |
-| WIF pool `github-actions` / provider `github` | 미완, 아래 1 |
-| 서비스 계정 2종 + IAM binding | 미완, 아래 2 |
-| environment secret·variable 등록 | 미완, 아래 3 |
-| GitHub Pages(`docs/`) 활성화 | 미완, 아래 4 |
-| main 브랜치 보호 required checks 교체 | 미완, 아래 5 |
-| Play Console 개발자 계정·앱 등록·서비스 계정 초대 | 미완, [play-release.md](../play-release.md) 참조 |
+| WIF pool `github-actions` / provider `github` | 완료 (`…/workloadIdentityPools/github-actions/providers/github`, ACTIVE) |
+| 서비스 계정 2종 + IAM binding | 완료 (`github-firebase-distribution`: firebaseappdistro.admin, `play-internal-publisher`: 역할 없음) |
+| environment secret·variable 등록 | 완료 (두 environment 에 7개 secret, `play-internal` 에 `PLAY_PACKAGE_NAME`) |
+| GitHub Pages(`docs/`) 활성화 | 완료. 사용자 사이트에 커스텀 도메인이 있어 `https://1hyok.me/SlowClock/` 로 서빙되고 `1hyok.github.io/SlowClock/` 은 그리로 리다이렉트된다 |
+| main 브랜치 보호 required checks 교체 | 완료 (5개) |
+| Play Console 개발자 계정·앱 등록·서비스 계정 초대 | 미완, [play-release.md](../play-release.md) 참조. 이것만 사람이 해야 한다 |
 
 ## 1. Workload Identity Federation
 
@@ -70,7 +70,7 @@ gh variable set PLAY_PACKAGE_NAME --env play-internal --body com.ilhyok.slowcloc
 ```
 
 - `app/google-services.json` 은 Firebase 콘솔 → 프로젝트 설정 → Android 앱 `com.ilhyok.slowclock` 에서 받은 실파일이어야 한다 (`firebase apps:sdkconfig ANDROID 1:887622067286:android:9a909124166f54123e87f7 --project slow-clock-scheduler -o app/google-services.json`).
-- 저장소 수준 secret `GOOGLE_SERVICES_JSON_B64` 는 예전 워크플로의 잔재다. 새 워크플로는 PR 검증에 시크릿을 쓰지 않으므로 삭제해도 된다.
+- 저장소 수준 secret `GOOGLE_SERVICES_JSON_B64` 는 예전 워크플로의 잔재라 삭제했다. 새 워크플로는 PR 검증에 시크릿을 쓰지 않는다.
 - keystore 와 비밀번호는 1Password 에 백업한다. upload key 를 잃으면 Play Console 에서 reset 을 요청해야 한다.
 
 ## 4. GitHub Pages (약관·개인정보처리방침)
@@ -97,7 +97,7 @@ gh api -X PATCH repos/1hyok/SlowClock/branches/main/protection/required_status_c
   -f 'contexts[]=Screenshot / Validate Compose Preview Screenshots'
 ```
 
-CodeQL(`Analyze (java-kotlin)` 등)은 required 로 두지 않는다. 분석 시간이 길고 결과는 Security 탭에서 본다.
+CodeQL(`Analyze (java-kotlin)` 등)은 required 로 두지 않는다. 분석 시간이 길고 결과는 Security 탭에서 본다. 저장소의 CodeQL default setup 은 꺼 두었다. 켜면 워크플로(advanced) 의 SARIF 업로드를 거부한다.
 
 ## 6. 라벨
 
