@@ -1,0 +1,52 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    `kotlin-dsl`
+}
+
+group = "com.example.slowclock.buildlogic"
+
+// 컨벤션 플러그인은 Gradle 데몬 JVM(21)에서 돌지만 산출물은 17 로 맞춘다. AGP 8.13 의 최소 JDK 가 17 이다.
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+dependencies {
+    compileOnly(libs.android.gradlePlugin)
+    compileOnly(libs.kotlin.gradlePlugin)
+    compileOnly(libs.compose.compiler.gradlePlugin)
+    compileOnly(libs.ksp.gradlePlugin)
+    compileOnly(libs.hilt.gradlePlugin)
+}
+
+gradlePlugin {
+    plugins {
+        register("androidApplication") {
+            id = "slowclock.android.application"
+            implementationClass = "AndroidApplicationConventionPlugin"
+        }
+        register("androidLibrary") {
+            id = "slowclock.android.library"
+            implementationClass = "AndroidLibraryConventionPlugin"
+        }
+        register("androidLibraryCompose") {
+            id = "slowclock.android.library.compose"
+            implementationClass = "AndroidLibraryComposeConventionPlugin"
+        }
+        register("androidHilt") {
+            id = "slowclock.android.hilt"
+            implementationClass = "AndroidHiltConventionPlugin"
+        }
+        register("androidFeature") {
+            id = "slowclock.android.feature"
+            implementationClass = "AndroidFeatureConventionPlugin"
+        }
+    }
+}

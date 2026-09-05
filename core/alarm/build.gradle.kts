@@ -1,24 +1,10 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.hilt)
-    alias(libs.plugins.ksp)
+    alias(libs.plugins.slowclock.android.library)
+    alias(libs.plugins.slowclock.android.hilt)
 }
 
 android {
     namespace = "com.example.slowclock.core.alarm"
-    compileSdk = 35
-
-    defaultConfig {
-        minSdk = 32
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
 }
 
 dependencies {
@@ -28,6 +14,4 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth)
     implementation(libs.volley)
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
 }
