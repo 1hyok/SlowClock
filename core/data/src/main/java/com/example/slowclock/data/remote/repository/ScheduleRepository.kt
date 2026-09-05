@@ -1,7 +1,6 @@
 // app/src/main/java/com/example/slowclock/data/remote/repository/ScheduleRepository.kt
 package com.example.slowclock.data.remote.repository
 
-import android.content.Context
 import android.util.Log
 import com.example.slowclock.data.FirestoreCollections
 import com.example.slowclock.data.model.Schedule
@@ -15,6 +14,7 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.tasks.await
 import java.util.Calendar
 import javax.inject.Inject
@@ -402,6 +402,47 @@ class ScheduleRepository
             }
         }
 
+        // 특정 날짜의 일정 실시간 구독. 로그인 전이면 빈 목록을 한 번 내고 끝난다.
+        fun observeSchedulesForDate(calendar: Calendar): Flow<List<Schedule>> {
+            val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
+            val startOfDay =
+                (calendar.clone() as Calendar).apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+            val endOfDay =
+                (calendar.clone() as Calendar).apply {
+                    set(Calendar.HOUR_OF_DAY, 23)
+                    set(Calendar.MINUTE, 59)
+                    set(Calendar.SECOND, 59)
+                    set(Calendar.MILLISECOND, 999)
+                }
+            return callbackFlow {
+                val listener =
+                    schedulesCollection
+                        .whereEqualTo("userId", uid)
+                        .addSnapshotListener { snapshot, error ->
+                            if (error != null) {
+                                close(error)
+                                return@addSnapshotListener
+                            }
+                            val schedules =
+                                snapshot
+                                    ?.documents
+                                    ?.mapNotNull { parseScheduleFromDocument(it) }
+                                    ?.filter { schedule ->
+                                        val time = schedule.startTime.toDate()
+                                        time.after(startOfDay.time) && time.before(endOfDay.time)
+                                    }?.sortedBy { it.startTime }
+                                    ?: emptyList()
+                            trySend(schedules)
+                        }
+                awaitClose { listener.remove() }
+            }
+        }
+
         // 공유 코드로 일정(리마인더) 목록 실시간 가져오기
         fun observeSchedulesBySharedCode(sharedCode: String): Flow<List<Schedule>> =
             callbackFlow {
@@ -424,7 +465,6 @@ class ScheduleRepository
 
         // 공유코드로 같은 그룹의 모든 사용자에게 FCM 알림 발송
         suspend fun sendNotificationToShareCodeMembers(
-            context: Context,
             shareCode: String,
             title: String,
             message: String,
@@ -441,7 +481,7 @@ class ScheduleRepository
                 val uid = userDoc.getString("id") ?: continue
                 if (uid == currentUid) continue // Skip self
                 val fcmToken = userDoc.getString("fcmToken") ?: continue
-                notifier.sendReminderToUser(context, fcmToken, title, message)
+                notifier.sendReminderToUser(fcmToken, title, message)
             }
 
             // Optimized: send to all tokens at once via Notifier
@@ -451,7 +491,7 @@ class ScheduleRepository
                     .mapNotNull { it.getString("fcmToken") }
                     .filter { it.isNotBlank() }
             if (tokens.isNotEmpty()) {
-                notifier.sendReminderToUsers(context, tokens, title, message)
+                notifier.sendReminderToUsers(tokens, title, message)
             }
         }
 
@@ -476,14 +516,13 @@ class ScheduleRepository
 
         // 🔔 여러 사용자에게 FCM 알림 전송
         suspend fun notifyShareCodeMembers(
-            context: Context,
             shareCode: String,
             title: String,
             message: String,
         ) {
             val tokens = getFcmTokensByShareCode(shareCode)
             if (tokens.isNotEmpty()) {
-                notifier.sendReminderToUsers(context, tokens, title, message)
+                notifier.sendReminderToUsers(tokens, title, message)
             }
         }
 

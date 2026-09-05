@@ -23,6 +23,10 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        // ViewModel 의 android.util.Log 호출이 JVM 단위 테스트에서 예외를 던지지 않도록 한다.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -40,7 +44,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
-    // MainViewModel(God-VM)이 직접 사용 — #26/#27 에서 정리 예정
-    implementation(libs.firebase.auth)
-    implementation(libs.firebase.messaging)
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

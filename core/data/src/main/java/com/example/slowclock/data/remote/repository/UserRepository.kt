@@ -1,6 +1,5 @@
 package com.example.slowclock.data.remote.repository
 
-import android.content.Context
 import com.example.slowclock.data.FirestoreCollections
 import com.example.slowclock.data.model.User
 import com.example.slowclock.data.notification.Notifier
@@ -113,14 +112,10 @@ class UserRepository
                 }
         }
 
-        fun sendAlertToFamily(
-            context: Context,
-            groupId: String,
-        ) {
+        fun sendAlertToFamily(groupId: String) {
             fetchFamilyTokens(groupId) { tokens ->
                 tokens.forEach { token ->
                     notifier.sendReminderToUser(
-                        context = context,
                         fcmToken = token,
                         title = "가족 일정 알림",
                         message = "가족 그룹에서 새로운 알림이 도착했습니다.",
