@@ -11,7 +11,7 @@
 - Kotlin · Jetpack Compose · Material3
 - Firebase(Firestore/Auth/FCM/Analytics) · Vertex AI · Google Calendar
 - Hilt DI · Gradle 버전 카탈로그(`gradle/libs.versions.toml`)
-- compileSdk 35 / minSdk 32 / JVM 11 · AGP 8.10.1 · Kotlin 2.0.21
+- compileSdk 37 / minSdk 32 / targetSdk 36 / JVM 11 · Gradle 9.5.0 · AGP 9.1.1(내장 Kotlin) · Kotlin 2.4.10 · KSP 2.3.11 · Hilt 2.60.1
 
 ## 🗺 진행
 이슈/로드맵은 [Projects 보드](https://github.com/users/1hyok/projects) · [Issues](https://github.com/1hyok/SlowClock/issues) 참고.

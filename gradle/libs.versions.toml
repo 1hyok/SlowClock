@@ -1,34 +1,36 @@
 [versions]
-agp = "8.13.2"
-kotlin = "2.0.21"
-coreKtx = "1.16.0"
+# AGP 9.1.1 은 Gradle 9.3.1 이상, JDK 17 이상. Kotlin 은 AGP 내장(built-in Kotlin)이라 kotlin-android 플러그인을 쓰지 않는다.
+# KGP 2.4.10 의 완전 지원 범위는 Gradle 7.6.3~9.5.0, AGP 8.5.2~9.1.0 (kotlinlang.org/docs/gradle-configure-project.html)
+agp = "9.1.1"
+kotlin = "2.4.10"
+coreKtx = "1.19.0"
 junit = "4.13.2"
-junitVersion = "1.2.1"
-espressoCore = "3.6.1"
-lifecycleRuntimeKtx = "2.9.0"
-activityCompose = "1.10.1"
-firebaseBom = "33.14.0"
-firebaseFirestore = "25.1.4"
-firebaseMessaging = "24.1.1"
-lifecycleViewmodelCompose = "2.9.0"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+lifecycleRuntimeKtx = "2.11.0"
+activityCompose = "1.13.0"
+firebaseBom = "34.18.0"
+lifecycleViewmodelCompose = "2.11.0"
 materialIconsExtended = "1.7.8"
-navigationCompose = "2.9.0"
-firebaseUiAuth = "9.0.0"
+navigationCompose = "2.10.0"
+firebaseUiAuth = "9.1.1"
 volley = "1.2.1"
 # --- 운영 툴링 도입 (Afternote 패리티): ktlint / compose screenshot test / firebase app distribution ---
 ktlint = "1.8.0"
-ktlintGradle = "12.1.1"
-composeRules = "0.5.6"
-screenshot = "0.0.1-alpha15"
+ktlintGradle = "14.2.0"
+composeRules = "0.6.6"
+screenshot = "0.0.1-alpha16"
 firebaseAppDistribution = "5.3.0"
+googleServices = "4.5.0"
 # --- 멀티모듈 DI ---
-hilt = "2.52"
-ksp = "2.0.21-1.0.28"
-hiltNavigationCompose = "1.2.0"
-kotlinxSerialization = "1.7.3"
+hilt = "2.60.1"
+# KSP 2.3.x 는 Kotlin 버전과 독립이다(KSP 2.3.0 릴리스 노트). 2.3.10 부터 AGP 9 내장 Kotlin 의 R 클래스 해석을 고쳤다.
+ksp = "2.3.11"
+hiltNavigationCompose = "1.4.0"
+kotlinxSerialization = "1.11.0"
 # --- 단위 테스트 ---
-mockk = "1.14.3"
-kotlinxCoroutinesTest = "1.10.2"
+mockk = "1.14.11"
+kotlinxCoroutinesTest = "1.11.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -41,19 +43,19 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecyc
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
 androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
-androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version = "2025.05.01" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version = "2026.08.00" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest", version = "1.8.2" }
+androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
-firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore", version.ref = "firebaseFirestore" }
-firebase-auth = { group = "com.google.firebase", name = "firebase-auth", version = "23.2.1" }
-firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
+firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
+firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
@@ -77,11 +79,11 @@ hilt-gradlePlugin = { group = "com.google.dagger", name = "hilt-android-gradle-p
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ktlint-gradle = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
 compose-screenshot = { id = "com.android.compose.screenshot", version.ref = "screenshot" }
 firebase-app-distribution = { id = "com.google.firebase.appdistribution", version.ref = "firebaseAppDistribution" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 # build-logic 컨벤션 플러그인 (포함 빌드라 버전이 없다)

@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.compose.screenshot)
     alias(libs.plugins.firebase.app.distribution)
-    id("com.google.gms.google-services")
+    alias(libs.plugins.google.services)
 }
 
 // local.properties 에서 release 서명 키 로드 (CI 는 시크릿으로 local.properties 합성)
@@ -122,20 +122,4 @@ dependencies {
     // Compose Preview Screenshot Testing
     screenshotTestImplementation(libs.screenshot.validation.api)
     screenshotTestImplementation(libs.androidx.ui.tooling)
-}
-
-// screenshot-validation-api 0.0.1-alpha15 는 Kotlin 2.2.10 stdlib 을 strictly 로 요구한다. 프로젝트 Kotlin 은 2.0.21 이라
-// 그대로 두면 compileDebugScreenshotTestKotlin 이 2.2 메타데이터를 읽다 죽는다("source must not be null").
-// screenshotTest 클래스패스에서만 stdlib 을 프로젝트 Kotlin 버전으로 되돌리고, 그 API jar 의 메타데이터 버전 검사를 건너뛴다.
-// 근본 해결은 Kotlin 2.2 업그레이드(별도 이슈)이며, 그때 이 블록을 지운다.
-configurations.matching { it.name.contains("ScreenshotTest") }.configureEach {
-    resolutionStrategy.force(
-        "org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}",
-        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${libs.versions.kotlin.get()}",
-        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${libs.versions.kotlin.get()}",
-        "org.jetbrains.kotlin:kotlin-stdlib-common:${libs.versions.kotlin.get()}",
-    )
-}
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().matching { it.name.contains("ScreenshotTest") }.configureEach {
-    compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
 }

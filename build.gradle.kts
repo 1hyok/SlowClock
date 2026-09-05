@@ -10,6 +10,9 @@ buildscript {
         )
     }
     dependencies {
+        // AGP 9 내장 Kotlin 은 KGP 2.2.10 을 런타임 의존으로 갖는다. 더 높은 KGP 를 쓰려면 classpath 에 직접 올린다
+        // (developer.android.com/build/releases/agp-9-0-0-release-notes 의 "Upgrade KGP/KSP").
+        classpath(libs.kotlin.gradlePlugin)
         // Hilt Gradle 플러그인(hiltAggregateDepsDebug)이 호출하는 JavaPoet ClassName.canonicalName() 보장 — 버전 충돌(NoSuchMethodError) 방지
         classpath("com.squareup:javapoet:1.13.0")
     }
@@ -18,13 +21,12 @@ buildscript {
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
     alias(libs.plugins.android.application) apply false
-    alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.ktlint.gradle) apply false
-    id("com.google.gms.google-services") version "4.4.2" apply false
+    alias(libs.plugins.google.services) apply false
 }
 
 // ktlint 를 모든 모듈에 적용한다. 종전엔 :app 에만 붙어 있어 core/feature 모듈은 Gradle 로 검사되지 않았다.
