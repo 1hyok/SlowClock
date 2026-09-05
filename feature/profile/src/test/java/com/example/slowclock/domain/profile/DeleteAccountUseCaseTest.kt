@@ -4,6 +4,7 @@ import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.FamilyGroupRepository
 import com.example.slowclock.data.remote.repository.NotificationRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
+import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -20,6 +21,7 @@ class DeleteAccountUseCaseTest {
     private val familyGroupRepository = mockk<FamilyGroupRepository>()
     private val notificationRepository = mockk<NotificationRepository>()
     private val userRepository = mockk<UserRepository>()
+    private val settingsRepository = mockk<SettingsRepository>()
 
     private val useCase =
         DeleteAccountUseCase(
@@ -28,6 +30,7 @@ class DeleteAccountUseCaseTest {
             familyGroupRepository = familyGroupRepository,
             notificationRepository = notificationRepository,
             userRepository = userRepository,
+            settingsRepository = settingsRepository,
         )
 
     private fun givenSignedIn(uid: String = "uid-1") {
@@ -39,6 +42,8 @@ class DeleteAccountUseCaseTest {
         coEvery { familyGroupRepository.leaveAllGroupsOf(uid) } returns true
         coEvery { notificationRepository.deleteAllNotificationsOf(uid) } returns true
         coEvery { userRepository.deleteUserDocument(uid) } returns true
+        every { settingsRepository.getShareCode() } returns "FAM001"
+        coEvery { userRepository.unregisterShareCodeWatcher(any()) } returns true
     }
 
     @Test
@@ -55,6 +60,7 @@ class DeleteAccountUseCaseTest {
                 scheduleRepository.deleteAllSchedulesOf("uid-1")
                 familyGroupRepository.leaveAllGroupsOf("uid-1")
                 notificationRepository.deleteAllNotificationsOf("uid-1")
+                userRepository.unregisterShareCodeWatcher("FAM001")
                 userRepository.deleteUserDocument("uid-1")
                 authRepository.deleteCurrentUser()
             }
@@ -105,5 +111,49 @@ class DeleteAccountUseCaseTest {
             assertEquals(DeleteAccountResult.NotSignedIn, useCase())
             coVerify(exactly = 0) { scheduleRepository.deleteAllSchedulesOf(any()) }
             coVerify(exactly = 0) { authRepository.deleteCurrentUser() }
+        }
+
+    @Test
+    fun `보고 있던 공유 코드의 감시자 등록을 사용자 문서보다 먼저 지운다`() =
+        runTest {
+            // 보안 규칙이 본인만 지우게 하므로 Auth 사용자가 사라진 뒤에는 아무도 못 지운다(#124).
+            givenSignedIn()
+            givenDataDeletionSucceeds()
+            coEvery { authRepository.deleteCurrentUser() } returns AuthRepository.DeleteResult.Success
+
+            useCase()
+
+            coVerifyOrder {
+                userRepository.unregisterShareCodeWatcher("FAM001")
+                userRepository.deleteUserDocument("uid-1")
+            }
+        }
+
+    @Test
+    fun `감시자 등록을 못 지우면 그 단계로 멈춘다`() =
+        runTest {
+            givenSignedIn()
+            givenDataDeletionSucceeds()
+            coEvery { userRepository.unregisterShareCodeWatcher("FAM001") } returns false
+
+            val result = useCase()
+
+            assertEquals(DeleteAccountResult.Failed(DeleteAccountStep.SHARE_CODE_WATCHERS), result)
+            coVerify(exactly = 0) { userRepository.deleteUserDocument(any()) }
+            coVerify(exactly = 0) { authRepository.deleteCurrentUser() }
+        }
+
+    @Test
+    fun `보고 있던 공유 코드가 없으면 감시자 해제를 시도하지 않는다`() =
+        runTest {
+            givenSignedIn()
+            givenDataDeletionSucceeds()
+            every { settingsRepository.getShareCode() } returns null
+            coEvery { authRepository.deleteCurrentUser() } returns AuthRepository.DeleteResult.Success
+
+            val result = useCase()
+
+            assertEquals(DeleteAccountResult.Success, result)
+            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
         }
 }

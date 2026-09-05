@@ -140,6 +140,7 @@ class ProfileViewModel
                 DeleteAccountStep.SCHEDULES -> "일정을 지우지 못했습니다. 잠시 후 다시 시도해 주세요."
                 DeleteAccountStep.FAMILY_GROUPS -> "가족 그룹 정리에 실패했습니다. 잠시 후 다시 시도해 주세요."
                 DeleteAccountStep.NOTIFICATIONS -> "알림 기록을 지우지 못했습니다. 잠시 후 다시 시도해 주세요."
+                DeleteAccountStep.SHARE_CODE_WATCHERS -> "공유 설정을 정리하지 못했습니다. 잠시 후 다시 시도해 주세요."
                 DeleteAccountStep.USER_DOCUMENT -> "사용자 정보를 지우지 못했습니다. 잠시 후 다시 시도해 주세요."
                 DeleteAccountStep.AUTH_USER -> "계정 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요."
             }

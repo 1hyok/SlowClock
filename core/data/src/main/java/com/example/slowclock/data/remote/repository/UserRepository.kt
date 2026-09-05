@@ -160,20 +160,6 @@ class UserRepository
             }
         }
 
-        suspend fun getCurrentUserFcmToken(): String? {
-            val uid = auth.currentUser?.uid ?: return null
-            return try {
-                usersCollection
-                    .document(uid)
-                    .get()
-                    .await()
-                    .getString("fcmToken")
-                    ?.takeIf { it.isNotBlank() }
-            } catch (e: Exception) {
-                null
-            }
-        }
-
         /** 공유 코드 감시자로 현재 기기 토큰을 등록한다. 공유 일정 변경 알림을 받기 위한 것이다. */
         suspend fun registerShareCodeWatcher(shareCode: String): Boolean {
             val uid = auth.currentUser?.uid ?: return false

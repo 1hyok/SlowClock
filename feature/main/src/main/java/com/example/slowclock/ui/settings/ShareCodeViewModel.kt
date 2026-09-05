@@ -43,8 +43,14 @@ class ShareCodeViewModel
         private fun save() {
             if (!currentState.canSave) return
             val shareCode = currentState.input.trim()
+            // 바꾸기 전 코드. 등록을 지우지 않으면 그 사람에게 내 토큰이 계속 남는다(#124).
+            val previousShareCode = settingsRepository.getShareCode()
             dispatch(ShareCodeReducerEvent.Saving)
             viewModelScope.launch {
+                if (!previousShareCode.isNullOrBlank() && previousShareCode != shareCode) {
+                    val unregistered = userRepository.unregisterShareCodeWatcher(previousShareCode)
+                    Log.d("ShareCodeWatcher", "watcher unregistered=$unregistered shareCode=$previousShareCode")
+                }
                 settingsRepository.setShareCode(shareCode)
                 val registered = userRepository.registerShareCodeWatcher(shareCode)
                 Log.d("ShareCodeWatcher", "watcher registered=$registered shareCode=$shareCode")
