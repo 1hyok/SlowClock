@@ -104,7 +104,14 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             }
 
             composable("recommendation") {
-                RecommendationScreen(navController = navController)
+                RecommendationScreen(
+                    onSelectRecommendation = { title ->
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("initial_title", title)
+                        navController.popBackStack()
+                    },
+                )
             }
 
             composable("settings_share_code") {

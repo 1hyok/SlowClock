@@ -367,41 +367,6 @@ class ScheduleRepository
             }
         }
 
-        // 공유 코드로 일정(리마인더) 목록 가져오기
-        suspend fun getSchedulesBySharedCode(sharedCode: String): ScheduleResult<List<Schedule>> {
-            Log.d("ScheduleRepo", "공유코드로 일정 조회 시작: $sharedCode")
-            return try {
-                val documents =
-                    schedulesCollection
-                        .whereEqualTo("sharedCode", sharedCode)
-                        .get()
-                        .await()
-
-                Log.d("ScheduleRepo", "공유코드로 조회된 문서 수: ${documents.size()}")
-
-                val schedules =
-                    documents.mapNotNull { document ->
-                        parseScheduleFromDocument(document)
-                    }
-
-                if (schedules.isEmpty()) {
-                    Log.i("ScheduleRepo", "공유코드로 불러온 일정이 없습니다.")
-                } else {
-                    Log.i("ScheduleRepo", "공유코드로 불러온 일정: ${schedules.size}")
-                    schedules.forEach { schedule ->
-                        Log.d("ScheduleRepo", "공유 일정: ${schedule.title}, 완료: ${schedule.completed}")
-                    }
-                }
-                ScheduleResult.Success(schedules)
-            } catch (e: FirebaseFirestoreException) {
-                Log.e("ScheduleRepo", "공유코드 일정 조회 실패: ${e.code}", e)
-                ScheduleResult.Error(AppError.GeneralError("공유코드 일정 조회 실패: ${e.localizedMessage}"))
-            } catch (e: Exception) {
-                Log.e("ScheduleRepo", "공유코드 일정 조회 중 에러", e)
-                ScheduleResult.Error(AppError.GeneralError("공유코드 일정 조회 중 에러: ${e.localizedMessage}"))
-            }
-        }
-
         // 특정 날짜의 일정 실시간 구독. 로그인 전이면 빈 목록을 한 번 내고 끝난다.
         fun observeSchedulesForDate(calendar: Calendar): Flow<List<Schedule>> {
             val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
@@ -490,37 +455,6 @@ class ScheduleRepository
                     .filter { it.id != currentUid }
                     .mapNotNull { it.getString("fcmToken") }
                     .filter { it.isNotBlank() }
-            if (tokens.isNotEmpty()) {
-                notifier.sendReminderToUsers(tokens, title, message)
-            }
-        }
-
-        // 🔔 공유코드로 FCM 토큰 리스트 가져오기 (자기 자신 제외)
-        suspend fun getFcmTokensByShareCode(shareCode: String): List<String> {
-            val currentUid = auth.currentUser?.uid ?: return emptyList()
-            return try {
-                val users =
-                    usersCollection
-                        .whereEqualTo("shareCode", shareCode)
-                        .get()
-                        .await()
-                users.documents
-                    .filter { it.id != currentUid }
-                    .mapNotNull { it.getString("fcmToken") }
-                    .filter { it.isNotBlank() }
-            } catch (e: Exception) {
-                Log.e("ScheduleRepo", "FCM 토큰 조회 실패", e)
-                emptyList()
-            }
-        }
-
-        // 🔔 여러 사용자에게 FCM 알림 전송
-        suspend fun notifyShareCodeMembers(
-            shareCode: String,
-            title: String,
-            message: String,
-        ) {
-            val tokens = getFcmTokensByShareCode(shareCode)
             if (tokens.isNotEmpty()) {
                 notifier.sendReminderToUsers(tokens, title, message)
             }

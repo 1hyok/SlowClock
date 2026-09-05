@@ -1,5 +1,6 @@
 package com.example.slowclock.ui.main
 
+import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.model.Schedule
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
@@ -11,6 +12,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +37,7 @@ class MainViewModelTest {
     private val userRepository = mockk<UserRepository>()
     private val authRepository = mockk<AuthRepository>()
     private val settingsRepository = mockk<SettingsRepository>()
+    private val alarmScheduler = mockk<AlarmScheduler>(relaxed = true)
 
     private val todaySchedules = MutableStateFlow<List<Schedule>>(emptyList())
     private val shareCode = MutableStateFlow<String?>(null)
@@ -58,7 +61,7 @@ class MainViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = MainViewModel(scheduleRepository, userRepository, authRepository, settingsRepository)
+    private fun createViewModel() = MainViewModel(scheduleRepository, userRepository, authRepository, settingsRepository, alarmScheduler)
 
     @Test
     fun `리스너가 낸 오늘 일정으로 상태를 채우고 지금 할 일을 고른다`() =
@@ -129,6 +132,7 @@ class MainViewModelTest {
             assertFalse(state.isLoading)
             assertEquals(listOf("s2"), state.todaySchedules.map { it.id })
             coVerify(exactly = 1) { scheduleRepository.deleteSchedule("s1") }
+            verify(exactly = 1) { alarmScheduler.cancel(match { it.id == "s1" }) }
         }
 
     @Test

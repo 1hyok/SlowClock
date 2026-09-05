@@ -15,7 +15,6 @@ materialIconsExtended = "1.7.8"
 navigationCompose = "2.9.0"
 firebaseUiAuth = "9.0.0"
 volley = "1.2.1"
-material = "1.9.0-beta01"
 # --- 운영 툴링 도입 (Afternote 패리티): ktlint / compose screenshot test / firebase app distribution ---
 ktlint = "1.8.0"
 ktlintGradle = "12.1.1"
@@ -59,7 +58,6 @@ androidx-material-icons-extended = { group = "androidx.compose.material", name =
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 firebase-ui-auth = { group = "com.firebaseui", name = "firebase-ui-auth", version.ref = "firebaseUiAuth" }
 volley = { group = "com.android.volley", name = "volley", version.ref = "volley" }
-androidx-material = { group = "androidx.compose.material", name = "material", version.ref = "material" }
 # 운영 툴링
 compose-rules = { group = "io.nlopez.compose.rules", name = "ktlint", version.ref = "composeRules" }
 screenshot-validation-api = { group = "com.android.tools.screenshot", name = "screenshot-validation-api", version.ref = "screenshot" }

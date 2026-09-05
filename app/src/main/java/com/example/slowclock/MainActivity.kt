@@ -15,7 +15,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
 import com.example.slowclock.auth.AuthManager
-import com.example.slowclock.data.DummyDataManager
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.navigation.AppNavigation
@@ -29,9 +28,6 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
-
-    @Inject
-    lateinit var dummyDataManager: DummyDataManager
 
     @Inject
     lateinit var userRepository: UserRepository
@@ -67,7 +63,6 @@ class MainActivity : ComponentActivity() {
             authManager.initialize(
                 onSuccess = {
                     Log.d("AUTH", "로그인 성공 콜백")
-                    addDummyData()
                     // FCM 토큰을 Firestore에 저장
                     saveFcmTokenToFirestore()
                 },
@@ -87,7 +82,6 @@ class MainActivity : ComponentActivity() {
                 Log.d("AUTH", "이미 로그인됨: ${currentUser.displayName}")
                 // 이미 로그인된 경우에도 사용자 정보 확인/생성 필요!
                 authManager.ensureShareCodeForUser(currentUser.uid, currentUser.displayName, currentUser.email)
-                addDummyData()
             }
 
             enableEdgeToEdge()
@@ -103,17 +97,6 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermission() // 알림 권한 요청
         requestExactAlarmPermissionIfNeeded(this) // 알림 권한 요청
         createNotificationChannel() // ← 반드시 호출 필요
-    }
-
-    private fun addDummyData() {
-        lifecycleScope.launch {
-            try {
-                dummyDataManager.addDummyDataIfNeeded()
-                Log.d("MAIN", "더미 데이터 처리 완료")
-            } catch (e: Exception) {
-                Log.e("MAIN", "더미 데이터 처리 실패", e)
-            }
-        }
     }
 
     private fun createNotificationChannel() {
