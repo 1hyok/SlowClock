@@ -1,26 +1,11 @@
 package com.example.slowclock
 
 import android.app.Application
-import com.google.firebase.FirebaseApp
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreSettings
 import dagger.hilt.android.HiltAndroidApp
 
+/**
+ * Firebase 초기화는 google-services 플러그인이 넣는 FirebaseInitProvider 가 앱 시작 시 한다.
+ * Firestore 오프라인 캐시 설정은 인스턴스를 제공하는 `FirebaseModule` 이 맡는다.
+ */
 @HiltAndroidApp
-class SlowClockApplication : Application() {
-    override fun onCreate() {
-        super.onCreate()
-
-        // Firebase 초기화
-        FirebaseApp.initializeApp(this)
-
-        // Firestore 설정
-        val firestore = FirebaseFirestore.getInstance()
-        val settings =
-            FirebaseFirestoreSettings
-                .Builder()
-                .setPersistenceEnabled(true) // 오프라인 지원 활성화
-                .build()
-        firestore.firestoreSettings = settings
-    }
-}
+class SlowClockApplication : Application()
