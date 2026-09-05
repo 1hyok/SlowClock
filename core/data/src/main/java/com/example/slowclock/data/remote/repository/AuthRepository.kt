@@ -2,6 +2,9 @@ package com.example.slowclock.data.remote.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -35,6 +38,21 @@ class AuthRepository
 
         val currentUid: String?
             get() = auth.currentUser?.uid
+
+        /**
+         * 로그인한 계정의 uid. 로그인하지 않았으면 null 이다. 현재 값을 먼저 내고 바뀔 때마다 낸다.
+         *
+         * 화면이 초기화 시점의 uid 를 들고 있으면 로그인에 성공해도 그대로 남는다. 그래서 흐름으로 낸다.
+         */
+        fun observeCurrentUid(): Flow<String?> =
+            callbackFlow {
+                val listener =
+                    FirebaseAuth.AuthStateListener { firebaseAuth ->
+                        trySend(firebaseAuth.currentUser?.uid)
+                    }
+                auth.addAuthStateListener(listener)
+                awaitClose { auth.removeAuthStateListener(listener) }
+            }
 
         val currentProfile: Profile?
             get() =

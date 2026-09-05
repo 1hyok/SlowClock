@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.slowclock.ui.common.components.ErrorCard
+import com.example.slowclock.ui.common.components.SignInPrompt
 import com.example.slowclock.ui.common.dialog.DeleteConfirmDialog
 import com.example.slowclock.ui.main.components.CurrentTaskSection
 import com.example.slowclock.ui.main.components.EmptyStateCard
@@ -55,6 +56,7 @@ fun MainScreen(
     onEditSchedule: (String) -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MainViewModel = hiltViewModel(),
 ) {
@@ -74,6 +76,7 @@ fun MainScreen(
         onEditSchedule = onEditSchedule,
         onNavigateToProfile = onNavigateToProfile,
         onNavigateToSettings = onNavigateToSettings,
+        onSignIn = onSignIn,
         modifier = modifier,
     )
 }
@@ -88,8 +91,10 @@ internal fun MainContent(
     onEditSchedule: (String) -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isSignedOut = state.isSignedInKnown && state.currentUserId.isBlank()
     val dateFormat = remember { SimpleDateFormat("yyyy년 M월 d일 EEEE", Locale.KOREAN) }
     val locale = LocalLocale.current.platformLocale
     val timeFormat = remember(locale) { SimpleDateFormat("HH:mm", locale) }
@@ -167,6 +172,7 @@ internal fun MainContent(
             )
         },
         floatingActionButton = {
+            if (isSignedOut) return@Scaffold
             FloatingActionButton(
                 onClick = onAddSchedule,
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -200,6 +206,11 @@ internal fun MainContent(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+
+            if (isSignedOut) {
+                item { SignInPrompt(onSignIn = onSignIn) }
+                return@LazyColumn
             }
 
             state.currentSchedule?.let { schedule ->

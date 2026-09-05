@@ -76,13 +76,14 @@ class ProfileViewModelTest {
         }
 
     @Test
-    fun `로그인돼 있지 않으면 안내 문구를 둔다`() =
+    fun `로그인돼 있지 않으면 로그인 안내 상태가 된다`() =
         runTest {
             every { authRepository.currentProfile } returns null
 
             val state = createViewModel().uiState.value
 
-            assertEquals("로그인이 필요합니다.", state.loadError)
+            assertTrue(state.isSignedOut)
+            assertNull(state.loadError)
         }
 
     @Test

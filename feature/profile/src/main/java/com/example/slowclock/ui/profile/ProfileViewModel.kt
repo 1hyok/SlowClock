@@ -53,6 +53,10 @@ class ProfileViewModel
                     state.copy(isLoading = false, loadError = event.message)
                 }
 
+                ProfileReducerEvent.SignedOut -> {
+                    state.copy(isLoading = false, isSignedOut = true, loadError = null)
+                }
+
                 ProfileReducerEvent.DeleteConfirmShown -> {
                     state.copy(isDeleteConfirmVisible = true)
                 }
@@ -86,7 +90,7 @@ class ProfileViewModel
             viewModelScope.launch {
                 val authProfile = authRepository.currentProfile
                 if (authProfile == null) {
-                    dispatch(ProfileReducerEvent.LoadFailed("로그인이 필요합니다."))
+                    dispatch(ProfileReducerEvent.SignedOut)
                     return@launch
                 }
                 val user = userRepository.getCurrentUser()

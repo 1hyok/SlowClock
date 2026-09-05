@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
                             ThemeMode.DARK -> true
                         },
                 ) {
-                    AppNavigation()
+                    AppNavigation(onSignIn = { authManager.signInWithGoogle() })
                 }
             }
             Log.d("MAIN", "onCreate 완료")
