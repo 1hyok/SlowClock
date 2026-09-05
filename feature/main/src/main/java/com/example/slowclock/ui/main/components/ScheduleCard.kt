@@ -39,24 +39,25 @@ fun ScheduleCard(
     onToggleComplete: () -> Unit, // 아직 사용 중이라면 그대로 둬도 됨
     onShowDetail: () -> Unit,
     completed: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val backgroundColor =
         if (completed) {
-            Color(0xFFE6F4EA) // 연한 초록
+            MaterialTheme.colorScheme.tertiaryContainer
         } else {
-            Color.White
+            MaterialTheme.colorScheme.surface
         }
 
     val borderColor =
         if (completed) {
             Color.Transparent
         } else {
-            Color(0xFF1A73E8) // 파란색 테두리
+            MaterialTheme.colorScheme.primary
         }
 
     Card(
         onClick = onShowDetail,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, borderColor),
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
@@ -75,19 +76,19 @@ fun ScheduleCard(
                 Text(
                     text = schedule.title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = schedule.startTime.toDate().toTimeString(),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             if (completed) {
                 Text(
                     text = "완료",
-                    color = Color(0xFF1A73E8),
+                    color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelLarge,
                 )
             }

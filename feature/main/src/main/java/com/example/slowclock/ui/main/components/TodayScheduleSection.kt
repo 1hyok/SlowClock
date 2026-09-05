@@ -24,10 +24,11 @@ fun TodayScheduleSection(
     schedules: List<Schedule>,
     onToggleComplete: (String) -> Unit,
     onShowDetail: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val (completed, remaining) = schedules.partition { it.completed }
 
-    Column {
+    Column(modifier = modifier) {
         // 섹션 제목
         Row(
             verticalAlignment = Alignment.CenterVertically,

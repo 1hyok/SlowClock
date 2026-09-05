@@ -6,7 +6,7 @@ import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 
 data class NavItem(
@@ -19,6 +19,7 @@ data class NavItem(
 fun BottomNavigationBar(
     currentRoute: String,
     onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val items =
         listOf(
@@ -29,6 +30,7 @@ fun BottomNavigationBar(
         )
 
     NavigationBar(
+        modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.primary,
     ) {
@@ -41,13 +43,13 @@ fun BottomNavigationBar(
                     Icon(
                         item.icon,
                         contentDescription = item.label,
-                        tint = if (selected) MaterialTheme.colorScheme.primary else Color.Gray,
+                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
                 label = {
                     Text(
                         item.label,
-                        color = if (selected) MaterialTheme.colorScheme.primary else Color.Gray,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
             )

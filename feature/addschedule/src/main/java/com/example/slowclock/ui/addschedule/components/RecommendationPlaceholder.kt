@@ -11,10 +11,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun RecommendationPlaceholder(onNavigateToRecommendation: () -> Unit) {
+fun RecommendationPlaceholder(
+    onNavigateToRecommendation: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Card(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .clickable { onNavigateToRecommendation() },
         colors =

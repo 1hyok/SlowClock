@@ -155,8 +155,8 @@ internal fun AddScheduleContent(
             TimePickerSection(
                 selectedTime = state.selectedTime,
                 endTime = state.endTime,
-                onTimeSelected = { onIntent(AddScheduleIntent.UpdateTime(it)) },
-                onEndTimeSelected = { onIntent(AddScheduleIntent.UpdateEndTime(it)) },
+                onTimeSelect = { onIntent(AddScheduleIntent.UpdateTime(it)) },
+                onEndTimeSelect = { onIntent(AddScheduleIntent.UpdateEndTime(it)) },
             )
 
             RecurringSection(
