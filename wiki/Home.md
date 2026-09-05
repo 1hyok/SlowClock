@@ -1,16 +1,17 @@
 # SlowClock 위키
 
-고령자 접근성 중심 **일정·알람 Android 앱**. 멀티모듈 + Hilt + Firebase/Vertex AI.
+고령자 접근성 중심 일정·알람 Android 앱. 멀티모듈 + Hilt + Firebase.
 
 ## 📚 문서
-- **[아키텍처](Architecture)** — 11모듈 구조 · Hilt DI · 의존 규칙
-- **[개발 환경 셋업](Dev-Setup)** — google-services.json · service_account · SHA-1 · 빌드 명령
-- **[작업 규약](Conventions)** — 이슈 우선 · `feat/<N>` 브랜치 · hook · PR
+- [아키텍처](Architecture): 10모듈 구조 · Hilt DI · 의존 규칙
+- [개발 환경 셋업](Dev-Setup): google-services.json · 서명 키 · SHA-1 · 빌드 명령
+- [작업 규약](Conventions): 이슈 우선 · `feat/<N>` 브랜치 · hook · PR
+- MVI 계약과 화면 2단 구조는 저장소의 [docs/architecture.md](https://github.com/1hyok/SlowClock/blob/main/docs/architecture.md)
 
 ## 🧱 스택
-- Kotlin · Jetpack Compose · Material3
-- Firebase(Firestore/Auth/FCM/Analytics) · Vertex AI · Google Calendar
-- Hilt DI · Gradle 버전 카탈로그(`gradle/libs.versions.toml`)
+- Kotlin · Jetpack Compose · Material3 · Navigation 3
+- Firebase(Firestore/Auth/FCM/Analytics) · Cloud Functions
+- Hilt DI · Gradle 버전 카탈로그(`gradle/libs.versions.toml`) · `build-logic` 컨벤션 플러그인
 - compileSdk 37 / minSdk 32 / targetSdk 36 / JVM 11 · Gradle 9.5.0 · AGP 9.1.1(내장 Kotlin) · Kotlin 2.4.10 · KSP 2.3.11 · Hilt 2.60.1
 
 ## 🗺 진행
