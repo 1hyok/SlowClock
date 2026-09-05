@@ -4,12 +4,15 @@ import android.app.Activity
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import com.example.slowclock.core.alarm.R
 import java.text.SimpleDateFormat
 import java.util.*
@@ -18,6 +21,11 @@ class AlarmFullScreenActivity : Activity() {
     private var mediaPlayer: MediaPlayer? = null
     private val timeHandler = Handler(Looper.getMainLooper())
     private lateinit var timeRunnable: Runnable
+
+    // 알람은 닫기 버튼으로만 끈다. targetSdk 36 부터 predictive back 이 기본이라
+    // API 33 이상에서는 onBackPressed 가 불리지 않으므로 여기서 제스처를 삼킨다.
+    // https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture
+    private var backGestureCallback: OnBackInvokedCallback? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,6 +62,15 @@ class AlarmFullScreenActivity : Activity() {
 
         // 알람 소리 재생
         playAlarmSound()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val callback = OnBackInvokedCallback { }
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                callback,
+            )
+            backGestureCallback = callback
+        }
     }
 
     private fun updateCurrentTime(timeTextView: TextView) {
@@ -100,8 +117,14 @@ class AlarmFullScreenActivity : Activity() {
         super.onDestroy()
         stopAlarmSound()
         timeHandler.removeCallbacks(timeRunnable)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            backGestureCallback?.let(onBackInvokedDispatcher::unregisterOnBackInvokedCallback)
+            backGestureCallback = null
+        }
     }
 
+    // API 32 기기용. 33 이상은 위의 OnBackInvokedCallback 이 대신 막는다.
+    @Deprecated("API 33 미만 기기 전용", ReplaceWith(""))
     override fun onBackPressed() {
         // 사용자가 명시적으로 닫기 버튼을 눌러야 함
     }
