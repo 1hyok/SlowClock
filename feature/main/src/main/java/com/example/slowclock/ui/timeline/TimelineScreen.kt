@@ -84,7 +84,7 @@ internal fun TimelineContent(
                     },
         ) {
             ScreenHeader(
-                title = "일정 타임라인",
+                title = "시간표",
                 subtitle = formatter.format(selectedDate.time),
                 modifier = Modifier.clickable { showDatePicker(context, selectedDate, onIntent) },
             )

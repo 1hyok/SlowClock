@@ -25,7 +25,7 @@ fun BottomNavigationBar(
         listOf(
             NavItem("main", Icons.Default.Home, "메인"),
             NavItem("done", Icons.Default.Check, "완료"),
-            NavItem("timeline", Icons.Default.DateRange, "타임라인"),
+            NavItem("timeline", Icons.Default.DateRange, "시간표"),
             NavItem("settings", Icons.AutoMirrored.Filled.Article, "정보"),
         )
 
@@ -39,7 +39,14 @@ fun BottomNavigationBar(
                 selected = currentRoute == item.route,
                 onClick = { onNavigate(item.route) },
                 icon = { Icon(item.icon, contentDescription = null) },
-                label = { Text(item.label, style = MaterialTheme.typography.labelLarge) },
+                // 글꼴을 키우면 두 줄로 흘러 옆 항목과 겹친다. 한 줄로 고정한다.
+                label = {
+                    Text(
+                        text = item.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                    )
+                },
             )
         }
     }
