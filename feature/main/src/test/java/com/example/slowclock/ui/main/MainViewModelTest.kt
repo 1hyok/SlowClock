@@ -187,12 +187,12 @@ class MainViewModelTest {
         }
 
     @Test
-    fun `공유 일정 완료 토글은 공유 코드 구성원에게 알린다`() =
+    fun `공유 일정 완료 토글은 저장소에 반영하고 화면 상태를 바꾼다`() =
         runTest {
+            // 감시자 알림은 Firestore 트리거가 보낸다. ViewModel 은 상태만 바꾼다(#93).
             val shared = soon.copy(id = "shared-1", userId = "owner-1", sharedCode = "ABC123")
             every { scheduleRepository.observeSchedulesBySharedCode("ABC123") } returns flowOf(listOf(shared))
             coEvery { scheduleRepository.markScheduleAsCompleted("shared-1", true) } returns ScheduleRepository.ScheduleResult.Success(Unit)
-            coEvery { scheduleRepository.sendNotificationToShareCodeMembers(any(), any(), any()) } returns Unit
             shareCode.value = "ABC123"
             val viewModel = createViewModel()
 
@@ -203,7 +203,7 @@ class MainViewModelTest {
                     .single()
                     .completed,
             )
-            coVerify(exactly = 1) { scheduleRepository.sendNotificationToShareCodeMembers("ABC123", "일정이 완료됨", any()) }
+            coVerify(exactly = 1) { scheduleRepository.markScheduleAsCompleted("shared-1", true) }
         }
 
     @Test

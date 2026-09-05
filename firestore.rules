@@ -1,54 +1,69 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 사용자 컬렉션 - 본인 데이터만 읽기/쓰기 가능
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      // 다른 사용자의 공개 정보 읽기 허용 (이름, 공유코드 등)
-      allow read: if request.auth != null;
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    // 일정 컬렉션
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 사용자 문서. 이메일과 FCM 토큰이 함께 있어 본인만 읽고 쓴다.
+    // 다른 사람에게 보여야 하는 이름·공유 코드는 publicProfiles 에 따로 둔다(#93).
+    match /users/{userId} {
+      allow read, write: if isSelf(userId);
+    }
+
+    // 공개 프로필. 공유 일정 소유자의 이름을 보여 주고 공유 코드로 사람을 찾는 데 쓴다.
+    // 읽기는 로그인한 사용자 전체, 쓰기는 본인 문서만이고 담을 수 있는 필드도 셋으로 묶는다.
+    match /publicProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSelf(userId)
+        && request.resource.data.keys().hasOnly(['id', 'name', 'shareCode'])
+        && request.resource.data.id == userId;
+    }
+
+    // 일정
     match /schedules/{scheduleId} {
       // 본인이 만든 일정
-      allow read, write: if request.auth != null && 
-        (request.auth.uid == resource.data.userId || 
+      allow read, write: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId ||
          request.auth.uid == request.resource.data.userId);
-      
-      // 공유 일정은 sharedCode가 비어있지 않으면 누구나 읽기 가능
-      allow read: if request.auth != null && 
-        resource.data.sharedCode != null && 
+
+      // 공유 일정은 sharedCode 가 비어 있지 않으면 읽을 수 있다.
+      allow read: if isSignedIn() &&
+        resource.data.sharedCode != null &&
         resource.data.sharedCode != "";
-        
-      // 공유 일정 완료 상태 변경 허용
-      allow update: if request.auth != null && 
-        resource.data.sharedCode != null && 
+
+      // 공유 일정의 완료 상태만 바꿀 수 있다.
+      allow update: if isSignedIn() &&
+        resource.data.sharedCode != null &&
         resource.data.sharedCode != "" &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed', 'updatedAt']);
     }
-    
-    // 알림 컬렉션 - 본인 알림만 접근
+
+    // 알림 기록. 계정 삭제 때 정리하는 용도로만 남아 있다.
     match /notifications/{notificationId} {
-      allow read, write: if request.auth != null && 
-        request.auth.uid == resource.data.userId;
+      allow read, write: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
-    
+
     // 일정 추천 - 모든 인증된 사용자가 읽기 가능
     match /scheduleRecommendations/{recommendationId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow write: if false; // 관리자만 쓰기 가능하도록 제한
     }
-    
+
     // 가족 그룹 - 그룹 멤버만 접근 가능
     match /familyGroups/{groupId} {
-      allow read, write: if request.auth != null && 
-        (request.auth.uid == resource.data.ownerUserId || 
+      allow read, write: if isSignedIn() &&
+        (request.auth.uid == resource.data.ownerUserId ||
          request.auth.uid in resource.data.memberIds);
     }
-    
-    // 공유코드 감시자 (FCM 토큰 저장용)
+
+    // 공유코드 감시자 (FCM 토큰 저장용). 서버(Cloud Functions)가 관리자 권한으로 읽어 알림을 보낸다.
     match /shareCodeWatchers/{shareCode}/tokens/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isSelf(userId);
     }
   }
 }

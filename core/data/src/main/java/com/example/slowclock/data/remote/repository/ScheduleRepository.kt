@@ -4,7 +4,6 @@ package com.example.slowclock.data.remote.repository
 import android.util.Log
 import com.example.slowclock.data.FirestoreCollections
 import com.example.slowclock.data.model.Schedule
-import com.example.slowclock.data.notification.Notifier
 import com.example.slowclock.util.AppError
 import com.example.slowclock.util.toAppError
 import com.google.firebase.Timestamp
@@ -25,7 +24,6 @@ import javax.inject.Inject
 class ScheduleRepository
     @Inject
     constructor(
-        private val notifier: Notifier,
         private val auth: FirebaseAuth,
         private val firestore: FirebaseFirestore,
     ) {
@@ -427,38 +425,6 @@ class ScheduleRepository
                         }
                 awaitClose { listener.remove() }
             }
-
-        // 공유코드로 같은 그룹의 모든 사용자에게 FCM 알림 발송
-        suspend fun sendNotificationToShareCodeMembers(
-            shareCode: String,
-            title: String,
-            message: String,
-        ) {
-            val currentUid = auth.currentUser?.uid ?: return
-            val users =
-                usersCollection
-                    .whereEqualTo("shareCode", shareCode)
-                    .get()
-                    .await()
-                    .documents
-                    .mapNotNull { it }
-            for (userDoc in users) {
-                val uid = userDoc.getString("id") ?: continue
-                if (uid == currentUid) continue // Skip self
-                val fcmToken = userDoc.getString("fcmToken") ?: continue
-                notifier.sendReminderToUser(fcmToken, title, message)
-            }
-
-            // Optimized: send to all tokens at once via Notifier
-            val tokens =
-                users
-                    .filter { it.id != currentUid }
-                    .mapNotNull { it.getString("fcmToken") }
-                    .filter { it.isNotBlank() }
-            if (tokens.isNotEmpty()) {
-                notifier.sendReminderToUsers(tokens, title, message)
-            }
-        }
 
         // 계정 삭제용: 사용자가 만든 일정 전부 삭제
         suspend fun deleteAllSchedulesOf(userId: String): Boolean =

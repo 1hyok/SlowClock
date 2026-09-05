@@ -88,6 +88,16 @@ beforeEach(async () => {
             completed: false,
             sharedCode: "",
         });
+        await setDoc(doc(db, "publicProfiles", OWNER), {
+            id: OWNER,
+            name: "느린 사용자",
+            shareCode: SHARE_CODE,
+        });
+        await setDoc(doc(db, "publicProfiles", OTHER), {
+            id: OTHER,
+            name: "다른 사용자",
+            shareCode: "ZZZ999",
+        });
         await setDoc(doc(db, "notifications", "n-own"), { userId: OWNER, message: "알림" });
         await setDoc(doc(db, "notifications", "n-other"), { userId: OTHER, message: "남의 알림" });
         await setDoc(doc(db, "scheduleRecommendations", "r-1"), { title: "산책하기" });
@@ -121,23 +131,57 @@ describe("users", () => {
         await assertFails(getDoc(doc(anonymous(), "users", OWNER)));
     });
 
-    it("공유 코드 중복 확인 질의가 통과한다", async () => {
-        // UserRepository.generateUniqueShareCode 가 쓰는 질의다.
-        const db = owner();
-        await assertSucceeds(getDocs(query(collection(db, "users"), where("shareCode", "==", "NEW123"))));
+    it("남의 사용자 문서는 읽지 못한다", async () => {
+        // 이 문서에는 이메일과 FCM 토큰이 함께 있다. 이름은 publicProfiles 로 따로 낸다(#93).
+        await assertFails(getDoc(doc(other(), "users", OWNER)));
     });
 
-    it("지금은 로그인한 누구나 남의 사용자 문서를 읽는다", async () => {
-        // 배포본 규칙의 users 읽기 허용(allow read: if request.auth != null)이 그대로 통과시킨다. 이름뿐 아니라
-        // 이메일·FCM 토큰까지 함께 노출되므로 좁혀야 한다. 좁히는 작업은 공개 프로필 분리가
-        // 필요해 별도 이슈로 다룬다. 그때 이 테스트는 assertFails 로 뒤집는다.
-        await assertSucceeds(getDoc(doc(other(), "users", OWNER)));
+    it("남의 사용자 문서를 질의로도 못 읽는다", async () => {
+        const db = other();
+        await assertFails(getDocs(query(collection(db, "users"), where("id", "in", [OWNER]))));
     });
+});
 
+describe("publicProfiles", () => {
     it("공유 일정 소유자 이름 조회 질의가 통과한다", async () => {
         // UserRepository.getUserNames 가 쓰는 질의다.
         const db = other();
-        await assertSucceeds(getDocs(query(collection(db, "users"), where("id", "in", [OWNER]))));
+        await assertSucceeds(getDocs(query(collection(db, "publicProfiles"), where("id", "in", [OWNER]))));
+    });
+
+    it("공유 코드 중복 확인 질의가 통과한다", async () => {
+        // UserRepository.generateUniqueShareCode 가 쓰는 질의다.
+        const db = owner();
+        await assertSucceeds(
+            getDocs(query(collection(db, "publicProfiles"), where("shareCode", "==", "NEW123"))),
+        );
+    });
+
+    it("본인 프로필만 쓴다", async () => {
+        const db = owner();
+        await assertSucceeds(
+            setDoc(doc(db, "publicProfiles", OWNER), { id: OWNER, name: "새 이름", shareCode: SHARE_CODE }),
+        );
+        await assertFails(
+            setDoc(doc(db, "publicProfiles", OTHER), { id: OTHER, name: "가로채기", shareCode: "ZZZ999" }),
+        );
+    });
+
+    it("이름·공유 코드 밖의 값은 넣지 못한다", async () => {
+        // 이메일이나 토큰이 공개 프로필로 새어 나가지 않게 필드를 묶는다.
+        const db = owner();
+        await assertFails(
+            setDoc(doc(db, "publicProfiles", OWNER), {
+                id: OWNER,
+                name: "느린 사용자",
+                shareCode: SHARE_CODE,
+                email: "owner@example.com",
+            }),
+        );
+    });
+
+    it("로그인하지 않으면 읽지 못한다", async () => {
+        await assertFails(getDoc(doc(anonymous(), "publicProfiles", OWNER)));
     });
 });
 
