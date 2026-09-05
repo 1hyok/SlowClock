@@ -2,13 +2,11 @@ import com.google.firebase.appdistribution.gradle.firebaseAppDistribution
 import java.util.Properties
 
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.slowclock.android.application)
+    alias(libs.plugins.slowclock.android.hilt)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.compose.screenshot)
     alias(libs.plugins.firebase.app.distribution)
-    alias(libs.plugins.hilt)
-    alias(libs.plugins.ksp)
     id("com.google.gms.google-services")
 }
 
@@ -34,15 +32,12 @@ android {
     // namespace(R 클래스·소스 패키지)는 그대로 두고 applicationId 만 Play 등록용으로 바꾼다.
     // Play 는 com.example.* 패키지를 거부하며, Firebase Android 앱은 이 applicationId 로 등록돼 있다.
     namespace = "com.example.slowclock"
-    compileSdk = 36
 
     // Compose Preview Screenshot Testing (alpha) 활성화
     experimentalProperties["android.experimental.enableScreenshotTest"] = true
 
     defaultConfig {
         applicationId = "com.ilhyok.slowclock"
-        minSdk = 32
-        targetSdk = 36
         versionCode = resolveSlowClockVersionCode(System.getenv(slowClockVersionCodeEnv))
         versionName = "1.0"
 
@@ -91,13 +86,6 @@ android {
             }
         }
     }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
     buildFeatures {
         compose = true
     }
@@ -130,8 +118,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.firebase.ui.auth)
     implementation(libs.volley)

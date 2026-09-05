@@ -83,4 +83,10 @@ compose-screenshot = { id = "com.android.compose.screenshot", version.ref = "scr
 firebase-app-distribution = { id = "com.google.firebase.appdistribution", version.ref = "firebaseAppDistribution" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+# build-logic 컨벤션 플러그인 (포함 빌드라 버전이 없다)
+slowclock-android-application = { id = "slowclock.android.application" }
+slowclock-android-library = { id = "slowclock.android.library" }
+slowclock-android-library-compose = { id = "slowclock.android.library.compose" }
+slowclock-android-hilt = { id = "slowclock.android.hilt" }
+slowclock-android-feature = { id = "slowclock.android.feature" }
 
