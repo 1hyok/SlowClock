@@ -26,6 +26,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-    implementation("org.jsoup:jsoup:1.17.2")
+    implementation("org.jsoup:jsoup:1.23.1")
     implementation(libs.androidx.material) // Material2 pull-refresh (ExperimentalMaterialApi)
 }
