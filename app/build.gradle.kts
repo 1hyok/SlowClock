@@ -1,4 +1,5 @@
 import com.google.firebase.appdistribution.gradle.firebaseAppDistribution
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 import java.util.Properties
 
 plugins {
@@ -9,6 +10,7 @@ plugins {
     alias(libs.plugins.compose.screenshot)
     alias(libs.plugins.firebase.app.distribution)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 // local.properties 에서 release 서명 키 로드 (CI 는 시크릿으로 local.properties 합성)
@@ -72,7 +74,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 개발 중에 낸 크래시가 대시보드를 채우면 테스터가 낸 크래시를 못 찾는다(#98).
+            manifestPlaceholders["crashlyticsCollectionEnabled"] = false
+        }
         release {
+            manifestPlaceholders["crashlyticsCollectionEnabled"] = true
             // v1 은 R8 을 켜지 않는다 — Firestore 가 리플렉션으로 매핑하는 data/model 클래스에 keep 규칙이 없고,
             // 난독화 산출물을 기기에서 검증한 적이 없다. 켜는 작업은 별도 이슈로 다룬다.
             isMinifyEnabled = false
@@ -81,6 +88,8 @@ android {
                 "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("release")
+            // R8 을 켜지 않아 매핑 파일이 없다. 업로드 태스크가 붙으면 배포 빌드만 느려진다(#98).
+            configure<CrashlyticsExtension> { mappingFileUploadEnabled = false }
             firebaseAppDistribution {
                 // 릴리스 노트는 배포 워크플로가 머지된 PR 본문에서 만들어 --releaseNotesFile 로 넘긴다.
                 // 여기서 releaseNotes 를 지정하면 그 파일을 덮어써 모든 배포가 같은 문구로 나간다(#79).
@@ -115,6 +124,7 @@ dependencies {
     // Firebase 초기화(Application)·Analytics·Firebase UI 로그인(AuthManager)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.ui.auth)
     testImplementation(libs.junit)

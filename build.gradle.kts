@@ -27,6 +27,7 @@ plugins {
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.ktlint.gradle) apply false
     alias(libs.plugins.google.services) apply false
+    alias(libs.plugins.firebase.crashlytics) apply false
 }
 
 // ktlint 를 모든 모듈에 적용한다. 종전엔 :app 에만 붙어 있어 core/feature 모듈은 Gradle 로 검사되지 않았다.
