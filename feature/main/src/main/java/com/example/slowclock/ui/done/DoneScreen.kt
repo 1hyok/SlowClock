@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -27,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -36,7 +39,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.slowclock.data.model.Schedule
+import com.example.slowclock.ui.common.components.EmptyState
 import com.example.slowclock.ui.common.components.ErrorCard
+import com.example.slowclock.ui.common.components.ScreenHeader
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,25 +72,10 @@ internal fun DoneContent(
         modifier =
             modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
     ) {
-        Text(
-            text = "오늘의 일정",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        )
-        Text(
-            text = formatter.format(Date()),
-            fontSize = 16.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier =
-                Modifier
-                    .padding(bottom = 16.dp)
-                    .align(Alignment.CenterHorizontally),
-            textAlign = TextAlign.Center,
-        )
+        ScreenHeader(title = "완료한 일", subtitle = formatter.format(Date()))
 
         state.error?.let { error ->
             ErrorCard(
@@ -122,27 +112,35 @@ internal fun DoneContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (completed.isEmpty() && remaining.isEmpty()) {
+            EmptyState(
+                icon = Icons.Outlined.TaskAlt,
+                title = "오늘 일정이 없습니다",
+                description = "메인 화면에서 일정을 추가하면 여기에 진행 상황이 보입니다",
+            )
+            return@Column
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = "오늘 ${completed.size}개의 일정을 완료했어요!",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.align(Alignment.CenterHorizontally),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         LinearProgressIndicator(
             progress = {
-                if ((completed.size + remaining.size) == 0) {
-                    0f
-                } else {
-                    completed.size.toFloat() / (completed.size + remaining.size)
-                }
+                completed.size.toFloat() / (completed.size + remaining.size)
             },
             color = MaterialTheme.colorScheme.tertiary,
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             modifier =
                 Modifier
-                    .padding(top = 8.dp)
-                    .fillMaxWidth(),
+                    .padding(top = 12.dp, bottom = 24.dp)
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(6.dp)),
         )
     }
 }

@@ -20,6 +20,8 @@ dependencies {
     // MviViewModel 이 androidx.lifecycle.ViewModel 을 상속해 노출하므로 feature 컴파일
     // 클래스패스에도 올라가야 한다. implementation 이면 상속체가 supertype 을 못 본다.
     api(libs.androidx.lifecycle.viewmodel.ktx)
+    // SlowClockTheme 이 창의 상태 표시줄 아이콘 색을 맞추는 데 WindowCompat 을 쓴다
+    implementation(libs.androidx.core.ktx)
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation(libs.junit)

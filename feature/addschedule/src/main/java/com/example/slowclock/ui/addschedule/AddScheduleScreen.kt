@@ -3,10 +3,14 @@ package com.example.slowclock.ui.addschedule
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,12 +21,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -111,28 +115,30 @@ internal fun AddScheduleContent(
                     ),
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { onIntent(AddScheduleIntent.Save) },
-                containerColor =
-                    if (state.canSave) {
-                        MaterialTheme.colorScheme.secondary
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
-                modifier = Modifier.size(64.dp),
+        // 저장은 화면 아래 넓은 버튼이다. 종전의 떠 있는 원형 버튼은 내용 위에 겹쳐 가렸고
+        // 무엇을 하는 버튼인지 글자가 없었다.
+        bottomBar = {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 8.dp,
             ) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = "저장",
-                    tint =
-                        if (state.canSave) {
-                            MaterialTheme.colorScheme.onSecondary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    modifier = Modifier.size(28.dp),
-                )
+                Button(
+                    onClick = { onIntent(AddScheduleIntent.Save) },
+                    enabled = state.canSave,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .height(64.dp),
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(28.dp))
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(
+                        text = if (state.isEditMode) "수정 저장" else "일정 저장",
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                }
             }
         },
     ) { paddingValues ->

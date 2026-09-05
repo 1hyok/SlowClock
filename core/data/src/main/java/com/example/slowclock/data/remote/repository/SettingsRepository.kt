@@ -2,6 +2,7 @@ package com.example.slowclock.data.remote.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.slowclock.data.model.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -10,7 +11,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 기기에만 남는 사용자 설정. 공유 일정을 볼 공유 코드와 정확한 알람 안내 표시 여부다.
+ * 기기에만 남는 사용자 설정. 공유 코드, 정확한 알람 안내 표시 여부, 화면 테마다.
  *
  * 화면이 SharedPreferences 를 직접 읽지 않도록 여기로 모은다.
  */
@@ -27,6 +28,24 @@ class SettingsRepository
         fun setShareCode(shareCode: String) {
             prefs.edit().putString(KEY_SHARE_CODE, shareCode.trim()).apply()
         }
+
+        fun getThemeMode(): ThemeMode = ThemeMode.fromName(prefs.getString(KEY_THEME_MODE, null))
+
+        fun setThemeMode(mode: ThemeMode) {
+            prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+        }
+
+        /** 현재 값을 먼저 내고, 바뀔 때마다 다시 낸다. */
+        fun observeThemeMode(): Flow<ThemeMode> =
+            callbackFlow {
+                val listener =
+                    SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                        if (key == KEY_THEME_MODE) trySend(getThemeMode())
+                    }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getThemeMode())
+                awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
 
         /** 정확한 알람 권한 안내를 이미 보여 줬는지. 한 번 보여 주면 다시 띄우지 않는다. */
         fun hasSeenExactAlarmNotice(): Boolean = prefs.getBoolean(KEY_EXACT_ALARM_NOTICE_SEEN, false)
@@ -51,5 +70,6 @@ class SettingsRepository
             const val PREFS_NAME = "settings"
             const val KEY_SHARE_CODE = "share_code"
             const val KEY_EXACT_ALARM_NOTICE_SEEN = "exact_alarm_notice_seen"
+            const val KEY_THEME_MODE = "theme_mode"
         }
     }
