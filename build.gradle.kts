@@ -1,4 +1,14 @@
 buildscript {
+    // AGP 8.13.x(9.1 도 동일)가 빌드 클래스패스에 올리는 Bouncy Castle 1.79 는 GHSA-574f-3g2m-x479(critical) 에 걸린다.
+    // 앱 런타임과 무관한 서명 도구 의존이지만 dependency-review 가 빌드 클래스패스도 검사하므로 패치본으로 고정한다.
+    // https://github.com/advisories/GHSA-574f-3g2m-x479 (patched 1.80.2), https://repo1.maven.org/maven2/org/bouncycastle/
+    configurations.classpath {
+        resolutionStrategy.force(
+            "org.bouncycastle:bcprov-jdk18on:1.85",
+            "org.bouncycastle:bcpkix-jdk18on:1.85",
+            "org.bouncycastle:bcutil-jdk18on:1.85",
+        )
+    }
     dependencies {
         // Hilt Gradle 플러그인(hiltAggregateDepsDebug)이 호출하는 JavaPoet ClassName.canonicalName() 보장 — 버전 충돌(NoSuchMethodError) 방지
         classpath("com.squareup:javapoet:1.13.0")
