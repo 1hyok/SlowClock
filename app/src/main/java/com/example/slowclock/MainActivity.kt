@@ -26,11 +26,14 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
-    private val dummyDataManager = DummyDataManager()
+
+    @Inject
+    lateinit var dummyDataManager: DummyDataManager
 
     private fun handleNewInstallation() {
         val prefs = getSharedPreferences("app_state", MODE_PRIVATE)

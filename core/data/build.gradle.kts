@@ -24,7 +24,6 @@ android {
 dependencies {
     api(project(":core:model"))
     implementation(project(":core:common"))
-    implementation(project(":core:alarm")) // GuardianNotifier (FCM 전송) 호출
 
     implementation(libs.firebase.auth)
 

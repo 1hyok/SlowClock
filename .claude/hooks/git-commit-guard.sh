@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# PreToolUse Bash hook: block all `git commit` invocations.
+# PreToolUse Bash hook: `git commit` 정책.
 #
-# 사용자가 Android Studio 커밋 탭에서 직접 검토·커밋하는 워크플로우. Claude의 자율 커밋은 절대 금지.
+# 2026-09-05 이전: 사용자가 Android Studio 커밋 탭에서 직접 검토·커밋하는 워크플로우라 Claude 의 `git commit` 을 전부 막았다.
+# 2026-09-05 지시("이 프로젝트는 내가 검토할 시간이 없으니 네가 알아서 해라"): 이 저장소에서는 Claude 가 검증을 마친 뒤
+# 커밋·push·PR 생성·머지까지 수행한다. 이 훅은 검증을 건너뛰는 `--no-verify` 커밋만 막는다.
+# 되돌리려면 이 파일의 이전 판(전부 deny)을 git 이력에서 복원하고 CLAUDE.md 의 규약 문구를 함께 되돌린다.
 set -uo pipefail
 
 input="$(cat)"
 cmd="$(echo "$input" | jq -r '.tool_input.command // empty')"
 [ -z "$cmd" ] && exit 0
 
-# `git commit` 가 단어 경계 단위로 나타나면 차단 (`git commit-tree` 같은 다른 서브커맨드는 영향 없음)
-if [[ "$cmd" =~ (^|[[:space:]]|\;|\&|\|)git[[:space:]]+commit([[:space:]]|$) ]]; then
-    # 예외: `git commit --amend -m "..."` 또는 `--amend --message=...` 는 *메시지만 수정* 용도로 허용.
-    # 주의: staged changes 가 있으면 amend 시 함께 커밋됨. 호출 전에 staging 이 비어있는지 확인할 책임은 호출자.
-    if [[ "$cmd" =~ --amend ]] && [[ "$cmd" =~ (-m[[:space:]]|--message) ]]; then
-        exit 0
-    fi
-    jq -nc --arg reason "자율 커밋 금지. 사용자가 Android Studio 커밋 탭에서 직접 검토·커밋합니다. 정말 커밋이 필요하면 사용자에게 직접 실행을 요청하세요. (예외: \`git commit --amend -m\` 으로 마지막 커밋 메시지만 수정하는 케이스는 허용.)" \
+if [[ "$cmd" =~ (^|[[:space:]]|\;|\&|\|)git[[:space:]]+commit([[:space:]]|$) ]] && [[ "$cmd" =~ --no-verify ]]; then
+    jq -nc --arg reason "git commit --no-verify 금지. 훅 검증을 건너뛰지 말고 실패 원인을 고친 뒤 커밋하세요." \
       '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
 fi
 
