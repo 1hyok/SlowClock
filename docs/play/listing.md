@@ -48,9 +48,24 @@
 |---|---|---|
 | 앱 아이콘 | `docs/play/ic_launcher_512.png` | 512×512 PNG, 투명 없음 |
 | 그래픽 이미지 | `docs/play/feature_graphic_1024x500.png` | 1024×500 PNG |
-| 휴대전화 스크린샷 | 미촬영 | 2~8장, 1080×2400 PNG, 16:9 또는 9:16 |
+| 휴대전화 스크린샷 | `docs/play/screenshots/` 4장 | 2~8장, 1080×2400 PNG |
 
-스크린샷은 로그인된 기기가 있어야 찍는다. 순서와 화면: (1) 메인 화면(오늘 일정과 현재 할 일) (2) 알람 전체 화면 (3) 일정 추가 (4) 가족 그룹 관리 (5) 완료한 일. 에뮬레이터 `Pixel_7_Claude_QA`(1080×2400) 에 Google 계정으로 로그인한 뒤 `adb exec-out screencap -p > 파일.png` 로 찍는다.
+올릴 순서와 파일이다.
+
+| 순서 | 파일 | 화면 |
+|---|---|---|
+| 1 | `docs/play/screenshots/01-main.png` | 메인. 지금 할 일과 오늘 진행 상황 |
+| 2 | `docs/play/screenshots/03-timeline.png` | 시간표. 하루를 시간 순서로 |
+| 3 | `docs/play/screenshots/02-done.png` | 완료한 일 |
+| 4 | `docs/play/screenshots/04-dark.png` | 어두운 모드 |
+
+네 장은 앱의 화면 코드를 그대로 그려 만들었다. 만드는 자리는 `feature/main/src/screenshotTest/.../StoreScreenshotTest.kt` 이고, 고칠 일이 있으면 그 파일의 미리보기를 렌더한 뒤 위 경로에 덮어쓴다.
+
+```bash
+./gradlew :feature:main:updateDebugScreenshotTest
+```
+
+알람이 울리는 전체 화면과 가족 그룹 화면은 남았다. 실제 동작과 계정이 있어야 자연스러워서 기기에서 찍는다. 에뮬레이터 `Pixel_7_Claude_QA`(1080×2400) 에 Google 계정으로 로그인한 뒤 `adb exec-out screencap -p > 파일.png` 로 찍는다. Play 는 두 장부터 받으므로 이 두 장이 없어도 등록은 막히지 않는다.
 
 ## 연락처
 
