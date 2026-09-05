@@ -2,6 +2,7 @@ package com.example.slowclock.ui.main
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.model.Schedule
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
@@ -34,6 +35,7 @@ class MainViewModel
         private val userRepository: UserRepository,
         private val authRepository: AuthRepository,
         private val settingsRepository: SettingsRepository,
+        private val alarmScheduler: AlarmScheduler,
     ) : MviViewModel<MainIntent, MainUiState, MainReducerEvent>(MainUiState()) {
         private var scheduleJob: Job? = null
 
@@ -232,6 +234,7 @@ class MainViewModel
             viewModelScope.launch {
                 when (val result = scheduleRepository.deleteSchedule(schedule.id)) {
                     is ScheduleRepository.ScheduleResult.Success -> {
+                        runCatching { alarmScheduler.cancel(schedule) }.onFailure { Log.e(TAG, "알람 취소 실패", it) }
                         dispatch(MainReducerEvent.Deleted(schedule.id, System.currentTimeMillis()))
                     }
 

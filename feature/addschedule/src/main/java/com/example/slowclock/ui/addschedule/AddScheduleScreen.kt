@@ -1,12 +1,12 @@
 package com.example.slowclock.ui.addschedule
 
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,64 +27,76 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.slowclock.ui.addschedule.components.RecommendationPlaceholder
 import com.example.slowclock.ui.addschedule.components.RecurringSection
 import com.example.slowclock.ui.addschedule.components.TimePickerSection
 import com.example.slowclock.ui.addschedule.components.TitleInputSection
+import com.example.slowclock.ui.mvi.ObserveSignal
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 일정 추가·수정 화면(stateful). [scheduleId] 가 있으면 수정 모드로 불러오고, [initialTitle] 은
+ * 추천 화면에서 고른 제목이다. 저장이 끝나면 [onNavigateBack] 으로 돌아간다.
+ */
 @Composable
 fun AddScheduleScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToRecommendation: () -> Unit,
+    modifier: Modifier = Modifier,
     scheduleId: String? = null,
     initialTitle: String? = null,
-    onNavigateBack: (Boolean) -> Unit,
     viewModel: AddScheduleViewModel = hiltViewModel(),
-    onNavigateToRecommendation: () -> Unit,
 ) {
-    val scrollState = remember { ScrollState(0) }
-    val uiState by viewModel.uiState.collectAsState()
-    val isEditMode = !scheduleId.isNullOrBlank()
-    val context = LocalContext.current
-
-    LaunchedEffect(Unit) {
-        scrollState.scrollTo(0)
-    }
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(scheduleId) {
-        if (!scheduleId.isNullOrBlank()) {
-            viewModel.loadScheduleForEdit(scheduleId)
-        }
+        if (!scheduleId.isNullOrBlank()) viewModel.onIntent(AddScheduleIntent.LoadForEdit(scheduleId))
     }
     LaunchedEffect(initialTitle) {
-        if (!initialTitle.isNullOrBlank()) {
-            viewModel.updateTitle(initialTitle)
-        }
+        if (!initialTitle.isNullOrBlank()) viewModel.onIntent(AddScheduleIntent.UpdateTitle(initialTitle))
     }
-    LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess) {
-            onNavigateBack(true)
-        }
-    }
+    ObserveSignal(
+        signal = state.isSaved.takeIf { it },
+        consumed = AddScheduleIntent.ConsumeSaved,
+        onIntent = viewModel::onIntent,
+    ) { onNavigateBack() }
 
+    AddScheduleContent(
+        state = state,
+        onIntent = viewModel::onIntent,
+        onNavigateBack = onNavigateBack,
+        onNavigateToRecommendation = onNavigateToRecommendation,
+        modifier = modifier,
+    )
+}
+
+/** 일정 추가·수정 화면(stateless). 프리뷰·스크린샷 테스트 진입점이다. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun AddScheduleContent(
+    state: AddScheduleUiState,
+    onIntent: (AddScheduleIntent) -> Unit,
+    onNavigateBack: () -> Unit,
+    onNavigateToRecommendation: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Scaffold(
+        modifier = modifier,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = if (isEditMode) "일정 수정" else "일정 추가",
+                        text = if (state.isEditMode) "일정 수정" else "일정 추가",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { onNavigateBack(false) }) {
+                    IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "뒤로가기",
@@ -101,9 +113,9 @@ fun AddScheduleScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.saveSchedule(context) },
+                onClick = { onIntent(AddScheduleIntent.Save) },
                 containerColor =
-                    if (uiState.canSave) {
+                    if (state.canSave) {
                         MaterialTheme.colorScheme.secondary
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant
@@ -114,7 +126,7 @@ fun AddScheduleScreen(
                     Icons.Default.Check,
                     contentDescription = "저장",
                     tint =
-                        if (uiState.canSave) {
+                        if (state.canSave) {
                             MaterialTheme.colorScheme.onSecondary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -129,41 +141,36 @@ fun AddScheduleScreen(
                 Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .verticalScroll(scrollState)
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            // 일정 제목 입력 (분리된 컴포넌트)
             TitleInputSection(
-                title = uiState.title,
-                description = uiState.description,
-                onTitleChange = viewModel::updateTitle,
-                onDescriptionChange = viewModel::updateDescription,
+                title = state.title,
+                description = state.description,
+                onTitleChange = { onIntent(AddScheduleIntent.UpdateTitle(it)) },
+                onDescriptionChange = { onIntent(AddScheduleIntent.UpdateDescription(it)) },
             )
 
-            // 시간 선택
             TimePickerSection(
-                selectedTime = uiState.selectedTime,
-                endTime = uiState.endTime,
-                onTimeSelected = viewModel::updateTime,
-                onEndTimeSelected = viewModel::updateEndTime,
+                selectedTime = state.selectedTime,
+                endTime = state.endTime,
+                onTimeSelected = { onIntent(AddScheduleIntent.UpdateTime(it)) },
+                onEndTimeSelected = { onIntent(AddScheduleIntent.UpdateEndTime(it)) },
             )
 
-            // 반복 일정 설정 (분리된 컴포넌트)
             RecurringSection(
-                recurring = uiState.recurring,
-                recurringType = uiState.recurringType,
-                onRecurringChange = viewModel::updateRecurring,
-                onRecurringTypeChange = viewModel::updateRecurringType,
+                recurring = state.recurring,
+                recurringType = state.recurringType,
+                onRecurringChange = { onIntent(AddScheduleIntent.UpdateRecurring(it)) },
+                onRecurringTypeChange = { onIntent(AddScheduleIntent.UpdateRecurringType(it)) },
             )
 
-            // 추천 기능 영역
             RecommendationPlaceholder(
                 onNavigateToRecommendation = onNavigateToRecommendation,
             )
 
-            // 에러 메시지
-            if (uiState.error != null) {
+            state.error?.let { error ->
                 Card(
                     colors =
                         CardDefaults.cardColors(
@@ -172,24 +179,24 @@ fun AddScheduleScreen(
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Text(
-                            text = uiState.error!!.message,
+                            text = error.message,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodyLarge,
                         )
 
-                        if (uiState.canRetry) {
+                        if (state.canRetry) {
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 OutlinedButton(
-                                    onClick = { viewModel.clearError() },
+                                    onClick = { onIntent(AddScheduleIntent.ConsumeError) },
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text("닫기")
                                 }
 
                                 Button(
-                                    onClick = { viewModel.retryLastAction(context) },
+                                    onClick = { onIntent(AddScheduleIntent.Retry) },
                                     modifier = Modifier.weight(1f),
                                 ) {
                                     Text("다시 시도")
@@ -200,8 +207,7 @@ fun AddScheduleScreen(
                 }
             }
 
-            // 로딩 상태
-            if (uiState.isLoading) {
+            if (state.isLoading) {
                 Card(
                     colors =
                         CardDefaults.cardColors(
@@ -217,7 +223,7 @@ fun AddScheduleScreen(
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
-                            text = "일정을 저장하는 중...",
+                            text = if (state.isEditMode && state.editingSchedule == null) "일정을 불러오는 중..." else "일정을 저장하는 중...",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )

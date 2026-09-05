@@ -19,5 +19,4 @@ android {
 dependencies {
     implementation(project(":core:ui"))
     implementation(project(":core:model"))
-    implementation(libs.androidx.navigation.compose)
 }
