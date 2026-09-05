@@ -157,7 +157,6 @@ export function resolvePrImpact(changedFiles, modules, dependencies) {
     let screenshotInfrastructureChange = false;
     let compileAndroidTest = false;
     let runNodeTests = false;
-    let codeqlActions = false;
     let codeqlJavaKotlin = false;
     let forceFull = false;
     let repositoryQualityFixtures = false;
@@ -207,7 +206,6 @@ export function resolvePrImpact(changedFiles, modules, dependencies) {
             runNodeTests = true;
         }
         if (filePath.startsWith(".github/workflows/") || filePath.startsWith(".github/actions/")) {
-            codeqlActions = true;
         }
         if (filePath === ".editorconfig") {
             globalKtlintChange = true;
@@ -262,7 +260,6 @@ export function resolvePrImpact(changedFiles, modules, dependencies) {
         globalKtlintChange = true;
         screenshotInfrastructureChange = true;
         runNodeTests = true;
-        codeqlActions = true;
         codeqlJavaKotlin = true;
         compileAndroidTest = true;
     }
@@ -328,7 +325,6 @@ export function resolvePrImpact(changedFiles, modules, dependencies) {
         unitTestModules,
         screenshotModules,
         screenshotTasks,
-        codeqlActions,
         codeqlJavaKotlin,
         repositoryQualityFull: forceFull,
         repositoryQualityFixtures,
@@ -403,7 +399,6 @@ export function githubOutputLines(impact) {
         screenshot_required: impact.screenshotTasks.length > 0,
         screenshot_modules: impact.screenshotModules.join(" "),
         screenshot_tasks: impact.screenshotTasks.join(" "),
-        codeql_actions: impact.codeqlActions,
         codeql_java_kotlin: impact.codeqlJavaKotlin,
         repository_quality_full: impact.repositoryQualityFull,
         repository_quality_fixtures: impact.repositoryQualityFixtures,
