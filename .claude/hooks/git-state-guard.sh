@@ -5,7 +5,6 @@
 #   - git push (모든 형태) — force push 포함
 #   - git reset --hard
 #   - git rebase
-#   - git branch -D
 #   - git clean -f
 #   - git checkout -- <file>  (작업 파일 폐기)
 #   - git restore <file>      (작업 파일 폐기)
@@ -41,22 +40,8 @@ if [[ "$cmd" =~ (^|[[:space:]]|\;|\&|\|)git[[:space:]]+rebase([[:space:]]|$) ]];
     deny "git rebase"
 fi
 
-# git branch -D (force delete)
-# 예외: 단일 feat/<숫자> 브랜치 + 머지된 PR (head 매칭) 1건 이상이면 통과.
-# memory feedback_cleanup_merged_branches.md — PR 머지 확인 시점 자동 삭제 영구 허가.
-# 모호 케이스 (multi-branch, 옵션 섞임, PR 없음/OPEN/CLOSED, head 매칭 안 됨) 는 deny 유지.
-if [[ "$cmd" =~ git[[:space:]]+branch[[:space:]]+-D([[:space:]]|$) ]]; then
-    args="${cmd#*git branch -D}"
-    read -ra tokens <<< "$args"
-    if [[ ${#tokens[@]} -eq 1 && "${tokens[0]}" =~ ^feat/[0-9]+$ ]]; then
-        branch="${tokens[0]}"
-        if merged=$(gh pr list --head "$branch" --state merged --json number --jq 'length' 2>/dev/null) \
-           && [[ "$merged" -gt 0 ]]; then
-            exit 0
-        fi
-    fi
-    deny "git branch -D"
-fi
+# git branch -D 는 막지 않는다. 로컬 브랜치 삭제는 원격과 PR 이 남아 있어 복구 가능하고,
+# 사용자가 삭제를 막으라고 지시한 적이 없다(2026-09-05).
 
 # git clean -f / -fd / -ffd 등
 if [[ "$cmd" =~ git[[:space:]]+clean[[:space:]].*-[a-zA-Z]*f ]]; then
