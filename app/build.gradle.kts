@@ -81,8 +81,9 @@ android {
             )
             signingConfig = signingConfigs.getByName("release")
             firebaseAppDistribution {
+                // 릴리스 노트는 배포 워크플로가 머지된 PR 본문에서 만들어 --releaseNotesFile 로 넘긴다.
+                // 여기서 releaseNotes 를 지정하면 그 파일을 덮어써 모든 배포가 같은 문구로 나간다(#79).
                 groups = "slowclock"
-                releaseNotes = "Release build for internal distribution"
             }
         }
     }
