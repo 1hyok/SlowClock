@@ -54,7 +54,7 @@ object ScheduleAlarmHelper {
         alarmManager: AlarmManager,
         isFullScreen: Boolean,
     ) {
-        schedule.startTime?.toDate()?.time?.takeIf { it > now }?.let { triggerTime ->
+        schedule.startTime.toDate().time.takeIf { it > now }?.let { triggerTime ->
             val intent = createAlarmIntent(context, schedule, "시작", isFullScreen)
             val requestCode = generateStartRequestCode(schedule.id)
             val pendingIntent = createPendingIntent(context, intent, requestCode)
@@ -107,7 +107,7 @@ object ScheduleAlarmHelper {
     ): Intent =
         Intent(context, AlarmReceiver::class.java).apply {
             putExtra("title", "${schedule.title} ($type)")
-            putExtra("desc", schedule.description ?: "")
+            putExtra("desc", schedule.description)
             putExtra("isFullScreen", isFullScreen)
             putExtra("scheduleId", schedule.id)
             putExtra("alarmType", type)
@@ -181,7 +181,7 @@ object ScheduleAlarmHelper {
             val intent =
                 Intent(context, AlarmReceiver::class.java).apply {
                     putExtra("title", "${schedule.title} ($type)")
-                    putExtra("desc", schedule.description ?: "")
+                    putExtra("desc", schedule.description)
                     putExtra("scheduleId", schedule.id)
                     putExtra("alarmType", type)
                 }
