@@ -39,13 +39,14 @@ import java.util.Locale
 fun Timeline(
     height: Dp,
     items: List<Schedule>,
+    modifier: Modifier = Modifier,
 ) {
     val sortedItems = items.sortedBy { it.startTime.seconds }
     val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     Box(
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
                 .padding(horizontal = 24.dp),
     ) {

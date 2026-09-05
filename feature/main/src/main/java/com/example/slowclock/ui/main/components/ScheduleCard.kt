@@ -39,6 +39,7 @@ fun ScheduleCard(
     onToggleComplete: () -> Unit, // 아직 사용 중이라면 그대로 둬도 됨
     onShowDetail: () -> Unit,
     completed: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val backgroundColor =
         if (completed) {
@@ -56,7 +57,7 @@ fun ScheduleCard(
 
     Card(
         onClick = onShowDetail,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, borderColor),
         colors = CardDefaults.cardColors(containerColor = backgroundColor),

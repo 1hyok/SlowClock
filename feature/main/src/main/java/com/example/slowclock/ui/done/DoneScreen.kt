@@ -152,11 +152,12 @@ fun Section(
     title: String,
     icon: ImageVector,
     color: Color,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -179,12 +180,13 @@ fun ScheduleCard(
     timeFormatter: SimpleDateFormat,
     completed: Boolean,
     onClick: (Schedule) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val cardColor = if (completed) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer
 
     Card(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
                 .clickable { onClick(schedule) },

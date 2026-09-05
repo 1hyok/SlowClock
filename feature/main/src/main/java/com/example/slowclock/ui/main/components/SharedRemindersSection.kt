@@ -29,6 +29,7 @@ fun SharedRemindersSection(
     currentUserUid: String?,
     timeFormat: SimpleDateFormat,
     onToggleComplete: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (sharedReminders.isEmpty()) return
     Card(
@@ -36,7 +37,7 @@ fun SharedRemindersSection(
             androidx.compose.foundation.shape
                 .RoundedCornerShape(16.dp),
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
                 .padding(vertical = 8.dp),
         colors =
