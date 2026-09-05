@@ -53,6 +53,13 @@ object ScheduleAlarmHelper {
      * Intent 만들기부터 AlarmManager 호출까지 한 함수 안에 둔다. 나눠 두면 정적 분석이 대상
      * 컴포넌트를 따라가지 못해 「암시적 PendingIntent」 로 본다. 실제로는 [AlarmReceiver] 로
      * 못박혀 있고 FLAG_IMMUTABLE 이라 받는 쪽이 고칠 수도 없다(#117).
+     *
+     * 생성자로 대상을 준 뒤 `setClass` 로 한 번 더 지정한다. 중복처럼 보이지만 지우면 안 된다.
+     * CodeQL 의 Kotlin 추출기(K2)가 `Intent(Context, Class)` 의 둘째 인자를 데이터베이스에
+     * 남기지 않아, 생성자만으로는 대상이 명시적이라는 것을 증명하지 못한다(github/codeql#20153).
+     * `setClass` 호출은 인자 타입을 보지 않는 갈래로 판정되어 그 자리를 세운다(#121).
+     * 런타임 동작은 같다. 두 방법이 만드는 ComponentName 이 같고, 알람 취소가 대상을 맞추는
+     * `filterEquals` 도 그 값만 본다. 그래서 예약과 취소가 계속 같은 자리를 가리킨다.
      */
     private fun scheduleOne(
         context: Context,
@@ -70,13 +77,16 @@ object ScheduleAlarmHelper {
 
         val requestCode = requestCodeOf(schedule.id, kind)
         val intent =
-            Intent(context, AlarmReceiver::class.java).apply {
-                putExtra("title", "${schedule.title} (${kind.label})")
-                putExtra("desc", schedule.description)
-                putExtra("isFullScreen", isFullScreen)
-                putExtra("scheduleId", schedule.id)
-                putExtra("alarmType", kind.label)
-            }
+            Intent(context, AlarmReceiver::class.java)
+                // 대상을 한 번 더 못박는다. 중복이 아니라 정적 분석을 위한 것이다(#121).
+                .setClass(context, AlarmReceiver::class.java)
+                .apply {
+                    putExtra("title", "${schedule.title} (${kind.label})")
+                    putExtra("desc", schedule.description)
+                    putExtra("isFullScreen", isFullScreen)
+                    putExtra("scheduleId", schedule.id)
+                    putExtra("alarmType", kind.label)
+                }
         val pendingIntent =
             PendingIntent.getBroadcast(
                 context,
@@ -122,12 +132,15 @@ object ScheduleAlarmHelper {
         val requestCode = requestCodeOf(schedule.id, kind)
         try {
             val intent =
-                Intent(context, AlarmReceiver::class.java).apply {
-                    putExtra("title", "${schedule.title} (${kind.label})")
-                    putExtra("desc", schedule.description)
-                    putExtra("scheduleId", schedule.id)
-                    putExtra("alarmType", kind.label)
-                }
+                Intent(context, AlarmReceiver::class.java)
+                    // 예약 쪽과 같은 이유로 대상을 다시 지정한다(#121).
+                    .setClass(context, AlarmReceiver::class.java)
+                    .apply {
+                        putExtra("title", "${schedule.title} (${kind.label})")
+                        putExtra("desc", schedule.description)
+                        putExtra("scheduleId", schedule.id)
+                        putExtra("alarmType", kind.label)
+                    }
             val pendingIntent =
                 PendingIntent.getBroadcast(
                     context,
