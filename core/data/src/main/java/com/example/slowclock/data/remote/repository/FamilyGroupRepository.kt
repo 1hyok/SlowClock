@@ -1,173 +1,22 @@
 package com.example.slowclock.data.remote.repository
 
 import com.example.slowclock.data.FirestoreCollections
-import com.example.slowclock.data.model.FamilyGroup
-import com.example.slowclock.data.notification.Notifier
 import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ktx.toObject
-import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 /**
- * FamilyGroup 컬렉션에 대한 저장소 클래스
+ * familyGroups 컬렉션. 앱에 가족 그룹 화면이 없어 지금은 계정 삭제 때 정리하는 용도만 남았다.
+ * 그룹 기능을 다시 붙이면 여기에 조회·생성을 더한다.
  */
 class FamilyGroupRepository
     @Inject
     constructor(
-        private val notifier: Notifier,
-        private val auth: FirebaseAuth,
         firestore: FirebaseFirestore,
     ) {
         private val familyGroupsCollection = firestore.collection(FirestoreCollections.FAMILY_GROUPS)
-        private val usersCollection = firestore.collection(FirestoreCollections.USERS)
-
-        // 사용자가 속한 가족 그룹 목록 가져오기
-        suspend fun getUserFamilyGroups(): List<FamilyGroup> {
-            val uid = auth.currentUser?.uid ?: return emptyList()
-
-            return try {
-                familyGroupsCollection
-                    .whereArrayContains("memberIds", uid)
-                    .get()
-                    .await()
-                    .toObjects()
-            } catch (e: Exception) {
-                emptyList()
-            }
-        }
-
-        // 사용자가 소유한 가족 그룹 목록 가져오기
-        suspend fun getOwnedFamilyGroups(): List<FamilyGroup> {
-            val uid = auth.currentUser?.uid ?: return emptyList()
-
-            return try {
-                familyGroupsCollection
-                    .whereEqualTo("ownerUserId", uid)
-                    .get()
-                    .await()
-                    .toObjects()
-            } catch (e: Exception) {
-                emptyList()
-            }
-        }
-
-        // 새 가족 그룹 생성
-        suspend fun createFamilyGroup(name: String): String? {
-            val uid = auth.currentUser?.uid ?: return null
-
-            val familyGroup =
-                FamilyGroup(
-                    name = name,
-                    ownerUserId = uid,
-                    memberIds = listOf(uid),
-                    createdAt = Timestamp.now(),
-                    updatedAt = Timestamp.now(),
-                )
-
-            return try {
-                val docRef = familyGroupsCollection.document()
-                val groupWithId = familyGroup.copy(id = docRef.id)
-                docRef.set(groupWithId).await()
-                docRef.id
-            } catch (e: Exception) {
-                null
-            }
-        }
-
-        // 가족 그룹에 멤버 추가
-        suspend fun addMemberToGroup(
-            groupId: String,
-            memberId: String,
-        ): Boolean =
-            try {
-                familyGroupsCollection
-                    .document(groupId)
-                    .update(
-                        mapOf(
-                            "memberIds" to FieldValue.arrayUnion(memberId),
-                            "updatedAt" to Timestamp.now(),
-                        ),
-                    ).await()
-                true
-            } catch (e: Exception) {
-                false
-            }
-
-        // 가족 그룹에서 멤버 제거
-        suspend fun removeMemberFromGroup(
-            groupId: String,
-            memberId: String,
-        ): Boolean =
-            try {
-                familyGroupsCollection
-                    .document(groupId)
-                    .update(
-                        mapOf(
-                            "memberIds" to FieldValue.arrayRemove(memberId),
-                            "updatedAt" to Timestamp.now(),
-                        ),
-                    ).await()
-                true
-            } catch (e: Exception) {
-                false
-            }
-
-        // 가족 그룹 정보 가져오기
-        suspend fun getFamilyGroupById(groupId: String): FamilyGroup? =
-            try {
-                val document = familyGroupsCollection.document(groupId).get().await()
-                document.toObject<FamilyGroup>()
-            } catch (e: Exception) {
-                null
-            }
-
-        // 가족 그룹 삭제
-        suspend fun deleteFamilyGroup(groupId: String): Boolean {
-            val uid = auth.currentUser?.uid ?: return false
-
-            try {
-                val group = getFamilyGroupById(groupId) ?: return false
-                if (group.ownerUserId != uid) return false
-
-                familyGroupsCollection.document(groupId).delete().await()
-                return true
-            } catch (e: Exception) {
-                return false
-            }
-        }
-
-        // 4. 해당 그룹 전체의 FCM 토큰 쿼리 (코루틴)
-        suspend fun fetchGroupMembersFcmTokens(groupId: String): List<String> {
-            val group = getFamilyGroupById(groupId) ?: return emptyList()
-            val memberIds = group.memberIds
-            if (memberIds.isEmpty()) return emptyList()
-            return usersCollection
-                .whereIn("id", memberIds)
-                .get()
-                .await()
-                .documents
-                .mapNotNull { it.getString("fcmToken") }
-        }
-
-        // 5. 그룹 전체에게 FCM 알림 발송
-        suspend fun sendAlertToGroup(
-            groupId: String,
-            title: String,
-            message: String,
-        ) {
-            val tokens = fetchGroupMembersFcmTokens(groupId)
-            tokens.forEach { token ->
-                notifier.sendReminderToUser(
-                    fcmToken = token,
-                    title = title,
-                    message = message,
-                )
-            }
-        }
 
         // 계정 삭제용: 소유한 그룹은 지우고, 참여한 그룹에서는 구성원에서 뺀다
         suspend fun leaveAllGroupsOf(userId: String): Boolean =
