@@ -285,16 +285,11 @@ class MainViewModel
             val reminder = currentState.sharedReminders.find { it.id == scheduleId } ?: return
             dispatch(MainReducerEvent.SharedReminderToggled(scheduleId))
             viewModelScope.launch {
+                // 공유 일정이 바뀌면 Firestore 트리거(sendFcmToShareCodeWatchers)가 감시자에게 알린다.
+                // 클라이언트가 남의 FCM 토큰을 읽어 직접 보내던 경로는 지웠다(#93).
                 when (val result = scheduleRepository.markScheduleAsCompleted(scheduleId, !reminder.completed)) {
                     is ScheduleRepository.ScheduleResult.Success -> {
-                        if (reminder.sharedCode.isNotBlank()) {
-                            val nowCompleted = !reminder.completed
-                            scheduleRepository.sendNotificationToShareCodeMembers(
-                                shareCode = reminder.sharedCode,
-                                title = if (nowCompleted) "일정이 완료됨" else "일정이 미완료로 변경됨",
-                                message = "${reminder.title} 일정이 ${if (nowCompleted) "완료" else "미완료"} 처리되었습니다.",
-                            )
-                        }
+                        Unit
                     }
 
                     is ScheduleRepository.ScheduleResult.Error -> {

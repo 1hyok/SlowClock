@@ -1,6 +1,8 @@
 package com.example.slowclock.data.remote.repository
 
+import android.util.Log
 import com.example.slowclock.data.FirestoreCollections
+import com.example.slowclock.data.model.PublicProfile
 import com.example.slowclock.data.model.User
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
@@ -9,6 +11,8 @@ import com.google.firebase.firestore.toObject
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
+
+private const val TAG = "UserRepository"
 
 /**
  * User 컬렉션에 대한 저장소 클래스
@@ -21,6 +25,7 @@ class UserRepository
         private val messaging: FirebaseMessaging,
     ) {
         private val usersCollection = firestore.collection(FirestoreCollections.USERS)
+        private val publicProfilesCollection = firestore.collection(FirestoreCollections.PUBLIC_PROFILES)
 
         // 6-character code generator
         private suspend fun generateUniqueShareCode(): String {
@@ -32,7 +37,7 @@ class UserRepository
                         .joinToString("")
                 // Check uniqueness in Firestore
                 val exists =
-                    usersCollection
+                    publicProfilesCollection
                         .whereEqualTo("shareCode", code)
                         .get()
                         .await()
@@ -57,6 +62,7 @@ class UserRepository
         suspend fun deleteUserDocument(userId: String): Boolean =
             try {
                 usersCollection.document(userId).delete().await()
+                publicProfilesCollection.document(userId).delete().await()
                 true
             } catch (e: Exception) {
                 false
@@ -85,6 +91,7 @@ class UserRepository
                             updatedAt = Timestamp.now(),
                         )
                     usersCollection.document(uid).set(newUser).await()
+                    savePublicProfile(newUser.id, newUser.name, newUser.shareCode)
                 } else {
                     val updates = mutableMapOf<String, Any>()
                     if (existing.name != name && name.isNotBlank()) updates["name"] = name
@@ -93,11 +100,33 @@ class UserRepository
                         updates["updatedAt"] = Timestamp.now()
                         usersCollection.document(uid).update(updates).await()
                     }
+                    // 공개 프로필이 아직 없거나 이름이 바뀐 경우를 함께 맞춘다.
+                    savePublicProfile(uid, if (name.isNotBlank()) name else existing.name, existing.shareCode)
                 }
                 true
             } catch (e: Exception) {
                 false
             }
+
+        /**
+         * 공개 프로필을 만들거나 갱신한다. 이름·공유 코드만 담으므로 다른 사용자가 읽어도 된다.
+         * 실패해도 사용자 문서 저장 결과를 뒤집지 않는다. 다음 로그인에서 다시 맞춘다.
+         */
+        private suspend fun savePublicProfile(
+            uid: String,
+            name: String,
+            shareCode: String,
+        ) {
+            if (shareCode.isBlank()) return
+            try {
+                publicProfilesCollection
+                    .document(uid)
+                    .set(PublicProfile(id = uid, name = name, shareCode = shareCode))
+                    .await()
+            } catch (e: Exception) {
+                Log.w(TAG, "공개 프로필 저장 실패", e)
+            }
+        }
 
         /** 사용자 ID → 이름. Firestore `whereIn` 은 10개까지라 나눠 조회한다. */
         suspend fun getUserNames(userIds: List<String>): Map<String, String> {
@@ -105,12 +134,12 @@ class UserRepository
             return try {
                 val result = mutableMapOf<String, String>()
                 userIds.distinct().chunked(FIRESTORE_WHERE_IN_LIMIT).forEach { chunk ->
-                    usersCollection
+                    publicProfilesCollection
                         .whereIn("id", chunk)
                         .get()
                         .await()
                         .documents
-                        .mapNotNull { it.toObject<User>() }
+                        .mapNotNull { it.toObject<PublicProfile>() }
                         .forEach { result[it.id] = it.name }
                 }
                 result

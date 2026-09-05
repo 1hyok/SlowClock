@@ -3,6 +3,9 @@ package com.example.slowclock.data
 /** Firestore 컬렉션 이름. 문자열을 흩어 두지 않기 위한 단일 정의다. */
 object FirestoreCollections {
     const val USERS = "users"
+
+    /** 이름·공유 코드만 담는 공개 프로필. `users` 는 본인만 읽는다. */
+    const val PUBLIC_PROFILES = "publicProfiles"
     const val SCHEDULES = "schedules"
     const val NOTIFICATIONS = "notifications"
     const val SCHEDULE_RECOMMENDATIONS = "scheduleRecommendations"

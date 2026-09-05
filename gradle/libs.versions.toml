@@ -15,7 +15,6 @@ materialIconsExtended = "1.7.8"
 navigation3 = "1.1.7"
 lifecycleViewmodelNavigation3 = "2.11.0"
 firebaseUiAuth = "9.1.1"
-volley = "1.2.1"
 # --- 운영 툴링 도입 (Afternote 패리티): ktlint / compose screenshot test / firebase app distribution ---
 ktlint = "1.8.0"
 ktlintGradle = "14.2.0"
@@ -63,7 +62,6 @@ androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigat
 androidx-navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3" }
 androidx-lifecycle-viewmodel-navigation3 = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-navigation3", version.ref = "lifecycleViewmodelNavigation3" }
 firebase-ui-auth = { group = "com.firebaseui", name = "firebase-ui-auth", version.ref = "firebaseUiAuth" }
-volley = { group = "com.android.volley", name = "volley", version.ref = "volley" }
 # 운영 툴링
 compose-rules = { group = "io.nlopez.compose.rules", name = "ktlint", version.ref = "composeRules" }
 screenshot-validation-api = { group = "com.android.tools.screenshot", name = "screenshot-validation-api", version.ref = "screenshot" }

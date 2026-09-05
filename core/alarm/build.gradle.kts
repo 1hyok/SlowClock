@@ -13,5 +13,4 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth)
-    implementation(libs.volley)
 }
