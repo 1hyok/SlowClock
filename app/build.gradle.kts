@@ -80,16 +80,17 @@ android {
         }
         release {
             manifestPlaceholders["crashlyticsCollectionEnabled"] = true
-            // v1 은 R8 을 켜지 않는다 — Firestore 가 리플렉션으로 매핑하는 data/model 클래스에 keep 규칙이 없고,
-            // 난독화 산출물을 기기에서 검증한 적이 없다. 켜는 작업은 #106 에서 다룬다.
-            isMinifyEnabled = false
+            // R8 로 쓰지 않는 코드와 리소스를 걷어낸다. Firestore 가 이름으로 읽는 모델과
+            // kotlinx.serialization 이 만드는 serializer 는 proguard-rules.pro 가 남긴다(#113).
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("release")
-            // R8 을 켜지 않아 매핑 파일이 없다. 업로드 태스크가 붙으면 배포 빌드만 느려진다(#98).
-            configure<CrashlyticsExtension> { mappingFileUploadEnabled = false }
+            // 난독화한 스택 트레이스를 되돌리려면 매핑 파일이 있어야 한다(#113).
+            configure<CrashlyticsExtension> { mappingFileUploadEnabled = true }
             firebaseAppDistribution {
                 // 릴리스 노트는 배포 워크플로가 머지된 PR 본문에서 만들어 --releaseNotesFile 로 넘긴다.
                 // 여기서 releaseNotes 를 지정하면 그 파일을 덮어써 모든 배포가 같은 문구로 나간다(#79).
