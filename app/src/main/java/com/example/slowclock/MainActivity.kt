@@ -19,7 +19,6 @@ import com.example.slowclock.auth.AuthManager
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.navigation.AppNavigation
-import com.example.slowclock.notification.requestExactAlarmPermissionIfNeeded
 import com.example.slowclock.ui.theme.SlowClockTheme
 import com.firebase.ui.auth.AuthUI
 import dagger.hilt.android.AndroidEntryPoint
@@ -95,8 +94,8 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.e("MAIN", "onCreate 실패", e)
         }
-        requestNotificationPermission() // 알림 권한 요청
-        requestExactAlarmPermissionIfNeeded(this) // 알림 권한 요청
+        requestNotificationPermission()
+        // 정확한 알람 권한은 메인 화면이 이유를 설명한 뒤 사용자가 원할 때 요청한다(#83).
         createNotificationChannel() // ← 반드시 호출 필요
     }
 
