@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -17,15 +21,15 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -90,19 +94,48 @@ private fun ThemeModeCard(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(12.dp))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                options.forEachIndexed { index, (mode, label) ->
-                    SegmentedButton(
+            // 가로로 나눈 세 칸은 글자 크기를 키우면 반드시 잘린다. 세로로 편다(#107).
+            Column(modifier = Modifier.selectableGroup()) {
+                options.forEach { (mode, label) ->
+                    ThemeModeRow(
+                        label = label,
                         selected = selected == mode,
-                        onClick = { onSelect(mode) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                        modifier = Modifier.height(56.dp),
-                    ) {
-                        Text(text = label, style = MaterialTheme.typography.titleMedium)
-                    }
+                        onSelect = { onSelect(mode) },
+                    )
                 }
             }
         }
+    }
+}
+
+/** 화면 밝기 선택 한 줄. 줄 전체가 눌리고, 글자가 커지면 줄도 같이 커진다. */
+@Composable
+private fun ThemeModeRow(
+    label: String,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .selectable(
+                    selected = selected,
+                    onClick = onSelect,
+                    role = Role.RadioButton,
+                ).heightIn(min = 56.dp)
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

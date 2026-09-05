@@ -3,7 +3,7 @@ package com.example.slowclock.ui.common.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,12 +66,18 @@ fun SignInPrompt(
             Button(
                 onClick = onSignIn,
                 shape = RoundedCornerShape(16.dp),
+                // 글자 크기를 키운 기기에서 높이를 고정하면 버튼 글자가 잘린다(#107).
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .height(64.dp),
+                        .heightIn(min = 64.dp),
             ) {
-                Text(text = "Google 계정으로 로그인", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = "Google 계정으로 로그인",
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
             }
         }
     }
