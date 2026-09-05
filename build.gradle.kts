@@ -31,6 +31,20 @@ plugins {
 
 // ktlint 를 모든 모듈에 적용한다. 종전엔 :app 에만 붙어 있어 core/feature 모듈은 Gradle 로 검사되지 않았다.
 // 버전은 .github/workflows 의 ktlint 와 통일(1.8.0). compose 규칙셋(io.nlopez.compose.rules)도 전 모듈 공통.
+// AGP 가 만드는 Unified Test Platform 내부 설정(_internal-unified-test-platform-*)도 Bouncy Castle 1.79 를
+// 끌어온다. buildscript classpath 만 고정하면 dependency-review 가 그 경로의 1.79 를 새 취약 의존으로 잡는다.
+// 앱 산출물에는 들어가지 않는 도구 의존이므로 모든 프로젝트 설정에서 패치본으로 맞춘다.
+// https://github.com/advisories/GHSA-574f-3g2m-x479
+allprojects {
+    configurations.configureEach {
+        resolutionStrategy.force(
+            "org.bouncycastle:bcprov-jdk18on:1.85",
+            "org.bouncycastle:bcpkix-jdk18on:1.85",
+            "org.bouncycastle:bcutil-jdk18on:1.85",
+        )
+    }
+}
+
 val composeRules = libs.compose.rules
 subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
