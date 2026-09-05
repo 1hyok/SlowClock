@@ -1,17 +1,13 @@
 package com.example.slowclock.ui.profile
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.domain.profile.DeleteAccountResult
 import com.example.slowclock.domain.profile.DeleteAccountStep
 import com.example.slowclock.domain.profile.DeleteAccountUseCase
+import com.example.slowclock.ui.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,86 +18,117 @@ class ProfileViewModel
         private val userRepository: UserRepository,
         private val authRepository: AuthRepository,
         private val deleteAccount: DeleteAccountUseCase,
-    ) : ViewModel() {
-        private val _uiState = MutableStateFlow(ProfileUiState())
-        val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
-
+    ) : MviViewModel<ProfileIntent, ProfileUiState, ProfileReducerEvent>(ProfileUiState()) {
         init {
             loadProfile()
         }
+
+        override fun onIntent(intent: ProfileIntent) {
+            when (intent) {
+                ProfileIntent.SignOut -> signOut()
+                ProfileIntent.RequestDeleteAccount -> dispatch(ProfileReducerEvent.DeleteConfirmShown)
+                ProfileIntent.DismissDeleteConfirm -> dispatch(ProfileReducerEvent.DeleteConfirmHidden)
+                ProfileIntent.ConfirmDeleteAccount -> confirmDeleteAccount()
+                ProfileIntent.ConsumeUserMessage -> dispatch(ProfileReducerEvent.UserMessageConsumed)
+                ProfileIntent.ConsumeLeave -> dispatch(ProfileReducerEvent.LeaveConsumed)
+            }
+        }
+
+        override fun reduce(
+            state: ProfileUiState,
+            event: ProfileReducerEvent,
+        ): ProfileUiState =
+            when (event) {
+                is ProfileReducerEvent.Loaded -> {
+                    state.copy(
+                        isLoading = false,
+                        name = event.name,
+                        email = event.email,
+                        shareCode = event.shareCode,
+                        loadError = null,
+                    )
+                }
+
+                is ProfileReducerEvent.LoadFailed -> {
+                    state.copy(isLoading = false, loadError = event.message)
+                }
+
+                ProfileReducerEvent.DeleteConfirmShown -> {
+                    state.copy(isDeleteConfirmVisible = true)
+                }
+
+                ProfileReducerEvent.DeleteConfirmHidden -> {
+                    state.copy(isDeleteConfirmVisible = false)
+                }
+
+                ProfileReducerEvent.DeleteStarted -> {
+                    state.copy(isDeleteConfirmVisible = false, isDeleting = true)
+                }
+
+                is ProfileReducerEvent.DeleteFailed -> {
+                    state.copy(isDeleting = false, userMessage = event.message)
+                }
+
+                is ProfileReducerEvent.Left -> {
+                    state.copy(isDeleting = false, leave = event.reason)
+                }
+
+                ProfileReducerEvent.UserMessageConsumed -> {
+                    state.copy(userMessage = null)
+                }
+
+                ProfileReducerEvent.LeaveConsumed -> {
+                    state.copy(leave = null)
+                }
+            }
 
         private fun loadProfile() {
             viewModelScope.launch {
                 val authProfile = authRepository.currentProfile
                 if (authProfile == null) {
-                    _uiState.update { it.copy(isLoading = false, loadError = "로그인이 필요합니다.") }
+                    dispatch(ProfileReducerEvent.LoadFailed("로그인이 필요합니다."))
                     return@launch
                 }
                 val user = userRepository.getCurrentUser()
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        name = user?.name?.takeIf { name -> name.isNotBlank() } ?: authProfile.displayName,
-                        email = user?.email?.takeIf { email -> email.isNotBlank() } ?: authProfile.email,
+                dispatch(
+                    ProfileReducerEvent.Loaded(
+                        name = user?.name?.takeIf { it.isNotBlank() } ?: authProfile.displayName,
+                        email = user?.email?.takeIf { it.isNotBlank() } ?: authProfile.email,
                         shareCode = user?.shareCode.orEmpty(),
-                        loadError = null,
-                    )
-                }
+                    ),
+                )
             }
         }
 
-        fun signOut() {
+        private fun signOut() {
             authRepository.signOut()
-            _uiState.update { it.copy(shouldLeave = true) }
+            dispatch(ProfileReducerEvent.Left(ProfileLeaveReason.SIGNED_OUT))
         }
 
-        fun requestDeleteAccount() {
-            _uiState.update { it.copy(isDeleteConfirmVisible = true) }
-        }
-
-        fun dismissDeleteConfirm() {
-            _uiState.update { it.copy(isDeleteConfirmVisible = false) }
-        }
-
-        fun confirmDeleteAccount() {
-            if (_uiState.value.isDeleting) return
-            _uiState.update { it.copy(isDeleteConfirmVisible = false, isDeleting = true) }
+        private fun confirmDeleteAccount() {
+            if (currentState.isDeleting) return
+            dispatch(ProfileReducerEvent.DeleteStarted)
             viewModelScope.launch {
-                val result = deleteAccount()
-                _uiState.update { state ->
-                    when (result) {
-                        DeleteAccountResult.Success -> {
-                            state.copy(isDeleting = false, shouldLeave = true)
-                        }
+                when (val result = deleteAccount()) {
+                    DeleteAccountResult.Success,
+                    DeleteAccountResult.NotSignedIn,
+                    -> {
+                        dispatch(ProfileReducerEvent.Left(ProfileLeaveReason.ACCOUNT_DELETED))
+                    }
 
-                        DeleteAccountResult.NotSignedIn -> {
-                            state.copy(isDeleting = false, shouldLeave = true)
-                        }
+                    DeleteAccountResult.RecentLoginRequired -> {
+                        dispatch(
+                            ProfileReducerEvent.DeleteFailed(
+                                "보안을 위해 로그아웃한 뒤 다시 로그인하고 계정 삭제를 다시 눌러 주세요.",
+                            ),
+                        )
+                    }
 
-                        DeleteAccountResult.RecentLoginRequired -> {
-                            state.copy(
-                                isDeleting = false,
-                                userMessage = "보안을 위해 로그아웃한 뒤 다시 로그인하고 계정 삭제를 다시 눌러 주세요.",
-                            )
-                        }
-
-                        is DeleteAccountResult.Failed -> {
-                            state.copy(
-                                isDeleting = false,
-                                userMessage = failureMessage(result.step),
-                            )
-                        }
+                    is DeleteAccountResult.Failed -> {
+                        dispatch(ProfileReducerEvent.DeleteFailed(failureMessage(result.step)))
                     }
                 }
             }
-        }
-
-        fun onUserMessageShown() {
-            _uiState.update { it.copy(userMessage = null) }
-        }
-
-        fun onLeaveHandled() {
-            _uiState.update { it.copy(shouldLeave = false) }
         }
 
         private fun failureMessage(step: DeleteAccountStep): String =
