@@ -88,6 +88,39 @@ unzip -p "${apks_path}" universal.apk > "${universal_apk_path}"
     exit 1
 }
 
+# R8 이 Firestore 가 이름으로 읽는 자리를 지웠는지 배포될 산출물에서 직접 본다. 이름이
+# 난독화되면 예외 없이 문서가 빈 값으로 매핑돼, 빌드도 테스트도 통과하고 기기에서만 깨진다.
+# proguard-rules.pro 의 keep 규칙이 지워지거나 좁아지면 여기서 걸린다(#113).
+dex_dir="${private_dir}/dex"
+rm -rf "${dex_dir}"
+mkdir -p "${dex_dir}"
+unzip -o -q "${universal_apk_path}" 'classes*.dex' -d "${dex_dir}"
+shopt -s nullglob
+dex_files=("${dex_dir}"/classes*.dex)
+shopt -u nullglob
+[[ ${#dex_files[@]} -gt 0 ]] || {
+    echo "Universal APK contains no DEX files." >&2
+    exit 1
+}
+
+required_symbols=(
+    'Lcom/example/slowclock/data/model/Schedule;'
+    'Lcom/example/slowclock/data/model/User;'
+    'Lcom/example/slowclock/data/model/PublicProfile;'
+    'getTitle'
+    'getStartTime'
+    'getShareCode'
+    'getFcmToken'
+    'Lcom/example/slowclock/navigation/MainKey;'
+)
+for symbol in "${required_symbols[@]}"; do
+    if ! grep -a -l -F -e "${symbol}" "${dex_files[@]}" > /dev/null 2>&1; then
+        printf 'R8 stripped a name the app reads by reflection: %s\n' "${symbol}" >&2
+        echo 'app/proguard-rules.pro 의 keep 규칙을 확인하라.' >&2
+        exit 1
+    fi
+done
+
 # 기동 스모크는 «배포될 그 산출물» 을 그대로 받아야 한다 — 다시 빌드하면 검증 대상과 배포 대상이
 # 갈라진다. 여기서 만든 universal APK 를 요청받은 경로로 넘기고, 지우는 책임은 워크플로에 있다.
 if [[ -n "${RELEASE_SMOKE_APK_PATH:-}" ]]; then
