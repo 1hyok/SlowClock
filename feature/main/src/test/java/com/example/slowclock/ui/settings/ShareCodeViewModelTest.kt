@@ -32,6 +32,7 @@ class ShareCodeViewModelTest {
         every { settingsRepository.getShareCode() } returns "OLD001"
         justRun { settingsRepository.setShareCode(any()) }
         coEvery { userRepository.registerShareCodeWatcher(any()) } returns true
+        coEvery { userRepository.unregisterShareCodeWatcher(any()) } returns true
     }
 
     @After
@@ -55,6 +56,8 @@ class ShareCodeViewModelTest {
 
             verify(exactly = 1) { settingsRepository.setShareCode("NEW002") }
             coVerify(exactly = 1) { userRepository.registerShareCodeWatcher("NEW002") }
+            // 이전 코드의 등록을 지우지 않으면 그 사람에게 내 토큰이 계속 남는다(#124).
+            coVerify(exactly = 1) { userRepository.unregisterShareCodeWatcher("OLD001") }
             assertTrue(viewModel.uiState.value.isSaved)
             assertFalse(viewModel.uiState.value.isSaving)
 
@@ -72,5 +75,30 @@ class ShareCodeViewModelTest {
 
             verify(exactly = 0) { settingsRepository.setShareCode(any()) }
             assertFalse(viewModel.uiState.value.isSaved)
+        }
+
+    @Test
+    fun `같은 코드를 다시 저장하면 해제하지 않는다`() =
+        runTest {
+            val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
+
+            viewModel.onIntent(ShareCodeIntent.UpdateInput("OLD001"))
+            viewModel.onIntent(ShareCodeIntent.Save)
+
+            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
+            coVerify(exactly = 1) { userRepository.registerShareCodeWatcher("OLD001") }
+        }
+
+    @Test
+    fun `이전 코드가 없으면 해제하지 않는다`() =
+        runTest {
+            every { settingsRepository.getShareCode() } returns null
+            val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
+
+            viewModel.onIntent(ShareCodeIntent.UpdateInput("NEW002"))
+            viewModel.onIntent(ShareCodeIntent.Save)
+
+            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
+            coVerify(exactly = 1) { userRepository.registerShareCodeWatcher("NEW002") }
         }
 }

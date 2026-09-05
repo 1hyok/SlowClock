@@ -4,6 +4,7 @@ import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.FamilyGroupRepository
 import com.example.slowclock.data.remote.repository.NotificationRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
+import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import javax.inject.Inject
 
@@ -12,6 +13,7 @@ enum class DeleteAccountStep {
     SCHEDULES,
     FAMILY_GROUPS,
     NOTIFICATIONS,
+    SHARE_CODE_WATCHERS,
     USER_DOCUMENT,
     AUTH_USER,
 }
@@ -34,6 +36,7 @@ sealed interface DeleteAccountResult {
  *
  * Firestore 데이터를 먼저 지우고 마지막에 Auth 사용자를 지운다. Auth 사용자가 먼저 사라지면
  * 남은 문서를 지울 권한이 없어지므로, 데이터 단계가 하나라도 실패하면 Auth 삭제로 넘어가지 않는다.
+ * 공유 코드 감시자 등록도 같은 이유로 이 안에서 지운다. 밖에 두면 지울 수 있는 사람이 없어진다.
  */
 class DeleteAccountUseCase
     @Inject
@@ -43,6 +46,7 @@ class DeleteAccountUseCase
         private val familyGroupRepository: FamilyGroupRepository,
         private val notificationRepository: NotificationRepository,
         private val userRepository: UserRepository,
+        private val settingsRepository: SettingsRepository,
     ) {
         suspend operator fun invoke(): DeleteAccountResult {
             val uid = authRepository.currentUid ?: return DeleteAccountResult.NotSignedIn
@@ -55,6 +59,14 @@ class DeleteAccountUseCase
             }
             if (!notificationRepository.deleteAllNotificationsOf(uid)) {
                 return DeleteAccountResult.Failed(DeleteAccountStep.NOTIFICATIONS)
+            }
+            // 가족의 공유 코드에 걸어 둔 내 감시자 등록. 보안 규칙이 본인만 지우게 하므로
+            // Auth 사용자가 사라진 뒤에는 아무도 못 지운다. 반드시 여기서 먼저 지운다(#124).
+            val watchedShareCode = settingsRepository.getShareCode()
+            if (!watchedShareCode.isNullOrBlank() &&
+                !userRepository.unregisterShareCodeWatcher(watchedShareCode)
+            ) {
+                return DeleteAccountResult.Failed(DeleteAccountStep.SHARE_CODE_WATCHERS)
             }
             if (!userRepository.deleteUserDocument(uid)) {
                 return DeleteAccountResult.Failed(DeleteAccountStep.USER_DOCUMENT)
