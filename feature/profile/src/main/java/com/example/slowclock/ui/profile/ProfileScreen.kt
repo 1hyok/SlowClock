@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/slowclock/ui/profile/ProfileScreen.kt
 package com.example.slowclock.ui.profile
 
 import androidx.compose.foundation.layout.Arrangement
@@ -11,58 +10,74 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.slowclock.data.FirestoreDB
-import com.example.slowclock.data.model.User
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.ktx.toObject
-import kotlinx.coroutines.tasks.await
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(onNavigateBack: () -> Unit) {
-    val currentUser = FirebaseAuth.getInstance().currentUser
-    var userModel by remember { mutableStateOf<User?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+fun ProfileScreen(
+    onNavigateBack: () -> Unit,
+    viewModel: ProfileViewModel = hiltViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(currentUser?.uid) {
-        if (currentUser?.uid != null) {
-            try {
-                val doc =
-                    FirestoreDB.users
-                        .document(currentUser.uid)
-                        .get()
-                        .await()
-                userModel = doc.toObject<User>()
-                isLoading = false
-            } catch (e: Exception) {
-                error = "사용자 정보를 불러올 수 없습니다."
-                isLoading = false
-            }
-        } else {
-            isLoading = false
+    LaunchedEffect(uiState.userMessage) {
+        val message = uiState.userMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.onUserMessageShown()
+    }
+
+    LaunchedEffect(uiState.shouldLeave) {
+        if (uiState.shouldLeave) {
+            viewModel.onLeaveHandled()
+            onNavigateBack()
         }
     }
 
+    ProfileContent(
+        uiState = uiState,
+        snackbarHostState = snackbarHostState,
+        onNavigateBack = onNavigateBack,
+        onSignOut = viewModel::signOut,
+        onDeleteAccountClick = viewModel::requestDeleteAccount,
+        onDeleteAccountConfirm = viewModel::confirmDeleteAccount,
+        onDeleteAccountDismiss = viewModel::dismissDeleteConfirm,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileContent(
+    uiState: ProfileUiState,
+    snackbarHostState: SnackbarHostState,
+    onNavigateBack: () -> Unit,
+    onSignOut: () -> Unit,
+    onDeleteAccountClick: () -> Unit,
+    onDeleteAccountConfirm: () -> Unit,
+    onDeleteAccountDismiss: () -> Unit,
+) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -89,6 +104,7 @@ fun ProfileScreen(onNavigateBack: () -> Unit) {
                     ),
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { paddingValues ->
         Column(
             modifier =
@@ -99,74 +115,157 @@ fun ProfileScreen(onNavigateBack: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (isLoading) {
-                Text("로딩 중...")
-            } else if (error != null) {
-                Text(error!!, color = MaterialTheme.colorScheme.error)
-            } else {
-                // 프로필 아이콘
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = "프로필",
-                    modifier = Modifier.size(120.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+            when {
+                uiState.isLoading -> {
+                    Text("로딩 중...")
+                }
 
-                Spacer(modifier = Modifier.height(28.dp))
+                uiState.loadError != null -> {
+                    Text(uiState.loadError, color = MaterialTheme.colorScheme.error)
+                }
 
-                // 사용자 이름
-                Text(
-                    text = userModel?.name ?: currentUser?.displayName ?: "이름 없음",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // 이메일
-                Text(
-                    text = userModel?.email ?: currentUser?.email ?: "이메일 없음",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // 공유 코드
-                Text(
-                    text = "내 공유 코드:",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = userModel?.shareCode ?: "-",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-
-                Spacer(modifier = Modifier.height(56.dp))
-
-                // 로그아웃 버튼
-                Button(
-                    onClick = {
-                        FirebaseAuth.getInstance().signOut()
-                        onNavigateBack()
-                    },
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ),
-                    modifier = Modifier.size(width = 200.dp, height = 56.dp),
-                ) {
-                    Text(
-                        text = "로그아웃",
-                        color = MaterialTheme.colorScheme.onError,
-                        style = MaterialTheme.typography.bodyLarge,
+                else -> {
+                    ProfileBody(
+                        uiState = uiState,
+                        onSignOut = onSignOut,
+                        onDeleteAccountClick = onDeleteAccountClick,
                     )
                 }
             }
         }
     }
+
+    if (uiState.isDeleteConfirmVisible) {
+        DeleteAccountConfirmDialog(
+            onConfirm = onDeleteAccountConfirm,
+            onDismiss = onDeleteAccountDismiss,
+        )
+    }
+}
+
+@Composable
+private fun ProfileBody(
+    uiState: ProfileUiState,
+    onSignOut: () -> Unit,
+    onDeleteAccountClick: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            Icons.Default.Person,
+            contentDescription = "프로필",
+            modifier = Modifier.size(120.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(
+            text = uiState.name.ifBlank { "이름 없음" },
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = uiState.email.ifBlank { "이메일 없음" },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "내 공유 코드:",
+            style = MaterialTheme.typography.labelLarge,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = uiState.shareCode.ifBlank { "-" },
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+
+        Spacer(modifier = Modifier.height(56.dp))
+
+        Button(
+            onClick = onSignOut,
+            enabled = !uiState.isDeleting,
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                ),
+            modifier = Modifier.size(width = 200.dp, height = 56.dp),
+        ) {
+            Text(
+                text = "로그아웃",
+                color = MaterialTheme.colorScheme.onError,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (uiState.isDeleting) {
+            CircularProgressIndicator(modifier = Modifier.size(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "계정을 삭제하는 중입니다...",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            TextButton(
+                onClick = onDeleteAccountClick,
+                modifier = Modifier.size(width = 200.dp, height = 56.dp),
+            ) {
+                Text(
+                    text = "계정 삭제",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteAccountConfirmDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "계정을 삭제할까요?",
+                style = MaterialTheme.typography.headlineSmall,
+            )
+        },
+        text = {
+            Text(
+                text = "일정, 가족 그룹, 알림 기록과 계정이 모두 지워지며 되돌릴 수 없습니다.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = "삭제",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "취소",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+        },
+    )
 }

@@ -128,4 +128,13 @@ class UserRepository
                 }
             }
         }
+
+        // 계정 삭제용: 사용자 문서 삭제
+        suspend fun deleteUserDocument(userId: String): Boolean =
+            try {
+                usersCollection.document(userId).delete().await()
+                true
+            } catch (e: Exception) {
+                false
+            }
     }
