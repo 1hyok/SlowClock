@@ -11,6 +11,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 object FirestoreDB {
     internal val db = FirebaseFirestore.getInstance()
 
+    /** Firestore 쓰기 배치 한 건의 최대 작업 수 */
+    internal const val BATCH_LIMIT = 500
+
     // 컬렉션 참조
     val users: CollectionReference = db.collection("users")
     val schedules: CollectionReference = db.collection("schedules")

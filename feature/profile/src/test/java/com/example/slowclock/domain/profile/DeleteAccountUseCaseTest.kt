@@ -1,0 +1,109 @@
+package com.example.slowclock.domain.profile
+
+import com.example.slowclock.data.remote.repository.AuthRepository
+import com.example.slowclock.data.remote.repository.FamilyGroupRepository
+import com.example.slowclock.data.remote.repository.NotificationRepository
+import com.example.slowclock.data.remote.repository.ScheduleRepository
+import com.example.slowclock.data.remote.repository.UserRepository
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.coVerifyOrder
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class DeleteAccountUseCaseTest {
+    private val authRepository = mockk<AuthRepository>()
+    private val scheduleRepository = mockk<ScheduleRepository>()
+    private val familyGroupRepository = mockk<FamilyGroupRepository>()
+    private val notificationRepository = mockk<NotificationRepository>()
+    private val userRepository = mockk<UserRepository>()
+
+    private val useCase =
+        DeleteAccountUseCase(
+            authRepository = authRepository,
+            scheduleRepository = scheduleRepository,
+            familyGroupRepository = familyGroupRepository,
+            notificationRepository = notificationRepository,
+            userRepository = userRepository,
+        )
+
+    private fun givenSignedIn(uid: String = "uid-1") {
+        every { authRepository.currentUid } returns uid
+    }
+
+    private fun givenDataDeletionSucceeds(uid: String = "uid-1") {
+        coEvery { scheduleRepository.deleteAllSchedulesOf(uid) } returns true
+        coEvery { familyGroupRepository.leaveAllGroupsOf(uid) } returns true
+        coEvery { notificationRepository.deleteAllNotificationsOf(uid) } returns true
+        coEvery { userRepository.deleteUserDocument(uid) } returns true
+    }
+
+    @Test
+    fun `데이터를 전부 지운 뒤 마지막에 Auth 사용자를 지운다`() =
+        runTest {
+            givenSignedIn()
+            givenDataDeletionSucceeds()
+            coEvery { authRepository.deleteCurrentUser() } returns AuthRepository.DeleteResult.Success
+
+            val result = useCase()
+
+            assertEquals(DeleteAccountResult.Success, result)
+            coVerifyOrder {
+                scheduleRepository.deleteAllSchedulesOf("uid-1")
+                familyGroupRepository.leaveAllGroupsOf("uid-1")
+                notificationRepository.deleteAllNotificationsOf("uid-1")
+                userRepository.deleteUserDocument("uid-1")
+                authRepository.deleteCurrentUser()
+            }
+        }
+
+    @Test
+    fun `Firebase 가 재로그인을 요구하면 그대로 알린다`() =
+        runTest {
+            givenSignedIn()
+            givenDataDeletionSucceeds()
+            coEvery { authRepository.deleteCurrentUser() } returns AuthRepository.DeleteResult.RecentLoginRequired
+
+            assertEquals(DeleteAccountResult.RecentLoginRequired, useCase())
+        }
+
+    @Test
+    fun `일정 삭제가 실패하면 뒤 단계와 Auth 삭제로 넘어가지 않는다`() =
+        runTest {
+            givenSignedIn()
+            coEvery { scheduleRepository.deleteAllSchedulesOf("uid-1") } returns false
+
+            val result = useCase()
+
+            assertEquals(DeleteAccountResult.Failed(DeleteAccountStep.SCHEDULES), result)
+            coVerify(exactly = 0) { familyGroupRepository.leaveAllGroupsOf(any()) }
+            coVerify(exactly = 0) { userRepository.deleteUserDocument(any()) }
+            coVerify(exactly = 0) { authRepository.deleteCurrentUser() }
+        }
+
+    @Test
+    fun `사용자 문서 삭제가 실패하면 Auth 사용자를 지우지 않는다`() =
+        runTest {
+            givenSignedIn()
+            givenDataDeletionSucceeds()
+            coEvery { userRepository.deleteUserDocument("uid-1") } returns false
+
+            val result = useCase()
+
+            assertEquals(DeleteAccountResult.Failed(DeleteAccountStep.USER_DOCUMENT), result)
+            coVerify(exactly = 0) { authRepository.deleteCurrentUser() }
+        }
+
+    @Test
+    fun `로그인돼 있지 않으면 아무것도 지우지 않는다`() =
+        runTest {
+            every { authRepository.currentUid } returns null
+
+            assertEquals(DeleteAccountResult.NotSignedIn, useCase())
+            coVerify(exactly = 0) { scheduleRepository.deleteAllSchedulesOf(any()) }
+            coVerify(exactly = 0) { authRepository.deleteCurrentUser() }
+        }
+}

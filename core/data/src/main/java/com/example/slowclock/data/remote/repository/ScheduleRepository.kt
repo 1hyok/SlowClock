@@ -483,4 +483,23 @@ class ScheduleRepository
                 notifier.sendReminderToUsers(context, tokens, title, message)
             }
         }
+
+        // 계정 삭제용: 사용자가 만든 일정 전부 삭제
+        suspend fun deleteAllSchedulesOf(userId: String): Boolean =
+            try {
+                val documents =
+                    schedulesCollection
+                        .whereEqualTo("userId", userId)
+                        .get()
+                        .await()
+                documents.documents.chunked(FirestoreDB.BATCH_LIMIT).forEach { chunk ->
+                    val batch = FirestoreDB.db.batch()
+                    chunk.forEach { batch.delete(it.reference) }
+                    batch.commit().await()
+                }
+                true
+            } catch (e: Exception) {
+                Log.e("ScheduleRepo", "사용자 일정 일괄 삭제 실패", e)
+                false
+            }
     }
