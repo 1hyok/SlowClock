@@ -26,59 +26,64 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.ui.mvi.ObserveSignal
+import kotlinx.coroutines.launch
 
+/**
+ * 내 정보 화면(stateful). 상태는 [ProfileViewModel] 이 갖고, 화면은 [ProfileIntent] 만 보낸다.
+ * 네비게이션([onNavigateBack])은 MVI 밖이라 NavGraph 가 넘긴다.
+ */
 @Composable
 fun ProfileScreen(
     onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(uiState.userMessage) {
-        val message = uiState.userMessage ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message)
-        viewModel.onUserMessageShown()
-    }
+    ObserveSignal(
+        signal = state.userMessage,
+        consumed = ProfileIntent.ConsumeUserMessage,
+        onIntent = viewModel::onIntent,
+    ) { message -> scope.launch { snackbarHostState.showSnackbar(message) } }
 
-    LaunchedEffect(uiState.shouldLeave) {
-        if (uiState.shouldLeave) {
-            viewModel.onLeaveHandled()
-            onNavigateBack()
-        }
-    }
+    ObserveSignal(
+        signal = state.leave,
+        consumed = ProfileIntent.ConsumeLeave,
+        onIntent = viewModel::onIntent,
+    ) { onNavigateBack() }
 
     ProfileContent(
-        uiState = uiState,
+        state = state,
+        onIntent = viewModel::onIntent,
         snackbarHostState = snackbarHostState,
         onNavigateBack = onNavigateBack,
-        onSignOut = viewModel::signOut,
-        onDeleteAccountClick = viewModel::requestDeleteAccount,
-        onDeleteAccountConfirm = viewModel::confirmDeleteAccount,
-        onDeleteAccountDismiss = viewModel::dismissDeleteConfirm,
+        modifier = modifier,
     )
 }
 
+/** 내 정보 화면(stateless). 프리뷰·스크린샷 테스트 진입점이다. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProfileContent(
-    uiState: ProfileUiState,
+internal fun ProfileContent(
+    state: ProfileUiState,
+    onIntent: (ProfileIntent) -> Unit,
     snackbarHostState: SnackbarHostState,
     onNavigateBack: () -> Unit,
-    onSignOut: () -> Unit,
-    onDeleteAccountClick: () -> Unit,
-    onDeleteAccountConfirm: () -> Unit,
-    onDeleteAccountDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Scaffold(
+        modifier = modifier,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -116,40 +121,31 @@ private fun ProfileContent(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             when {
-                uiState.isLoading -> {
-                    Text("로딩 중...")
-                }
-
-                uiState.loadError != null -> {
-                    Text(uiState.loadError, color = MaterialTheme.colorScheme.error)
-                }
-
-                else -> {
-                    ProfileBody(
-                        uiState = uiState,
-                        onSignOut = onSignOut,
-                        onDeleteAccountClick = onDeleteAccountClick,
-                    )
-                }
+                state.isLoading -> Text("로딩 중...")
+                state.loadError != null -> Text(state.loadError, color = MaterialTheme.colorScheme.error)
+                else -> ProfileBody(state = state, onIntent = onIntent)
             }
         }
     }
 
-    if (uiState.isDeleteConfirmVisible) {
+    if (state.isDeleteConfirmVisible) {
         DeleteAccountConfirmDialog(
-            onConfirm = onDeleteAccountConfirm,
-            onDismiss = onDeleteAccountDismiss,
+            onConfirm = { onIntent(ProfileIntent.ConfirmDeleteAccount) },
+            onDismiss = { onIntent(ProfileIntent.DismissDeleteConfirm) },
         )
     }
 }
 
 @Composable
 private fun ProfileBody(
-    uiState: ProfileUiState,
-    onSignOut: () -> Unit,
-    onDeleteAccountClick: () -> Unit,
+    state: ProfileUiState,
+    onIntent: (ProfileIntent) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Icon(
             Icons.Default.Person,
             contentDescription = "프로필",
@@ -160,7 +156,7 @@ private fun ProfileBody(
         Spacer(modifier = Modifier.height(28.dp))
 
         Text(
-            text = uiState.name.ifBlank { "이름 없음" },
+            text = state.name.ifBlank { "이름 없음" },
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -168,7 +164,7 @@ private fun ProfileBody(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = uiState.email.ifBlank { "이메일 없음" },
+            text = state.email.ifBlank { "이메일 없음" },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -183,7 +179,7 @@ private fun ProfileBody(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = uiState.shareCode.ifBlank { "-" },
+            text = state.shareCode.ifBlank { "-" },
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -191,8 +187,8 @@ private fun ProfileBody(
         Spacer(modifier = Modifier.height(56.dp))
 
         Button(
-            onClick = onSignOut,
-            enabled = !uiState.isDeleting,
+            onClick = { onIntent(ProfileIntent.SignOut) },
+            enabled = !state.isDeleting,
             colors =
                 ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error,
@@ -208,7 +204,7 @@ private fun ProfileBody(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (uiState.isDeleting) {
+        if (state.isDeleting) {
             CircularProgressIndicator(modifier = Modifier.size(32.dp))
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -218,7 +214,7 @@ private fun ProfileBody(
             )
         } else {
             TextButton(
-                onClick = onDeleteAccountClick,
+                onClick = { onIntent(ProfileIntent.RequestDeleteAccount) },
                 modifier = Modifier.size(width = 200.dp, height = 56.dp),
             ) {
                 Text(
@@ -235,8 +231,10 @@ private fun ProfileBody(
 private fun DeleteAccountConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     AlertDialog(
+        modifier = modifier,
         onDismissRequest = onDismiss,
         title = {
             Text(
