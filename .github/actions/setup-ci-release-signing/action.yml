@@ -1,0 +1,13 @@
+name: Set up ephemeral CI release signing
+description: Generate a one-run, non-production keystore for release validation only
+
+runs:
+  using: composite
+  steps:
+    - name: Generate CI-only release signing material
+      shell: bash
+      run: >-
+        bash "${{ github.action_path }}/../../scripts/create-ci-release-signing.sh"
+        --workspace "$GITHUB_WORKSPACE"
+        --runner-temp "$RUNNER_TEMP"
+        --github-env "$GITHUB_ENV"

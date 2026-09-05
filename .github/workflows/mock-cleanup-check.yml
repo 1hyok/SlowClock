@@ -1,24 +1,31 @@
 name: Mock Cleanup Check
 
 on:
-  pull_request:
+  push:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   mock-cleanup:
     name: Check MOCK_CLEANUP TODOs
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Check for MOCK_CLEANUP markers
         run: |
           MATCHES=$(grep -rn "MOCK_CLEANUP" --include="*.kt" \
-            --exclude-dir="src/debug" \
-            --exclude-dir="src/test" \
-            --exclude-dir="src/androidTest" || true)
+            --exclude-dir="debug" \
+            --exclude-dir="test" \
+            --exclude-dir="androidTest" || true)
           if [ -n "$MATCHES" ]; then
             echo "::warning::⚠️ MOCK_CLEANUP 마커가 발견되었습니다. 목업 코드가 프로덕션에 남아있을 수 있습니다:"
             echo "$MATCHES"
+            exit 1
           fi

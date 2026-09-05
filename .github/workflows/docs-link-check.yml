@@ -1,0 +1,48 @@
+name: Documentation Link Check
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+      - '.github/scripts/verify-markdown-links.mjs'
+      - '.github/scripts/verify-markdown-links.test.mjs'
+      - '.github/workflows/docs-link-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.md'
+      - '.github/scripts/verify-markdown-links.mjs'
+      - '.github/scripts/verify-markdown-links.test.mjs'
+      - '.github/workflows/docs-link-check.yml'
+  schedule:
+    # External sites are checked off the PR critical path every Monday 04:23 KST.
+    - cron: '23 19 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-links-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  links:
+    name: Validate Markdown links
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test the link verifier
+        run: node --test .github/scripts/verify-markdown-links.test.mjs
+
+      - name: Validate local paths and anchors
+        run: node .github/scripts/verify-markdown-links.mjs
+
+      - name: Validate external links outside pull requests
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: node .github/scripts/verify-markdown-links.mjs --external

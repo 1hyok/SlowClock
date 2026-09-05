@@ -1,92 +1,205 @@
 name: Release Distribution (Firebase App Distribution)
 
-# main 브랜치 push 시점에만 실행. PR / 다른 브랜치에서는 트리거되지 않음 —
-# "main 머지된 상태만 배포" 운영 정책에 맞춤. 수동 트리거 (1hyok 머신) 는 fallback 으로 유지.
+# 배포 경로는 main 머지 하나뿐이다. 수동 dispatch 경로는 두지 않는다 — 도착지(Firebase `slowclock`
+# 그룹)가 같아 실익이 없고, dispatch 는 release keystore 와 WIF 자격을 임의 ref 에 노출하는 표면이다.
+# feat/<N> → main 단일 흐름이라 main 에 머지된 PR 하나가 곧 릴리스 후보다. 릴리스 노트는 그 PR 본문에서 만든다.
 
 on:
   push:
     branches: [main]
 
-permissions:
-  contents: read
+# 같은 Firebase App Distribution 앱에 올리는 경로를 전부 이 group 하나로 직렬화한다 — main 릴리스
+# push 에 WIF canary(firebase-wif-canary.yml)가 겹치면 러너 둘이 같은 앱에 업로드한다. group 문자열은
+# 두 워크플로가 공유하므로 한쪽만 바꾸면 방호가 풀린다 (#995).
+# cancel-in-progress 는 기본값(false) 그대로 — 진행 중 업로드가 취소되면 부분 상태가 남는다.
+concurrency:
+  group: firebase-app-distribution-upload
+
+# 최상단을 비워 두고 권한은 provenance 를 발급하는 job 에서만 연다 (#851). attestations·id-token 은
+# 이 저장소 이름으로 Sigstore 서명을 받는 권한이라, 워크플로 기본값으로 두면 나중에 추가되는 job 이
+# 조용히 물려받는다.
+permissions: {}
 
 jobs:
   distribute:
     name: Build Release and Upload to Firebase App Distribution
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # 보호 규칙(deployment branch 제한·required reviewer·environment secret)은 워크플로 파일로
+    # 지정할 수 없다 — 여긴 연결점만 만들고 실제 설정은 Settings → Environments 에서 한다.
+    environment: release-distribution
+    # 빌드·attest·업로드가 한 job 에 있는 이유: signed APK 를 job 사이로 넘기려면 Actions artifact
+    # 가 필요한데 public 저장소라 그 경로를 쓸 수 없다. 그래서 이 job 이 곧 provenance job 이고,
+    # 권한도 여기서만 최소로 연다 — pull-requests: read 는 릴리스 노트를 읽는 아래 step 몫이다.
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      pull-requests: read
     steps:
+      # 이 job 은 release keystore·Firebase service account 를 받는다. 트리거가 push: [main] 하나여서
+      # ref 가 main 으로 고정되므로, 예전의 수동 실행용 브랜치 가드는 더 방어할 대상이 없어 제거했다.
       - name: Clone repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Load release metadata from main PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR_BODY_FILE: ${{ runner.temp }}/main-release-pr-body.md
+        run: |
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '[.[] | select(.base.ref == "main" and .merged_at != null)] | sort_by(.merged_at) | last | .body // empty' \
+            > "$RELEASE_PR_BODY_FILE"
+
+      - name: Prepare Firebase release notes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_PR_BODY_FILE: ${{ runner.temp }}/main-release-pr-body.md
+          RELEASE_NOTES_FILE: ${{ runner.temp }}/firebase-app-distribution-release-notes.txt
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          bash .github/scripts/render-distribution-release-notes.sh "$RELEASE_NOTES_FILE"
+          cat "$RELEASE_NOTES_FILE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
 
-      # fail-fast — secret 누락 시 Gradle 까지 가지 않고 즉시 실패.
-      # secret 값은 echo 하지 않음 (env 로만 받아서 길이 검사). 누락 키 이름은 안전.
-      - name: Verify required secrets are set
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+
+      - name: Set up release build configuration
+        id: release_config
+        uses: ./.github/actions/setup-release-config
+        with:
+          require: >-
+            GOOGLE_SERVICES_JSON_B64
+            RELEASE_STORE_FILE_B64 RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS
+            RELEASE_KEY_PASSWORD
+          google-services-json-b64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+          release-store-file-b64: ${{ secrets.RELEASE_STORE_FILE_B64 }}
+          release-store-password: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          release-key-alias: ${{ secrets.RELEASE_KEY_ALIAS }}
+          release-key-password: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          compose-local-properties: 'true'
+
+      # 빌드와 업로드를 갈라 놓은 이유는 그 사이에 attest 할 «파일 하나» 를 확정하기 위해서다.
+      # digest 는 signing 이 끝난 바로 그 APK 에서 뜨고, 이후 단계는 전부 이 값을 기준으로 판정한다.
+      # 이 step 에는 Google 자격이 없다. WIF 전환(#850) 이후로는 파이프라인 어디에도 장기 키가
+      # 없고, 업로드 직전에 발급되는 단기 credential 만 존재한다 (#851 의 «노출을 미룬다» 가
+      # «애초에 저장하지 않는다» 로 바뀌었다).
+      - name: Build signed release APK
+        id: release_apk
+        run: |
+          ./gradlew assembleRelease --no-daemon
+
+          mapfile -t apk_files < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print)
+          if [ "${#apk_files[@]}" -ne 1 ]; then
+            echo "::error::업로드할 release APK가 정확히 1개여야 합니다."
+            exit 1
+          fi
+          echo "path=${apk_files[0]}" >> "$GITHUB_OUTPUT"
+          node .github/scripts/verify-release-attestation.mjs \
+            digest "${apk_files[0]}" "$GITHUB_OUTPUT"
+
+      # subject 는 경로 하나다. attestation 에는 source repository·commit·workflow identity 가
+      # SLSA provenance 로 들어가고, APK 자체는 여기서도 게시되지 않는다.
+      - name: Attest the exact signed APK
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: ${{ steps.release_apk.outputs.path }}
+          show-summary: false
+
+      # fail-closed 지점. 서명·저장소·signer workflow·source commit/ref·GitHub-hosted 러너를 모두
+      # 검증하고, 검증된 attestation 의 subject digest 가 빌드 직후 digest 와 다르면 여기서 멈춘다.
+      - name: Verify provenance and attestation subject digest
         env:
-          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
-          RELEASE_STORE_FILE_B64: ${{ secrets.RELEASE_STORE_FILE_B64 }}
-          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          EXPECTED_SHA256: ${{ steps.release_apk.outputs.sha256 }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_APK_PATH: ${{ steps.release_apk.outputs.path }}
+        run: |
+          verification_file="$RUNNER_TEMP/verified-release-attestation.json"
+          gh attestation verify "$RELEASE_APK_PATH" \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$ATTESTATION_BUNDLE" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release-distribution.yml" \
+            --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --deny-self-hosted-runners \
+            --format json > "$verification_file"
+
+          node .github/scripts/verify-release-attestation.mjs \
+            verify "$RELEASE_APK_PATH" "$EXPECTED_SHA256" "$verification_file"
+
+      - name: Verify WIF configuration is set
+        env:
+          GCP_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.GCP_FIREBASE_SERVICE_ACCOUNT }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         run: |
           missing=""
-          [ -z "$GOOGLE_SERVICES_JSON_B64" ] && missing="$missing GOOGLE_SERVICES_JSON_B64"
-          [ -z "$RELEASE_STORE_FILE_B64" ] && missing="$missing RELEASE_STORE_FILE_B64"
-          [ -z "$RELEASE_STORE_PASSWORD" ] && missing="$missing RELEASE_STORE_PASSWORD"
-          [ -z "$RELEASE_KEY_ALIAS" ] && missing="$missing RELEASE_KEY_ALIAS"
-          [ -z "$RELEASE_KEY_PASSWORD" ] && missing="$missing RELEASE_KEY_PASSWORD"
-          [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && missing="$missing FIREBASE_SERVICE_ACCOUNT_JSON"
+          [ -z "$GCP_WORKLOAD_IDENTITY_PROVIDER" ] && missing="$missing GCP_WORKLOAD_IDENTITY_PROVIDER"
+          [ -z "$GCP_FIREBASE_SERVICE_ACCOUNT" ] && missing="$missing GCP_FIREBASE_SERVICE_ACCOUNT"
           if [ -n "$missing" ]; then
-            echo "::error::필수 secret 누락:$missing — Settings → Secrets and variables → Actions 에 등록"
+            echo "::error::필수 WIF 설정 누락:$missing"
             exit 1
           fi
 
-      # google-services plugin 이 app/google-services.json 을 요구. 파일은 .gitignore 라
-      # CI 환경엔 없음. base64 인코딩된 secret 으로 받아서 decode.
-      - name: Decode google-services.json
-        env:
-          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
-        run: |
-          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > app/google-services.json
-
-      - name: Decode release keystore
-        env:
-          RELEASE_STORE_FILE_B64: ${{ secrets.RELEASE_STORE_FILE_B64 }}
-        run: |
-          echo "$RELEASE_STORE_FILE_B64" | base64 -d > "$HOME/slowclock-release.jks"
+      # v3 immutable SHA. 이 단계 전에는 Google Cloud WIF credential 이 발급되지 않는다.
+      # 토큰 수명이 짧으므로 빌드·attestation 이 끝난 업로드 직전에 발급한다 (#850).
+      - name: Authenticate to Google Cloud with WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_FIREBASE_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       # Firebase App Distribution Gradle plugin 이 GOOGLE_APPLICATION_CREDENTIALS 환경변수로
-      # service account JSON 경로를 인식. plugin DSL 의 serviceCredentialsFile 미지정 시 fallback.
+      # credential 파일 경로를 인식한다. 그 값은 위 auth 액션이 export_environment_variables 로
+      # 내보내는 단기 credential 이다 — 워크플로가 손으로 지정하지 않는다.
       # 참고: https://firebase.google.com/docs/app-distribution/android/distribute-gradle
-      - name: Decode Firebase service account credentials
+      #
+      # --artifactPath 로 이미 attest 된 파일만 올린다. 인자를 빼면 plugin 이 assemble 을 다시
+      # 엮어 검증 대상과 업로드 대상이 갈라진다. 업로드 직전 digest 재계산이 그 마지막 자물쇠다.
+      - name: Upload the attested APK to Firebase App Distribution
         env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          ATTESTATION_URL: ${{ steps.provenance.outputs.attestation-url }}
+          EXPECTED_SHA256: ${{ steps.release_apk.outputs.sha256 }}
+          RELEASE_APK_PATH: ${{ steps.release_apk.outputs.path }}
+          RELEASE_NOTES_FILE: ${{ runner.temp }}/firebase-app-distribution-release-notes.txt
         run: |
-          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$HOME/firebase-service-account.json"
+          node .github/scripts/verify-release-attestation.mjs \
+            assert "$RELEASE_APK_PATH" "$EXPECTED_SHA256"
 
-      # app/build.gradle.kts 의 signingConfigs.release 가 local.properties 의 RELEASE_* 4개 키를
-      # 읽음. CI 환경에서는 local.properties 가 없으므로 secret 으로부터 작성.
-      - name: Compose local.properties
-        env:
-          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: |
+          ./gradlew appDistributionUploadRelease \
+            --artifactPath="$RELEASE_APK_PATH" \
+            --releaseNotesFile="$RELEASE_NOTES_FILE" \
+            --no-daemon
+
           {
-            echo "RELEASE_STORE_FILE=$HOME/slowclock-release.jks"
-            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
-            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
-            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
-          } > local.properties
+            echo "### Release distribution provenance"
+            echo "- result: PASS"
+            echo "- source: \`$GITHUB_SHA\`"
+            echo "- artifact digest: \`sha256:$EXPECTED_SHA256\`"
+            echo "- attestation: $ATTESTATION_URL"
+            echo "- run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build release APK and upload to Firebase App Distribution
-        run: |
-          export GOOGLE_APPLICATION_CREDENTIALS="$HOME/firebase-service-account.json"
-          ./gradlew assembleRelease appDistributionUploadRelease --no-daemon
+      - name: Remove release build configuration
+        if: always()
+        uses: ./.github/actions/cleanup-release-config
+        with:
+          keystore-path: ${{ steps.release_config.outputs.keystore-path }}

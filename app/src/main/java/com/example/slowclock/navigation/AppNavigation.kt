@@ -24,14 +24,17 @@ import com.example.slowclock.ui.settings.SettingsScreen
 import com.example.slowclock.ui.timeline.TimelineScreen
 
 @Composable
-fun AppNavigation() {
-    val mainViewModel: MainViewModel = hiltViewModel()
+fun AppNavigation(
+    modifier: Modifier = Modifier,
+    mainViewModel: MainViewModel = hiltViewModel(),
+) {
     val navController = rememberNavController()
     val currentRoute by navController.currentBackStackEntryFlow.collectAsState(
         initial = navController.currentBackStackEntry,
     )
 
     Scaffold(
+        modifier = modifier,
         bottomBar = {
             BottomNavigationBar(
                 currentRoute = currentRoute?.destination?.route ?: "main",

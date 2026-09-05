@@ -1,67 +1,95 @@
 name: Unit Test
 
-# PR 대상 main 일 때 :app 모듈의 JVM unit test (./gradlew testDebugUnitTest) 실행.
+# PR 에서는 변경 모듈과 역의존 모듈, main 에서는 전체 unit test 를 실행한다:
+#   - node --test .github/scripts/*.test.mjs : 배포 판단 스크립트·워크플로 정책 회귀 가드.
+#   - testDebugUnitTest : 모든 Android 모듈의 JVM 단위 테스트.
+#   - :app:compileDebugAndroidTestKotlin : production/androidTest 변경 시 계측 소스셋 컴파일 가드.
+#     계측 테스트 자체는 에뮬레이터가 필요해 CI 에서 돌리지 않는다.
 # lint.yml 과 setup 이 거의 동일하지만 분리 — lint 실패가 test 결과를 가리지 않도록 fail-fast 독립.
 
+# PR 검증은 pr-validation.yml 이 한 번에 부르고, 이 워크플로의 job check 를
+# 브랜치 보호에서 required 로 직접 요구한다. concurrency 는 진입점에서 PR 단위로 건다.
+#
+# 트리거를 workflow_call 하나로 두는 것이 요점이다 — on: pull_request 를 함께 남기면
+# 같은 검증과 동일한 이름의 check 가 PR 마다 두 벌씩 돈다.
 on:
-  pull_request:
-    branches: [main]
+  workflow_call:
+    inputs:
+      pull_request_number:
+        required: false
+        default: 0
+        type: number
+      run_validation:
+        description: "false 이면 required check 이름을 유지한 채 무거운 검증을 건너뜀"
+        required: false
+        default: true
+        type: boolean
+      run_node_tests:
+        description: "GitHub Actions 정책 Node 테스트 실행 여부"
+        required: false
+        default: true
+        type: boolean
+      gradle_tasks:
+        description: "신뢰된 영향도 계산기가 만든 Gradle task 목록"
+        required: false
+        default: "testDebugUnitTest :app:compileDebugAndroidTestKotlin"
+        type: string
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   unit-test:
-    name: Run Unit Tests (testDebugUnitTest)
+    name: Run Unit Tests
+    if: inputs.run_validation
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Run deployment script tests
+        if: inputs.run_node_tests
+        run: node --test .github/scripts/*.test.mjs
+
+      - name: Set up JDK 21
+        if: inputs.gradle_tasks != ''
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
 
-      # fail-fast — secret 누락 시 Gradle 까지 가지 않고 즉시 실패.
-      # secret 값은 echo 하지 않음 (env 로만 받아서 길이 검사). 누락 키 이름은 안전.
-      - name: Verify required secrets are set
+      - name: Set up Gradle and validate wrapper
+        if: inputs.gradle_tasks != ''
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+
+      - name: Set up CI-only app configuration
+        if: inputs.gradle_tasks != ''
+        uses: ./.github/actions/setup-ci-config
+
+      - name: Run affected unit tests and androidTest compile guard
+        if: inputs.gradle_tasks != ''
         env:
-          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+          GRADLE_TASKS: ${{ inputs.gradle_tasks }}
         run: |
-          missing=""
-          [ -z "$GOOGLE_SERVICES_JSON_B64" ] && missing="$missing GOOGLE_SERVICES_JSON_B64"
-          if [ -n "$missing" ]; then
-            echo "::error::필수 secret 누락:$missing — Settings → Secrets and variables → Actions 에 등록"
-            exit 1
-          fi
-
-      # google-services plugin 이 app/google-services.json 을 요구. 파일은 .gitignore 라
-      # CI 환경엔 없음. base64 인코딩된 secret 으로 받아서 decode.
-      - name: Decode google-services.json
-        env:
-          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
-        run: |
-          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > app/google-services.json
-
-      # core/data 의 R.raw.service_account 컴파일 위해 stub raw 생성 (CI 런타임 미실행).
-      - name: Create stub service_account raw (CI only)
-        run: |
-          mkdir -p core/data/src/main/res/raw
-          printf '%s' '{"type":"service_account","project_id":"ci-stub"}' > core/data/src/main/res/raw/service_account
-
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --continue --parallel
+          read -r -a tasks <<< "$GRADLE_TASKS"
+          ./gradlew "${tasks[@]}" --continue --parallel --build-cache
 
       # 실패한 테스트의 HTML/XML 리포트를 PR artifact 로 보존 — CI 로그에서 stack trace 추적이 빠름.
       - name: Upload test reports on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unit-test-reports
           path: |
             **/build/reports/tests/testDebugUnitTest
             **/build/test-results/testDebugUnitTest
+          # 표준 보관 기간 7일 — 리포트·디버깅용 artifact 는 이 값 하나로 통일한다.
           retention-days: 7
