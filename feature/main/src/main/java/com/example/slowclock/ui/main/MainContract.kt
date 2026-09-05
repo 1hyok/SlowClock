@@ -58,6 +58,8 @@ data class MainUiState(
     /** null 이 아니면 삭제 확인 다이얼로그가 떠 있다. */
     val scheduleToDelete: Schedule? = null,
     val currentUserId: String = "",
+    /** 로그인 여부를 아직 모르는 동안에는 로그인 안내를 띄우지 않는다. */
+    val isSignedInKnown: Boolean = false,
     /** true 면 정확한 알람 권한을 설명하는 다이얼로그가 떠 있다. */
     val showExactAlarmNotice: Boolean = false,
     /** null 이 아니면 화면이 시스템 설정을 한 번 연다. */

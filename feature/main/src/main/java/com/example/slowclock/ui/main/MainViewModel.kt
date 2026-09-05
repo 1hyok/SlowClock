@@ -40,13 +40,13 @@ class MainViewModel
         private var scheduleJob: Job? = null
 
         init {
-            dispatch(MainReducerEvent.UserResolved(authRepository.currentUid.orEmpty()))
+            observeSignedInUser()
             // 정확한 알람 권한이 없으면 첫 진입에 한 번만 이유를 설명한다. 설정으로 보내는 건
             // 사용자가 「설정 열기」 를 눌렀을 때다(#83).
             if (!alarmScheduler.canScheduleExactAlarms() && !settingsRepository.hasSeenExactAlarmNotice()) {
                 dispatch(MainReducerEvent.ExactAlarmNoticeShown)
             }
-            observeTodaySchedules()
+            // 일정 구독은 로그인 상태를 받은 뒤 observeSignedInUser 가 건다.
             observeSharedReminders()
         }
 
@@ -115,7 +115,7 @@ class MainViewModel
         ): MainUiState =
             when (event) {
                 is MainReducerEvent.UserResolved -> {
-                    state.copy(currentUserId = event.userId)
+                    state.copy(currentUserId = event.userId, isSignedInKnown = true)
                 }
 
                 MainReducerEvent.Loading -> {
@@ -211,6 +211,16 @@ class MainViewModel
                 completedCount = schedules.count { it.completed },
                 totalCount = schedules.size,
             )
+
+        /** 로그인·로그아웃이 화면에 바로 반영되도록 흐름으로 받는다. */
+        private fun observeSignedInUser() {
+            viewModelScope.launch {
+                authRepository.observeCurrentUid().collect { uid ->
+                    dispatch(MainReducerEvent.UserResolved(uid.orEmpty()))
+                    if (uid != null) observeTodaySchedules()
+                }
+            }
+        }
 
         private fun observeTodaySchedules() {
             scheduleJob?.cancel()

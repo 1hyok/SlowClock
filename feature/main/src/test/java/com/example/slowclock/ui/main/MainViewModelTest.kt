@@ -51,6 +51,7 @@ class MainViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { authRepository.currentUid } returns "uid-1"
+        every { authRepository.observeCurrentUid() } returns flowOf("uid-1")
         every { scheduleRepository.observeSchedulesForDate(any()) } returns todaySchedules
         every { settingsRepository.observeShareCode() } returns shareCode
         every { scheduleRepository.observeSchedulesBySharedCode(any()) } returns flowOf(emptyList())

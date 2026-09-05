@@ -37,6 +37,8 @@ data class ProfileUiState(
     val email: String = "",
     val shareCode: String = "",
     val loadError: String? = null,
+    /** 로그인하지 않아 정보를 보여 줄 수 없다. */
+    val isSignedOut: Boolean = false,
     val isDeleteConfirmVisible: Boolean = false,
     val isDeleting: Boolean = false,
     val userMessage: String? = null,
@@ -45,6 +47,9 @@ data class ProfileUiState(
 
 /** 내 정보 화면의 상태가 겪은 것. 화면은 만들지 않고 ViewModel 만 dispatch 한다. */
 sealed interface ProfileReducerEvent : ReducerEvent {
+    /** 로그인하지 않았다. 오류가 아니라 로그인 안내를 띄우는 상태다. */
+    data object SignedOut : ProfileReducerEvent
+
     data class Loaded(
         val name: String,
         val email: String,

@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.ui.common.components.SignInPrompt
 import com.example.slowclock.ui.mvi.ObserveSignal
 import kotlinx.coroutines.launch
 
@@ -44,6 +45,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProfileScreen(
     onNavigateBack: () -> Unit,
+    onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
@@ -68,6 +70,7 @@ fun ProfileScreen(
         onIntent = viewModel::onIntent,
         snackbarHostState = snackbarHostState,
         onNavigateBack = onNavigateBack,
+        onSignIn = onSignIn,
         modifier = modifier,
     )
 }
@@ -80,6 +83,7 @@ internal fun ProfileContent(
     onIntent: (ProfileIntent) -> Unit,
     snackbarHostState: SnackbarHostState,
     onNavigateBack: () -> Unit,
+    onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -122,7 +126,12 @@ internal fun ProfileContent(
         ) {
             when {
                 state.isLoading -> Text("로딩 중...")
+
+                // 로그인하지 않은 상태는 오류가 아니라 할 일이다. 버튼을 주어 되돌아갈 길을 만든다(#103).
+                state.isSignedOut -> SignInPrompt(onSignIn = onSignIn)
+
                 state.loadError != null -> Text(state.loadError, color = MaterialTheme.colorScheme.error)
+
                 else -> ProfileBody(state = state, onIntent = onIntent)
             }
         }

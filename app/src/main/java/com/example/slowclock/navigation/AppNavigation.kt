@@ -82,7 +82,10 @@ private fun NavBackStack<NavKey>.showTab(key: SlowClockKey) {
 }
 
 @Composable
-fun AppNavigation(modifier: Modifier = Modifier) {
+fun AppNavigation(
+    onSignIn: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val backStack = rememberNavBackStack(MainKey)
     // 추천 화면이 고른 제목. 일정 추가 entry 를 바꾸지 않고 전달하므로 그 화면의 ViewModel 이 유지된다.
     var recommendedTitle by rememberSaveable { mutableStateOf<String?>(null) }
@@ -118,6 +121,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                             onEditSchedule = { scheduleId -> backStack.add(EditScheduleKey(scheduleId)) },
                             onNavigateToProfile = { backStack.add(ProfileKey) },
                             onNavigateToSettings = { backStack.add(ShareCodeKey) },
+                            onSignIn = onSignIn,
                         )
                     }
                     entry<DoneKey> { DoneScreen() }
@@ -148,7 +152,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                             },
                         )
                     }
-                    entry<ProfileKey> { ProfileScreen(onNavigateBack = { backStack.popBack() }) }
+                    entry<ProfileKey> {
+                        ProfileScreen(onNavigateBack = { backStack.popBack() }, onSignIn = onSignIn)
+                    }
                     entry<ShareCodeKey> { SettingsScreenShareCode(onReturn = { backStack.popBack() }) }
                 },
         )
