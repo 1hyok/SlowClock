@@ -10,7 +10,6 @@ import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.notification.requestExactAlarmPermissionIfNeeded
 import com.example.slowclock.util.AppError
 import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -184,7 +183,6 @@ class AddScheduleViewModel
 
                 try {
                     Log.d("AddSchedule", "일정 저장 시작: $currentTitle")
-                    Log.d("AddSchedule", "현재 사용자: ${FirebaseAuth.getInstance().currentUser?.uid}")
 
                     val schedule =
                         if (_uiState.value.isEditMode) {

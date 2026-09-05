@@ -16,12 +16,12 @@ import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
 import com.example.slowclock.auth.AuthManager
 import com.example.slowclock.data.DummyDataManager
+import com.example.slowclock.data.remote.repository.AuthRepository
+import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.navigation.AppNavigation
 import com.example.slowclock.notification.requestExactAlarmPermissionIfNeeded
 import com.example.slowclock.ui.theme.SlowClockTheme
 import com.firebase.ui.auth.AuthUI
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,6 +33,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var dummyDataManager: DummyDataManager
 
+    @Inject
+    lateinit var userRepository: UserRepository
+
+    @Inject
+    lateinit var authRepository: AuthRepository
+
     private fun handleNewInstallation() {
         val prefs = getSharedPreferences("app_state", MODE_PRIVATE)
         val isAppEverLaunched = prefs.getBoolean("app_launched", false)
@@ -41,7 +47,7 @@ class MainActivity : ComponentActivity() {
             // 이 앱이 처음 실행됨 = 새 설치
             Log.d("INSTALL", "새 설치 감지 - Firebase 로그아웃")
 
-            FirebaseAuth.getInstance().signOut()
+            authRepository.signOut()
             AuthUI.getInstance().signOut(this)
 
             // 플래그 저장
@@ -57,7 +63,7 @@ class MainActivity : ComponentActivity() {
 
         try {
             // AuthManager 초기화
-            authManager = AuthManager(this)
+            authManager = AuthManager(this, userRepository, authRepository)
             authManager.initialize(
                 onSuccess = {
                     Log.d("AUTH", "로그인 성공 콜백")
@@ -78,20 +84,9 @@ class MainActivity : ComponentActivity() {
                 authManager.signInWithGoogle()
             } else {
                 Log.d("AUTH", "=== MainActivity에서 Firebase 사용자 정보 ===")
-                Log.d("AUTH", "displayName: '${currentUser.displayName}'")
-                Log.d("AUTH", "email: '${currentUser.email}'")
-                Log.d("AUTH", "photoUrl: '${currentUser.photoUrl}'")
-                Log.d("AUTH", "uid: '${currentUser.uid}'")
-
                 Log.d("AUTH", "이미 로그인됨: ${currentUser.displayName}")
                 // 이미 로그인된 경우에도 사용자 정보 확인/생성 필요!
-                lifecycleScope.launch {
-                    authManager.ensureShareCodeForUser(
-                        currentUser.uid,
-                        currentUser.displayName ?: "",
-                        currentUser.email ?: "",
-                    )
-                }
+                authManager.ensureShareCodeForUser(currentUser.uid, currentUser.displayName, currentUser.email)
                 addDummyData()
             }
 
@@ -160,18 +155,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun saveFcmTokenToFirestore() {
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                val db =
-                    com.google.firebase.firestore.FirebaseFirestore
-                        .getInstance()
-                db
-                    .collection("users")
-                    .document(user.uid)
-                    .update("fcmToken", token)
-                    .addOnSuccessListener { Log.d("FCM", "로그인 후 토큰 Firestore 저장 성공") }
-                    .addOnFailureListener { e -> Log.e("FCM", "로그인 후 토큰 Firestore 저장 실패", e) }
+        lifecycleScope.launch {
+            if (userRepository.saveCurrentUserFcmToken()) {
+                Log.d("FCM", "로그인 후 토큰 Firestore 저장 성공")
+            } else {
+                Log.e("FCM", "로그인 후 토큰 Firestore 저장 실패")
             }
         }
     }

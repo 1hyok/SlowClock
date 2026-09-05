@@ -1,12 +1,13 @@
 package com.example.slowclock.data.remote.repository
 
 import android.content.Context
-import com.example.slowclock.data.FirestoreDB
+import com.example.slowclock.data.FirestoreCollections
 import com.example.slowclock.data.model.FamilyGroup
 import com.example.slowclock.data.notification.Notifier
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.tasks.await
@@ -19,10 +20,11 @@ class FamilyGroupRepository
     @Inject
     constructor(
         private val notifier: Notifier,
+        private val auth: FirebaseAuth,
+        firestore: FirebaseFirestore,
     ) {
-        private val auth = FirebaseAuth.getInstance()
-        private val familyGroupsCollection = FirestoreDB.familyGroups
-        private val usersCollection = FirestoreDB.users
+        private val familyGroupsCollection = firestore.collection(FirestoreCollections.FAMILY_GROUPS)
+        private val usersCollection = firestore.collection(FirestoreCollections.USERS)
 
         // 사용자가 속한 가족 그룹 목록 가져오기
         suspend fun getUserFamilyGroups(): List<FamilyGroup> {

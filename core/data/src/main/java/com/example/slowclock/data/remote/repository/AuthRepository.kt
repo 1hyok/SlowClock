@@ -10,9 +10,9 @@ import javax.inject.Inject
  */
 class AuthRepository
     @Inject
-    constructor() {
-        private val auth = FirebaseAuth.getInstance()
-
+    constructor(
+        private val auth: FirebaseAuth,
+    ) {
         /** 로그인한 계정의 표시 정보. Firestore 사용자 문서가 없을 때의 대체값으로 쓴다. */
         data class Profile(
             val uid: String,

@@ -26,6 +26,7 @@ dependencies {
     implementation(project(":core:common"))
 
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.messaging)
 
     // Hilt: @Inject 생성자 Repository 의 Factory 가 본 모듈에서 생성되도록
     implementation(libs.hilt.android)

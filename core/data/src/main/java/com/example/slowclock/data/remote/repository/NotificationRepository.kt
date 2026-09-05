@@ -1,9 +1,10 @@
 package com.example.slowclock.data.remote.repository
 
-import com.example.slowclock.data.FirestoreDB
+import com.example.slowclock.data.FirestoreCollections
 import com.example.slowclock.data.model.Notification
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.tasks.await
@@ -14,9 +15,11 @@ import javax.inject.Inject
  */
 class NotificationRepository
     @Inject
-    constructor() {
-        private val auth = FirebaseAuth.getInstance()
-        private val notificationsCollection = FirestoreDB.notifications
+    constructor(
+        private val auth: FirebaseAuth,
+        private val firestore: FirebaseFirestore,
+    ) {
+        private val notificationsCollection = firestore.collection(FirestoreCollections.NOTIFICATIONS)
 
         // 현재 사용자의 알림 목록 가져오기
         suspend fun getUserNotifications(limit: Int = 50): List<Notification> {
@@ -72,7 +75,7 @@ class NotificationRepository
             val uid = auth.currentUser?.uid ?: return false
 
             return try {
-                val batch = FirestoreDB.db.batch()
+                val batch = firestore.batch()
 
                 val unreadNotifications =
                     notificationsCollection
@@ -109,8 +112,8 @@ class NotificationRepository
                         .whereEqualTo("userId", userId)
                         .get()
                         .await()
-                documents.documents.chunked(FirestoreDB.BATCH_LIMIT).forEach { chunk ->
-                    val batch = FirestoreDB.db.batch()
+                documents.documents.chunked(FirestoreCollections.BATCH_LIMIT).forEach { chunk ->
+                    val batch = firestore.batch()
                     chunk.forEach { batch.delete(it.reference) }
                     batch.commit().await()
                 }
