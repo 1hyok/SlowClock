@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -75,7 +76,8 @@ internal fun MainContent(
     modifier: Modifier = Modifier,
 ) {
     val dateFormat = remember { SimpleDateFormat("yyyy년 M월 d일 EEEE", Locale.KOREAN) }
-    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val locale = LocalLocale.current.platformLocale
+    val timeFormat = remember(locale) { SimpleDateFormat("HH:mm", locale) }
 
     state.selectedScheduleForDetail?.let { schedule ->
         ScheduleDetailDialog(
