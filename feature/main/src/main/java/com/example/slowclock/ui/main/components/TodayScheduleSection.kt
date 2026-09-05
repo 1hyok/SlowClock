@@ -1,24 +1,23 @@
-// app/src/main/java/com/example/slowclock/ui/main/components/TodayScheduleSection.kt
 package com.example.slowclock.ui.main.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.slowclock.data.model.Schedule
+import com.example.slowclock.ui.common.components.ScheduleRow
 
+/**
+ * 오늘의 일정. 남은 일정을 먼저, 끝낸 일정을 아래에 둔다.
+ *
+ * 종전에는 끝낸 일정이 위에 있었다. 할 일을 보러 온 사람에게 이미 끝난 것을 먼저 보여 주는
+ * 순서였다(#109).
+ */
 @Composable
 fun TodayScheduleSection(
     schedules: List<Schedule>,
@@ -28,54 +27,51 @@ fun TodayScheduleSection(
 ) {
     val (completed, remaining) = schedules.partition { it.completed }
 
-    Column(modifier = modifier) {
-        // 섹션 제목
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 12.dp),
-        ) {
-            Icon(
-                Icons.Outlined.CalendarToday,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "오늘의 일정",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-
-        // 완료한 일정
-        if (completed.isNotEmpty()) {
-            Text("", style = MaterialTheme.typography.titleMedium)
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                completed.forEach { schedule ->
-                    ScheduleCard(
-                        schedule = schedule,
-                        onToggleComplete = { onToggleComplete(schedule.id) },
-                        onShowDetail = { onShowDetail(schedule.id) },
-                        completed = schedule.completed,
-                    )
-                }
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (remaining.isNotEmpty()) {
+            SectionLabel(text = "남은 일정")
+            remaining.forEach { schedule ->
+                ScheduleRow(
+                    title = schedule.title,
+                    time = schedule.startTime.toDate(),
+                    completed = false,
+                    onClick = { onShowDetail(schedule.id) },
+                    onToggleComplete = { onToggleComplete(schedule.id) },
+                )
             }
         }
 
-        // 남은 일정
-        if (remaining.isNotEmpty()) {
-            Text("", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                remaining.forEach { schedule ->
-                    ScheduleCard(
-                        schedule = schedule,
-                        onToggleComplete = { onToggleComplete(schedule.id) },
-                        onShowDetail = { onShowDetail(schedule.id) },
-                        completed = schedule.completed,
-                    )
-                }
+        if (completed.isNotEmpty()) {
+            SectionLabel(
+                text = "끝낸 일정",
+                modifier = Modifier.padding(top = if (remaining.isNotEmpty()) 12.dp else 0.dp),
+            )
+            completed.forEach { schedule ->
+                ScheduleRow(
+                    title = schedule.title,
+                    time = schedule.startTime.toDate(),
+                    completed = true,
+                    onClick = { onShowDetail(schedule.id) },
+                    onToggleComplete = { onToggleComplete(schedule.id) },
+                )
             }
         }
     }
+}
+
+/** 목록 위의 구역 이름. 아이콘 없이 글자만 둔다. 아이콘이 뜻을 더하지 않는 자리다. */
+@Composable
+internal fun SectionLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier,
+    )
 }

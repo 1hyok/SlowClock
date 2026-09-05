@@ -83,7 +83,7 @@ private fun ThemeModeCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -149,7 +149,7 @@ private fun MedicalNewsCard(modifier: Modifier = Modifier) {
                 .clickable {
                     context.startActivity(Intent(Intent.ACTION_VIEW, MEDICAL_NEWS_URL.toUri()))
                 },
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {

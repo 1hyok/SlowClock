@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/slowclock/ui/theme/Type.kt
 package com.example.slowclock.ui.theme
 
 import androidx.compose.material3.Typography
@@ -7,91 +6,148 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// ============== 접근성 강화 타이포그래피 ==============
-
+// ============== 느린시계 글자 ==============
+//
+// 고령자가 읽는 화면이라 기본 크기를 Material 기본값보다 크게 잡는다. 크기만 키우면 화면이
+// 평평해지므로 단계마다 굵기도 함께 바꿔 위아래를 만든다.
+//
+// 종전에는 display·title 단계를 정의하지 않아 화면이 쓰는 titleLarge·titleMedium 이 Material
+// 기본값으로 떨어졌다. 그 결과 titleMedium(16sp)이 bodySmall(16sp)과 같아지고 bodyLarge(20sp)
+// 보다 작아져, 제목이 본문보다 작게 나오는 자리가 생겼다(#109). 열세 단계를 모두 정의한다.
+//
 // 타이포그래피는 색을 갖지 않는다. 글자 색은 각 화면이 테마 토큰으로 정한다. 스타일에 색을 박아
 // 두면 다크 모드에서 배경만 바뀌고 글자는 라이트 색으로 남는다(#90 에서 제거).
+//
+// 줄 높이는 글자 크기의 1.4배 안팎이다. 한글은 라틴 문자보다 세로로 꽉 차서 줄 간격이 좁으면
+// 글줄이 붙어 보인다.
+
+private val Sans = FontFamily.Default
+
 val Typography =
     Typography(
-        // 대형 제목 (앱 이름, 주요 헤더)
-        headlineLarge =
+        // 화면의 주인공. 지금 할 일의 시각처럼 한 화면에 하나만 쓴다.
+        displayLarge =
             TextStyle(
-                fontFamily = FontFamily.Default,
+                fontFamily = Sans,
                 fontWeight = FontWeight.Bold,
-                fontSize = 32.sp, // 28sp → 32sp
+                fontSize = 48.sp,
+                lineHeight = 56.sp,
+                letterSpacing = (-0.5).sp,
+            ),
+        displayMedium =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 38.sp,
+                lineHeight = 46.sp,
+                letterSpacing = (-0.25).sp,
+            ),
+        displaySmall =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 32.sp,
                 lineHeight = 40.sp,
                 letterSpacing = 0.sp,
             ),
-        // 중형 제목 (화면 제목, 섹션 헤더)
-        headlineMedium =
+        // 앱 이름과 화면 제목
+        headlineLarge =
             TextStyle(
-                fontFamily = FontFamily.Default,
+                fontFamily = Sans,
                 fontWeight = FontWeight.Bold,
-                fontSize = 24.sp, // 20sp → 24sp
-                lineHeight = 32.sp,
+                fontSize = 30.sp,
+                lineHeight = 38.sp,
                 letterSpacing = 0.sp,
             ),
-        // 소형 제목 (카드 제목, 그룹 헤더)
+        headlineMedium =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 26.sp,
+                lineHeight = 34.sp,
+                letterSpacing = 0.sp,
+            ),
         headlineSmall =
             TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Medium,
-                fontSize = 20.sp, // 18sp → 20sp
+                fontFamily = Sans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                lineHeight = 30.sp,
+                letterSpacing = 0.sp,
+            ),
+        // 구역 제목과 카드 제목
+        titleLarge =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                lineHeight = 30.sp,
+                letterSpacing = 0.sp,
+            ),
+        titleMedium =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 20.sp,
                 lineHeight = 28.sp,
                 letterSpacing = 0.sp,
             ),
-        // 큰 본문 (주요 내용, 일정 제목)
+        titleSmall =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.Medium,
+                fontSize = 18.sp,
+                lineHeight = 26.sp,
+                letterSpacing = 0.sp,
+            ),
+        // 본문
         bodyLarge =
             TextStyle(
-                fontFamily = FontFamily.Default,
+                fontFamily = Sans,
                 fontWeight = FontWeight.Normal,
-                fontSize = 20.sp, // 16sp → 20sp (크게 증가)
-                lineHeight = 28.sp, // 24sp → 28sp
-                letterSpacing = 0.5.sp,
-            ),
-        // 중간 본문 (설명 텍스트, 부가 정보)
-        bodyMedium =
-            TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Normal,
-                fontSize = 18.sp, // 14sp → 18sp (크게 증가)
-                lineHeight = 26.sp, // 20sp → 26sp
-                letterSpacing = 0.25.sp,
-            ),
-        // 작은 본문 (시간, 메타데이터)
-        bodySmall =
-            TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Normal,
-                fontSize = 16.sp, // 12sp → 16sp (크게 증가)
-                lineHeight = 24.sp, // 16sp → 24sp
-                letterSpacing = 0.4.sp,
-            ),
-        // 버튼 텍스트 (모든 버튼)
-        labelLarge =
-            TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp, // 14sp → 18sp
-                lineHeight = 24.sp, // 20sp → 24sp
+                fontSize = 20.sp,
+                lineHeight = 28.sp,
                 letterSpacing = 0.1.sp,
             ),
-        // 작은 버튼 텍스트
+        bodyMedium =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.Normal,
+                fontSize = 18.sp,
+                lineHeight = 26.sp,
+                letterSpacing = 0.1.sp,
+            ),
+        bodySmall =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                letterSpacing = 0.1.sp,
+            ),
+        // 버튼과 라벨
+        labelLarge =
+            TextStyle(
+                fontFamily = Sans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 19.sp,
+                lineHeight = 26.sp,
+                letterSpacing = 0.sp,
+            ),
         labelMedium =
             TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.Medium,
-                fontSize = 16.sp, // 12sp → 16sp
-                lineHeight = 20.sp, // 16sp → 20sp
-                letterSpacing = 0.5.sp,
+                fontFamily = Sans,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 17.sp,
+                lineHeight = 24.sp,
+                letterSpacing = 0.sp,
             ),
-        // 아주 작은 라벨 (태그, 배지)
         labelSmall =
             TextStyle(
-                fontFamily = FontFamily.Default,
+                fontFamily = Sans,
                 fontWeight = FontWeight.Medium,
-                fontSize = 14.sp, // 11sp → 14sp
-                lineHeight = 18.sp, // 16sp → 18sp
-                letterSpacing = 0.5.sp,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                letterSpacing = 0.sp,
             ),
     )
