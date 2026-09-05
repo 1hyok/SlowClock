@@ -3,13 +3,14 @@ package com.example.slowclock.data.remote.repository
 
 import android.content.Context
 import android.util.Log
-import com.example.slowclock.data.FirestoreDB
+import com.example.slowclock.data.FirestoreCollections
 import com.example.slowclock.data.model.Schedule
 import com.example.slowclock.data.notification.Notifier
 import com.example.slowclock.util.AppError
 import com.example.slowclock.util.toAppError
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -25,9 +26,11 @@ class ScheduleRepository
     @Inject
     constructor(
         private val notifier: Notifier,
+        private val auth: FirebaseAuth,
+        private val firestore: FirebaseFirestore,
     ) {
-        private val auth = FirebaseAuth.getInstance()
-        private val schedulesCollection = FirestoreDB.schedules
+        private val schedulesCollection = firestore.collection(FirestoreCollections.SCHEDULES)
+        private val usersCollection = firestore.collection(FirestoreCollections.USERS)
 
         // 결과 타입 정의
         sealed class ScheduleResult<out T> {
@@ -172,7 +175,7 @@ class ScheduleRepository
 
             // Fetch user's shareCode
             val userDoc =
-                FirestoreDB.users
+                usersCollection
                     .document(uid)
                     .get()
                     .await()
@@ -428,7 +431,7 @@ class ScheduleRepository
         ) {
             val currentUid = auth.currentUser?.uid ?: return
             val users =
-                FirestoreDB.users
+                usersCollection
                     .whereEqualTo("shareCode", shareCode)
                     .get()
                     .await()
@@ -457,7 +460,7 @@ class ScheduleRepository
             val currentUid = auth.currentUser?.uid ?: return emptyList()
             return try {
                 val users =
-                    FirestoreDB.users
+                    usersCollection
                         .whereEqualTo("shareCode", shareCode)
                         .get()
                         .await()
@@ -492,8 +495,8 @@ class ScheduleRepository
                         .whereEqualTo("userId", userId)
                         .get()
                         .await()
-                documents.documents.chunked(FirestoreDB.BATCH_LIMIT).forEach { chunk ->
-                    val batch = FirestoreDB.db.batch()
+                documents.documents.chunked(FirestoreCollections.BATCH_LIMIT).forEach { chunk ->
+                    val batch = firestore.batch()
                     chunk.forEach { batch.delete(it.reference) }
                     batch.commit().await()
                 }
