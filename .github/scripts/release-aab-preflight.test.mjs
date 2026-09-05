@@ -109,10 +109,28 @@ test("release workflow is secretless, non-deploying, and uploads reports only", 
     ]) {
         assert.match(verifier, new RegExp(entry.replaceAll(".", "\\.")));
     }
-    // v1 은 release 에서 R8 을 끄고 있다 — 켜는 순간 mapping 이 생기므로 preflight 리포트와 이 단언을
-    // 함께 바꾼다(mapping digest 를 필수로 되돌린다).
-    assert.match(appBuild, /isMinifyEnabled = false/);
-    assert.doesNotMatch(appBuild, /isShrinkResources = true/);
+    // release 는 R8 로 코드와 리소스를 줄인다. 끄면 배포 산출물이 갑자기 여덟 배로 불고
+    // 난독화 전제로 쓴 preflight 의 이름 확인이 무의미해진다(#113).
+    assert.match(appBuild, /isMinifyEnabled = true/);
+    assert.match(appBuild, /isShrinkResources = true/);
+    assert.doesNotMatch(appBuild, /isMinifyEnabled = false/);
+
+    // R8 이 이름을 지우면 Firestore 매핑이 조용히 빈다. 배포 전 검사가 산출물에서 직접 본다.
+    const preflight = await readFile(
+        join(repositoryRoot, ".github/scripts/run-release-aab-preflight.sh"),
+        "utf8",
+    );
+    for (const symbol of [
+        "Lcom/example/slowclock/data/model/Schedule;",
+        "Lcom/example/slowclock/data/model/User;",
+        "getTitle",
+        "getStartTime",
+    ]) {
+        assert.ok(
+            preflight.includes(symbol),
+            `배포 전 검사가 ${symbol} 를 확인하지 않는다`,
+        );
+    }
 });
 
 test("reports an absent R8 mapping honestly instead of fabricating a digest", () => {
