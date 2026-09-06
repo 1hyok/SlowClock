@@ -17,6 +17,10 @@ export const ALLOWED_PERMISSIONS = new Set([
   'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
   'android.permission.INTERNET',
   'android.permission.POST_NOTIFICATIONS',
+  // 기기를 껐다 켜면 AlarmManager 의 예약이 전부 취소된다. 이 방송을 받아야 걸어 둔 알람을
+  // 다시 걸 수 있다. Play 데이터 보안 양식에는 수집 항목이 늘지 않는다 — 기기 밖으로 나가는
+  // 데이터가 없고 기기 안 장부만 다시 읽는다 (#127).
+  'android.permission.RECEIVE_BOOT_COMPLETED',
   'android.permission.SCHEDULE_EXACT_ALARM',
   // 알람이 본업인 앱에 자동으로 부여되고 사용자가 회수할 수 없다. 앱을 오래 안 열어도 대기
   // 버킷이 RESTRICTED 로 떨어지지 않게 해, 고령 사용자가 앱을 열지 않아도 알람이 계속 울린다.

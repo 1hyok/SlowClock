@@ -112,6 +112,15 @@ class AlarmScheduler
             return alarmManager.canScheduleExactAlarms()
         }
 
+        /**
+         * 잠금 화면을 덮는 큰 알람 화면을 띄울 수 있는지. false 면 소리와 진동은 그대로 나가지만
+         * 그 화면은 뜨지 않는다. 화면이 이유를 설명하고 사용자가 원할 때만 설정으로 보낸다(#128).
+         *
+         * 화면 모듈이 NotificationManager 를 직접 만지지 않도록 이 클래스를 통로로 쓴다.
+         * 정시 알람 안내(#83)가 이미 같은 자리를 쓰고 있어 통로를 둘로 가르지 않는다.
+         */
+        fun canUseFullScreenAlarm(): Boolean = context.canUseFullScreenAlarm()
+
         private fun Schedule.toRecord() =
             ScheduledAlarm(
                 id = id,
