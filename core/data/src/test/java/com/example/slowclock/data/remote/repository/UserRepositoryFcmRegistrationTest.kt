@@ -106,4 +106,24 @@ class UserRepositoryFcmRegistrationTest {
             assertFalse(result.await())
             verify(exactly = 0) { userDocument.update("fcmToken", any()) }
         }
+
+    @Test
+    fun `토큰 조회 취소는 토큰 없는 새 등록으로 바꾸지 않는다`() =
+        runTest {
+            val token = TaskCompletionSource<String>()
+            every { messaging.token } returns token.task
+            val result = async { repository.registerShareCodeWatcher("CODE01") }
+            runCurrent()
+            result.cancel()
+            runCurrent()
+            token.setResult("late-token")
+            verify(exactly = 0) { watcherDocument.set(any(), any<SetOptions>()) }
+        }
+
+    @Test
+    fun `기대 UID와 다르면 현재 기기의 다른 사용자 감시자를 지우지 않는다`() =
+        runTest {
+            assertFalse(repository.unregisterShareCodeWatcher("CODE01", "other"))
+            verify(exactly = 0) { watcherDocument.delete() }
+        }
 }

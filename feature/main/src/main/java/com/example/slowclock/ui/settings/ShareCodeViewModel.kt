@@ -81,7 +81,8 @@ class ShareCodeViewModel
             // 바꾸기 전 코드. 등록을 지우지 않으면 그 사람에게 내 토큰이 계속 남는다(#124).
             val session = sharedScheduleNotifier.snapshot()
             val previousShareCode = session.shareCode
-            if (session.userId.isNullOrBlank()) {
+            val uid = session.userId
+            if (uid.isNullOrBlank()) {
                 dispatch(ShareCodeReducerEvent.SaveFailed("로그인한 뒤 공유 설정을 다시 확인해주세요"))
                 return
             }
@@ -89,7 +90,7 @@ class ShareCodeViewModel
             viewModelScope.launch {
                 if (shareCode.isBlank()) {
                     if (!previousShareCode.isNullOrBlank() &&
-                        !userRepository.unregisterShareCodeWatcher(previousShareCode)
+                        !userRepository.unregisterShareCodeWatcher(previousShareCode, uid)
                     ) {
                         dispatch(
                             ShareCodeReducerEvent.SaveFailed(
@@ -119,7 +120,7 @@ class ShareCodeViewModel
                     return@launch
                 }
                 if (!previousShareCode.isNullOrBlank() && previousShareCode != shareCode) {
-                    val unregistered = userRepository.unregisterShareCodeWatcher(previousShareCode)
+                    val unregistered = userRepository.unregisterShareCodeWatcher(previousShareCode, uid)
                     Log.d("ShareCodeWatcher", "공유 감시자 해제 결과: $unregistered")
                 }
                 if (!sharedScheduleNotifier.replaceShareCode(session, shareCode)) {

@@ -13,7 +13,7 @@ exports.sendFcmToShareCodeWatchers = onDocumentWritten(
       const schedule = after || before;
       if (!schedule || typeof schedule.sharedCode !== "string" ||
           !schedule.sharedCode.trim() ||
-          typeof event.params?.scheduleId !== "string" ||
+          !event.params || typeof event.params.scheduleId !== "string" ||
           !event.params.scheduleId.trim()) return null;
 
       const tokensSnapshot = await admin

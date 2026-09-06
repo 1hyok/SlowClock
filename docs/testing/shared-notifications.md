@@ -55,3 +55,25 @@ Cloud Function `sendFcmToShareCodeWatchers`는 `notification` 없이 다음 문�
 - `:feature:main:testDebugUnitTest`, `:feature:profile:testDebugUnitTest`: 늦은 등록/해제 응답과 세션 정리 호출을 검사한다.
 
 공식 근거: [Android 수신 경로](https://firebase.google.com/docs/cloud-messaging/android/receive-messages), [Admin SDK sendEach](https://firebase.google.com/docs/cloud-messaging/send/admin-sdk), [메시지 우선순위](https://firebase.google.com/docs/cloud-messaging/android-message-priority), [토큰 관리](https://firebase.google.com/docs/cloud-messaging/manage-tokens), [Firebase SDK 기본 tag/채널](https://github.com/firebase/firebase-android-sdk/blob/master/firebase-messaging/src/main/java/com/google/firebase/messaging/CommonNotificationBuilder.java).
+
+
+### Android 실제 알림 검증
+
+`SharedScheduleNotificationTest`는 별도 `demo-slowclock-fcm` FirebaseApp과 테스트 설정 파일만 사용한다. `sharedAuthEmulatorPort` 인자가 없으면 명시적으로 skip하므로 일반 기기 실행을 통과 증거로 세지 않는다. 운영 계정이 없는 폐기 가능한 Android emulator에서 실행한다. 테스트는 현재 앱의 공유 알림을 지우므로 개인 기기에서 실행하지 않는다.
+
+1. 별도 폴더의 `firebase.json`에 `{"emulators":{"auth":{"port":9096},"ui":{"enabled":false}}}`를 저장하고 `firebase emulators:start --only auth --project demo-slowclock-fcm --config firebase.json`을 실행한다.
+2. `:app:assembleDebug :app:assembleDebugAndroidTest`로 만든 두 APK를 전용 emulator에 `adb -s <serial> install -r -g`로 설치한다.
+3. 아래 세 메서드를 `adb -s <serial> shell am instrument -w -r -e sharedAuthEmulatorPort 9096 -e class <class>#<method> com.ilhyok.slowclock.test/androidx.test.runner.AndroidJUnitRunner`로 실행한다. class는 `com.example.slowclock.notification.SharedScheduleNotificationTest`다. 앱 알림을 허용한 상태에서 실행한다.
+   - `currentSessionOnlyAndDistinctScheduleIds`
+   - `logoutClearsNewAndLegacySharedNotificationsButKeepsAlarm`
+   - `codeReplacementAndUnregisterRemovePreviousNotifications`
+4. `adb -s <serial> shell pm revoke com.ilhyok.slowclock android.permission.POST_NOTIFICATIONS` 후 같은 runner에 `-e sharedPermissionDenied true`를 추가해 `permissionDeniedDoesNotPost`를 실행한다. 끝나면 `pm grant`로 권한을 복구하고 전용 emulator/Auth emulator를 종료한다.
+
+Auth emulator용 HTTP 허용은 debug variant의 10.0.2.2/127.0.0.1/localhost에만 한정한다. release에는 해당 manifest/config가 포함되지 않는다. [Auth emulator 연결](https://firebase.google.com/docs/emulator-suite/connect_auth)과 [domain별 network security config](https://developer.android.com/privacy-and-security/security-config)를 따른다. 실제 OS NotificationManager, 알림 권한, UID/설정 검증을 사용하며 FCM 네트워크 발송 성공이나 운영 배포 검증을 대신하지 않는다.
+
+
+### 계정 삭제 중 세션 전환
+
+수신 경로 점검 중 계정 삭제가 비동기 단계 이후 현재 코드/UID를 다시 골라 새 계정의 watcher 또는 Auth 사용자를 지울 수 있는 경로도 확인했다. 삭제는 시작 시 UID·코드·revision을 고정하고 각 await 뒤 `ensureActive`와 동일 세션을 확인한다. 로컬 알람 취소도 동일 잠금에서 현재 세션일 때만 실행한다. watcher 해제와 Auth 삭제 Repository는 명시한 expected UID가 현재 사용자와 일치해야 시작하고, Auth는 확인한 FirebaseUser 인스턴스를 사용한다.
+
+6개 삭제 단계 각각에서 계정 전환 또는 취소가 일어나도 다음 파괴 단계로 진행하지 않는 테스트를 둔다. 이미 제출된 Firebase 작업은 coroutine 대기 취소만으로 철회됐다고 주장하지 않는다. Auth 단계에 도달했다면 원격 데이터와 watcher를 이미 제거했으므로 Auth 실패/취소 때도 그 세션의 로컬 코드·공유 알림을 finally에서 정리한다. 새 세션이 시작된 경우에는 revision/UID 검사로 이 정리가 새 설정을 건드리지 않는다. [협력적 취소 확인](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/ensure-active.html)을 따른다.

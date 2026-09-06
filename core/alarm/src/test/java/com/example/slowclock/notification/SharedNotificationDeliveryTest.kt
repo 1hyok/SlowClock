@@ -123,4 +123,26 @@ class SharedNotificationDeliveryTest {
         delivery.withCurrentSession { error("로그아웃 뒤 등록") }
         assertEquals(listOf(SharedNotificationSession("uid", "CODE01", 0)), submitted)
     }
+
+    @Test
+    fun `Auth 삭제 완료 뒤에도 같은 세션의 공유 알림을 지운다`() {
+        val session = delivery.snapshot()
+        visible.add("schedule")
+        uid = null
+        assertTrue(delivery.changeAfterAccountDeletion(session) { code = null })
+        assertTrue(visible.isEmpty())
+    }
+
+    @Test
+    fun `늦은 계정 삭제 응답이 새 로그인 알림과 코드를 지우지 않는다`() {
+        val session = delivery.snapshot()
+        delivery.changeSession {
+            uid = "new-uid"
+            code = "NEW002"
+        }
+        visible.add("new schedule")
+        assertFalse(delivery.changeAfterAccountDeletion(session) { error("새 설정 삭제") })
+        assertEquals(setOf("new schedule"), visible)
+        assertEquals("NEW002", code)
+    }
 }

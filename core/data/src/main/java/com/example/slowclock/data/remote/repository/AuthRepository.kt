@@ -2,7 +2,10 @@ package com.example.slowclock.data.remote.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
@@ -65,11 +68,15 @@ class AuthRepository
                 }
 
         /** Auth 사용자를 지운다. 성공하면 Firebase 가 세션도 끝낸다. */
-        suspend fun deleteCurrentUser(): DeleteResult {
+        suspend fun deleteCurrentUser(expectedUid: String): DeleteResult {
+            currentCoroutineContext().ensureActive()
             val user = auth.currentUser ?: return DeleteResult.NotSignedIn
+            if (user.uid != expectedUid) return DeleteResult.NotSignedIn
             return try {
                 user.delete().await()
                 DeleteResult.Success
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: FirebaseAuthRecentLoginRequiredException) {
                 DeleteResult.RecentLoginRequired
             } catch (e: Exception) {

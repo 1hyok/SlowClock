@@ -43,6 +43,16 @@ class SharedScheduleNotifier
                 if (code.isNullOrBlank()) settingsRepository.clearShareCode() else settingsRepository.setShareCode(code)
             }
 
+        fun runIfCurrent(
+            expected: SharedNotificationSession,
+            action: () -> Unit,
+        ): Boolean = delivery.runIfCurrent(expected, action)
+
+        fun clearDeletedAccount(expected: SharedNotificationSession): Boolean =
+            delivery.changeAfterAccountDeletion(expected) {
+                settingsRepository.clearShareCode()
+            }
+
         fun withCurrentSession(action: (SharedNotificationSession) -> Unit) = delivery.withCurrentSession(action)
 
         fun show(message: SharedScheduleMessage): Boolean =

@@ -5,9 +5,10 @@ import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.FamilyGroupRepository
 import com.example.slowclock.data.remote.repository.NotificationRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
-import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.notification.SharedScheduleNotifier
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import javax.inject.Inject
 
 /** 계정 삭제 중 실패한 단계. 사용자 안내와 재시도 판단에 쓴다. */
@@ -48,55 +49,62 @@ class DeleteAccountUseCase
         private val familyGroupRepository: FamilyGroupRepository,
         private val notificationRepository: NotificationRepository,
         private val userRepository: UserRepository,
-        private val settingsRepository: SettingsRepository,
         private val alarmScheduler: AlarmScheduler,
         private val sharedScheduleNotifier: SharedScheduleNotifier,
     ) {
         suspend operator fun invoke(): DeleteAccountResult {
-            val uid = authRepository.currentUid ?: return DeleteAccountResult.NotSignedIn
-
-            if (!scheduleRepository.deleteAllSchedulesOf(uid)) {
-                return DeleteAccountResult.Failed(DeleteAccountStep.SCHEDULES)
-            }
-            // 서버 일정이 사라지면 이 기기에 걸린 알람은 근거를 잃는다. 지우지 않으면 계정을
-            // 지운 뒤에도 울리고, 재부팅 뒤에도 장부를 보고 되살아난다(#127).
-            alarmScheduler.cancelAll()
-            if (!familyGroupRepository.leaveAllGroupsOf(uid)) {
-                return DeleteAccountResult.Failed(DeleteAccountStep.FAMILY_GROUPS)
-            }
-            if (!notificationRepository.deleteAllNotificationsOf(uid)) {
-                return DeleteAccountResult.Failed(DeleteAccountStep.NOTIFICATIONS)
-            }
-            // 가족의 공유 코드에 걸어 둔 내 감시자 등록. 보안 규칙이 본인만 지우게 하므로
-            // Auth 사용자가 사라진 뒤에는 아무도 못 지운다. 반드시 여기서 먼저 지운다(#124).
-            val watchedShareCode = settingsRepository.getShareCode()
-            if (!watchedShareCode.isNullOrBlank() &&
-                !userRepository.unregisterShareCodeWatcher(watchedShareCode)
-            ) {
-                return DeleteAccountResult.Failed(DeleteAccountStep.SHARE_CODE_WATCHERS)
-            }
-            if (!userRepository.deleteUserDocument(uid)) {
-                return DeleteAccountResult.Failed(DeleteAccountStep.USER_DOCUMENT)
-            }
-
-            return when (authRepository.deleteCurrentUser()) {
-                AuthRepository.DeleteResult.Success -> {
-                    sharedScheduleNotifier.changeSession { settingsRepository.clearShareCode() }
-                    DeleteAccountResult.Success
+            currentCoroutineContext().ensureActive()
+            val session = sharedScheduleNotifier.snapshot()
+            val uid =
+                session.userId ?: run {
+                    sharedScheduleNotifier.clearDeletedAccount(session)
+                    return DeleteAccountResult.NotSignedIn
                 }
 
-                AuthRepository.DeleteResult.NotSignedIn -> {
-                    sharedScheduleNotifier.changeSession { settingsRepository.clearShareCode() }
-                    DeleteAccountResult.NotSignedIn
-                }
+            suspend fun sessionIsCurrent(): Boolean {
+                currentCoroutineContext().ensureActive()
+                return sharedScheduleNotifier.snapshot() == session && authRepository.currentUid == uid
+            }
 
-                AuthRepository.DeleteResult.RecentLoginRequired -> {
-                    DeleteAccountResult.RecentLoginRequired
-                }
+            val schedulesDeleted = scheduleRepository.deleteAllSchedulesOf(uid)
+            if (!sessionIsCurrent()) return DeleteAccountResult.NotSignedIn
+            if (!schedulesDeleted) return DeleteAccountResult.Failed(DeleteAccountStep.SCHEDULES)
+            // 앞 계정의 서버 응답이 새 계정의 기기 알람을 취소하지 않게 같은 세션 잠금에서 처리한다.
+            if (!sharedScheduleNotifier.runIfCurrent(session) { alarmScheduler.cancelAll() }) return DeleteAccountResult.NotSignedIn
 
-                is AuthRepository.DeleteResult.Failure -> {
-                    DeleteAccountResult.Failed(DeleteAccountStep.AUTH_USER)
+            val groupsLeft = familyGroupRepository.leaveAllGroupsOf(uid)
+            if (!sessionIsCurrent()) return DeleteAccountResult.NotSignedIn
+            if (!groupsLeft) return DeleteAccountResult.Failed(DeleteAccountStep.FAMILY_GROUPS)
+
+            val notificationsDeleted = notificationRepository.deleteAllNotificationsOf(uid)
+            if (!sessionIsCurrent()) return DeleteAccountResult.NotSignedIn
+            if (!notificationsDeleted) return DeleteAccountResult.Failed(DeleteAccountStep.NOTIFICATIONS)
+
+            // 늦은 콜백에서 현재 설정/현재 UID를 다시 선택하지 않는다.
+            val watchedShareCode = session.shareCode
+            if (!watchedShareCode.isNullOrBlank()) {
+                val unregistered = userRepository.unregisterShareCodeWatcher(watchedShareCode, uid)
+                if (!sessionIsCurrent()) return DeleteAccountResult.NotSignedIn
+                if (!unregistered) return DeleteAccountResult.Failed(DeleteAccountStep.SHARE_CODE_WATCHERS)
+            }
+            val userDeleted = userRepository.deleteUserDocument(uid)
+            if (!sessionIsCurrent()) return DeleteAccountResult.NotSignedIn
+            if (!userDeleted) return DeleteAccountResult.Failed(DeleteAccountStep.USER_DOCUMENT)
+
+            try {
+                val authResult = authRepository.deleteCurrentUser(uid)
+                currentCoroutineContext().ensureActive()
+                val current = sharedScheduleNotifier.snapshot()
+                if (current != session && current != session.copy(userId = null)) return DeleteAccountResult.NotSignedIn
+                return when (authResult) {
+                    AuthRepository.DeleteResult.Success -> DeleteAccountResult.Success
+                    AuthRepository.DeleteResult.NotSignedIn -> DeleteAccountResult.NotSignedIn
+                    AuthRepository.DeleteResult.RecentLoginRequired -> DeleteAccountResult.RecentLoginRequired
+                    is AuthRepository.DeleteResult.Failure -> DeleteAccountResult.Failed(DeleteAccountStep.AUTH_USER)
                 }
+            } finally {
+                // 원격 데이터/감시자를 이미 지웠다. Auth 대기 취소/실패에도 이 세션의 로컬 공유 흔적은 정리한다.
+                sharedScheduleNotifier.clearDeletedAccount(session)
             }
         }
     }

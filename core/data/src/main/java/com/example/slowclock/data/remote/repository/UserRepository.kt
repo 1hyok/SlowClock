@@ -11,6 +11,7 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.toObject
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
@@ -233,8 +234,10 @@ class UserRepository
                 if (auth.currentUser?.uid != uid) return false
                 usersCollection.document(uid).update("fcmToken", token).await()
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.e(TAG, "FCM 토큰 저장 실패", e)
+                Log.e(TAG, "FCM 토큰 저장 실패")
                 false
             }
         }
@@ -268,7 +271,14 @@ class UserRepository
         suspend fun registerShareCodeWatcher(shareCode: String): Boolean {
             val uid = auth.currentUser?.uid ?: return false
             return try {
-                val token = runCatching { messaging.token.await() }.getOrNull()
+                val token =
+                    try {
+                        messaging.token.await()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
                 if (auth.currentUser?.uid != uid) return false
                 if (token == null) Log.w(TAG, "FCM 토큰 없이 감시자를 등록한다. 알림은 다음 등록에서 붙는다")
                 val fields = mutableMapOf<String, Any>("userId" to uid)
@@ -276,19 +286,27 @@ class UserRepository
                 // merge 로 쓴다. 토큰을 못 받은 등록이 앞서 저장해 둔 토큰을 지우면 안 된다.
                 shareCodeWatcherTokens(shareCode).document(uid).set(fields, SetOptions.merge()).await()
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.e(TAG, "공유 코드 감시자 등록 실패", e)
+                Log.e(TAG, "공유 코드 감시자 등록 실패")
                 false
             }
         }
 
-        suspend fun unregisterShareCodeWatcher(shareCode: String): Boolean {
+        suspend fun unregisterShareCodeWatcher(
+            shareCode: String,
+            expectedUid: String,
+        ): Boolean {
             val uid = auth.currentUser?.uid ?: return false
+            if (uid != expectedUid) return false
             return try {
                 shareCodeWatcherTokens(shareCode).document(uid).delete().await()
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.e(TAG, "공유 코드 감시자 해제 실패", e)
+                Log.e(TAG, "공유 코드 감시자 해제 실패")
                 false
             }
         }

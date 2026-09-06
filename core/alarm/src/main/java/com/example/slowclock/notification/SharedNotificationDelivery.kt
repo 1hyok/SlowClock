@@ -47,6 +47,27 @@ internal class SharedNotificationDelivery(
             true
         }
 
+    fun runIfCurrent(
+        expected: SharedNotificationSession,
+        action: () -> Unit,
+    ): Boolean =
+        synchronized(lock) {
+            if (currentSession() != expected) return@synchronized false
+            action()
+            true
+        }
+
+    fun changeAfterAccountDeletion(
+        expected: SharedNotificationSession,
+        change: () -> Unit,
+    ): Boolean =
+        synchronized(lock) {
+            val current = currentSession()
+            if (current != expected && current != expected.copy(userId = null)) return@synchronized false
+            changeSession(change)
+            true
+        }
+
     fun withCurrentSession(action: (SharedNotificationSession) -> Unit) =
         synchronized(lock) {
             val session = currentSession()

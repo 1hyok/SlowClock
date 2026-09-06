@@ -49,7 +49,7 @@ class ShareCodeViewModelTest {
         justRun { settingsRepository.setShareCode(any()) }
         justRun { settingsRepository.clearShareCode() }
         coEvery { userRepository.registerShareCodeWatcher(any()) } returns true
-        coEvery { userRepository.unregisterShareCodeWatcher(any()) } returns true
+        coEvery { userRepository.unregisterShareCodeWatcher(any(), any()) } returns true
     }
 
     @After
@@ -74,7 +74,7 @@ class ShareCodeViewModelTest {
             verify(exactly = 1) { settingsRepository.setShareCode("NEW002") }
             coVerify(exactly = 1) { userRepository.registerShareCodeWatcher("NEW002") }
             // 이전 코드의 등록을 지우지 않으면 그 사람에게 내 토큰이 계속 남는다(#124).
-            coVerify(exactly = 1) { userRepository.unregisterShareCodeWatcher("OLD001") }
+            coVerify(exactly = 1) { userRepository.unregisterShareCodeWatcher("OLD001", "uid-1") }
             assertTrue(viewModel.uiState.value.isSaved)
             assertFalse(viewModel.uiState.value.isSaving)
 
@@ -94,7 +94,7 @@ class ShareCodeViewModelTest {
             viewModel.onIntent(ShareCodeIntent.Save)
 
             verify(exactly = 0) { settingsRepository.setShareCode(any()) }
-            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
+            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any(), any()) }
             assertFalse(viewModel.uiState.value.isSaved)
             assertFalse(viewModel.uiState.value.isSaving)
             assertNotNull(viewModel.uiState.value.saveError)
@@ -117,7 +117,7 @@ class ShareCodeViewModelTest {
     fun `빈 입력을 저장하면 감시자 해제 뒤 로컬 코드도 지운다`() =
         runTest {
             val unregistered = CompletableDeferred<Boolean>()
-            coEvery { userRepository.unregisterShareCodeWatcher("OLD001") } coAnswers { unregistered.await() }
+            coEvery { userRepository.unregisterShareCodeWatcher("OLD001", "uid-1") } coAnswers { unregistered.await() }
             val viewModel = ShareCodeViewModel(settingsRepository, userRepository, notifier)
 
             viewModel.onIntent(ShareCodeIntent.UpdateInput("   "))
@@ -136,7 +136,7 @@ class ShareCodeViewModelTest {
     @Test
     fun `감시자 해제 실패는 기존 코드를 유지하고 다시 시도할 수 있다`() =
         runTest {
-            coEvery { userRepository.unregisterShareCodeWatcher("OLD001") } returns false
+            coEvery { userRepository.unregisterShareCodeWatcher("OLD001", "uid-1") } returns false
             val viewModel = ShareCodeViewModel(settingsRepository, userRepository, notifier)
             viewModel.onIntent(ShareCodeIntent.UpdateInput(""))
             viewModel.onIntent(ShareCodeIntent.Save)
@@ -147,7 +147,7 @@ class ShareCodeViewModelTest {
             assertNotNull(viewModel.uiState.value.saveError)
             assertFalse(viewModel.uiState.value.isSaved)
 
-            coEvery { userRepository.unregisterShareCodeWatcher("OLD001") } returns true
+            coEvery { userRepository.unregisterShareCodeWatcher("OLD001", "uid-1") } returns true
             viewModel.onIntent(ShareCodeIntent.Save)
             verify(exactly = 1) { settingsRepository.clearShareCode() }
             assertTrue(viewModel.uiState.value.isSaved)
@@ -204,7 +204,7 @@ class ShareCodeViewModelTest {
             viewModel.onIntent(ShareCodeIntent.UpdateInput("OLD001"))
             viewModel.onIntent(ShareCodeIntent.Save)
 
-            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
+            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any(), any()) }
             coVerify(exactly = 1) { userRepository.registerShareCodeWatcher("OLD001") }
         }
 
@@ -217,7 +217,7 @@ class ShareCodeViewModelTest {
             viewModel.onIntent(ShareCodeIntent.UpdateInput("NEW002"))
             viewModel.onIntent(ShareCodeIntent.Save)
 
-            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
+            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any(), any()) }
             coVerify(exactly = 1) { userRepository.registerShareCodeWatcher("NEW002") }
         }
 
@@ -232,7 +232,7 @@ class ShareCodeViewModelTest {
             notifier.changeSession { every { authRepository.currentUid } returns null }
             registered.complete(true)
             verify(exactly = 0) { settingsRepository.setShareCode(any()) }
-            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
+            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any(), any()) }
             assertNotNull(viewModel.uiState.value.saveError)
             assertFalse(viewModel.uiState.value.isSaved)
         }
@@ -241,7 +241,7 @@ class ShareCodeViewModelTest {
     fun `해제 대기 중 새 세션이 코드를 저장하면 늦은 해제가 새 코드를 지우지 않는다`() =
         runTest {
             val unregistered = CompletableDeferred<Boolean>()
-            coEvery { userRepository.unregisterShareCodeWatcher("OLD001") } coAnswers { unregistered.await() }
+            coEvery { userRepository.unregisterShareCodeWatcher("OLD001", "uid-1") } coAnswers { unregistered.await() }
             val viewModel = ShareCodeViewModel(settingsRepository, userRepository, notifier)
             viewModel.onIntent(ShareCodeIntent.UpdateInput(""))
             viewModel.onIntent(ShareCodeIntent.Save)
