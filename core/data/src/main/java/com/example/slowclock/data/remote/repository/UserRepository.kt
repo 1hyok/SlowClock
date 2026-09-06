@@ -70,6 +70,8 @@ class UserRepository
             return try {
                 val document = usersCollection.document(uid).get().await()
                 document.toObject<User>()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 null
             }
@@ -123,6 +125,8 @@ class UserRepository
                     }.commit()
                     .await()
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "사용자 문서 삭제 실패", e)
                 false
@@ -167,6 +171,8 @@ class UserRepository
                     savePublicProfile(uid, if (name.isNotBlank()) name else existing.name)
                 }
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // 공유 코드가 없으면 그 뒤에 만든 일정이 sharedCode 없이 저장되고, 보안 규칙의
                 // 공유 읽기 조건이 sharedCode != "" 라 가족이 어떤 코드로도 읽지 못한다.
@@ -188,6 +194,8 @@ class UserRepository
                     .document(uid)
                     .set(PublicProfile(id = uid, name = name))
                     .await()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "공개 프로필 저장 실패", e)
             }
@@ -220,6 +228,8 @@ class UserRepository
                         .filter { (_, name) -> name.isNotBlank() }
                         .toMap()
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "공유 일정 소유자 이름 조회 실패", e)
                 emptyMap()

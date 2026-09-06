@@ -4,6 +4,7 @@ import com.example.slowclock.data.FirestoreCollections
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -43,6 +44,8 @@ class FamilyGroupRepository
                         ).await()
                 }
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 false
             }
