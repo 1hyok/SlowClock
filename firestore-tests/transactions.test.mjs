@@ -119,7 +119,9 @@ describe("온라인 일정 transaction", () => {
             runTransaction(db, async (tx) => { await tx.get(ref); tx.update(ref, { completed: true }); }),
         ]);
         assert.ok(results.every((result) => result.status === "rejected"));
-        for (const result of results) assert.equal(result.reason.code, "unavailable");
+        // TCP reset can surface as CANCELLED on Linux gRPC. Both are transport failures;
+        // permission/validation errors must still fail this assertion.
+        for (const result of results) assert.ok(["unavailable", "cancelled"].includes(result.reason.code), result.reason.code);
         connected = true;
         await waitForPendingWrites(db);
         assert.equal((await stored("schedules/offline-new")).exists(), false);
