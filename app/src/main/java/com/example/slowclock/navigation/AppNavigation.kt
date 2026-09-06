@@ -1,5 +1,6 @@
 package com.example.slowclock.navigation
 
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -115,7 +116,7 @@ fun AppNavigation(
     ) { innerPadding ->
         NavDisplay(
             backStack = backStack,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
             onBack = {
                 recommendation = recommendation?.afterLeaving(backStack.lastOrNull())
                 backStack.popBack()

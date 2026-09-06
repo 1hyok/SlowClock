@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,6 +34,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -95,6 +98,10 @@ internal fun AddScheduleContent(
     onNavigateToRecommendation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val errorInView = remember { BringIntoViewRequester() }
+    LaunchedEffect(state.error) {
+        if (state.error != null) errorInView.bringIntoView()
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -186,6 +193,7 @@ internal fun AddScheduleContent(
 
             state.error?.let { error ->
                 Card(
+                    modifier = Modifier.bringIntoViewRequester(errorInView),
                     colors =
                         CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -198,17 +206,17 @@ internal fun AddScheduleContent(
                             style = MaterialTheme.typography.bodyLarge,
                         )
 
-                        if (state.canRetry) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = { onIntent(AddScheduleIntent.ConsumeError) },
+                                modifier = Modifier.weight(1f),
                             ) {
-                                OutlinedButton(
-                                    onClick = { onIntent(AddScheduleIntent.ConsumeError) },
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("닫기")
-                                }
+                                Text("닫기")
+                            }
 
+                            if (state.canRetry) {
                                 Button(
                                     onClick = { onIntent(AddScheduleIntent.Retry) },
                                     modifier = Modifier.weight(1f),
