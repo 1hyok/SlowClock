@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.ui.common.ScheduleLoadingIndicator
 import com.example.slowclock.ui.common.components.EmptyState
 import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.ScreenHeader
@@ -63,7 +65,7 @@ internal fun TimelineContent(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var hasSwiped by remember { mutableStateOf(false) }
+    val currentOnIntent by rememberUpdatedState(onIntent)
     val selectedDate = state.selectedDate
     val dayText = rememberDayText(selectedDate.time)
 
@@ -73,18 +75,13 @@ internal fun TimelineContent(
                 .fillMaxSize()
                 .padding(horizontal = 20.dp)
                 .pointerInput(Unit) {
+                    val gesture = DaySwipeGesture(SWIPE_THRESHOLD_PX)
                     detectHorizontalDragGestures(
-                        onDragStart = { hasSwiped = false },
+                        onDragStart = { gesture.reset() },
+                        onDragEnd = { gesture.reset() },
+                        onDragCancel = { gesture.reset() },
                     ) { _, dragAmount ->
-                        if (!hasSwiped) {
-                            if (dragAmount > SWIPE_THRESHOLD_PX) {
-                                onIntent(TimelineIntent.PreviousDay)
-                                hasSwiped = true
-                            } else if (dragAmount < -SWIPE_THRESHOLD_PX) {
-                                onIntent(TimelineIntent.NextDay)
-                                hasSwiped = true
-                            }
-                        }
+                        gesture.dragBy(dragAmount)?.let(currentOnIntent)
                     }
                 },
     ) {
@@ -106,7 +103,11 @@ internal fun TimelineContent(
             )
         }
 
+        if (state.isLoading) {
+            ScheduleLoadingIndicator()
+        }
         if (state.schedules.isEmpty()) {
+            if (state.isLoading || state.error != null) return@Column
             EmptyState(
                 icon = Icons.Outlined.Schedule,
                 title = "이 날은 일정이 없습니다",

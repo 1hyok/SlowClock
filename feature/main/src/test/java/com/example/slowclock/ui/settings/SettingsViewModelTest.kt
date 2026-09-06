@@ -125,4 +125,23 @@ class SettingsViewModelTest {
             viewModel.onIntent(SettingsIntent.ConsumeFullScreenAlarmSettingsRequest)
             assertNull(viewModel.uiState.value.openFullScreenAlarmSettings)
         }
+
+    @Test
+    fun `의료 링크 요청을 소비하고 열기 실패 안내를 닫는다`() =
+        runTest {
+            val viewModel = createViewModel()
+            viewModel.onIntent(SettingsIntent.OpenMedicalNews)
+            assertNotNull(viewModel.uiState.value.openMedicalNews)
+            viewModel.onIntent(SettingsIntent.ConsumeMedicalNewsRequest)
+            assertNull(viewModel.uiState.value.openMedicalNews)
+            viewModel.onIntent(SettingsIntent.MedicalNewsUnavailable)
+            assertTrue(
+                viewModel.uiState.value.error
+                    ?.message
+                    .orEmpty()
+                    .contains("브라우저를 열 수 없습니다"),
+            )
+            viewModel.onIntent(SettingsIntent.ConsumeError)
+            assertNull(viewModel.uiState.value.error)
+        }
 }

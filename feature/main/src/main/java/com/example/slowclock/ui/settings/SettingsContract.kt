@@ -4,6 +4,7 @@ import com.example.slowclock.data.model.ThemeMode
 import com.example.slowclock.ui.mvi.MviIntent
 import com.example.slowclock.ui.mvi.ReducerEvent
 import com.example.slowclock.ui.mvi.UiState
+import com.example.slowclock.util.AppError
 
 /** 정보 화면에서 사용자가 하려는 것. */
 sealed interface SettingsIntent : MviIntent {
@@ -18,6 +19,14 @@ sealed interface SettingsIntent : MviIntent {
     data object OpenFullScreenAlarmSettings : SettingsIntent
 
     data object ConsumeFullScreenAlarmSettingsRequest : SettingsIntent
+
+    data object OpenMedicalNews : SettingsIntent
+
+    data object ConsumeMedicalNewsRequest : SettingsIntent
+
+    data object MedicalNewsUnavailable : SettingsIntent
+
+    data object ConsumeError : SettingsIntent
 }
 
 /** 정보 화면의 단일 UI 상태. */
@@ -27,6 +36,8 @@ data class SettingsUiState(
     val showFullScreenAlarmNotice: Boolean = false,
     /** null 이 아니면 화면이 시스템 설정을 한 번 연다. */
     val openFullScreenAlarmSettings: Unit? = null,
+    val openMedicalNews: Unit? = null,
+    val error: AppError? = null,
 ) : UiState
 
 /** 정보 화면의 상태가 겪은 것. */
@@ -42,4 +53,12 @@ sealed interface SettingsReducerEvent : ReducerEvent {
     data object FullScreenAlarmSettingsRequested : SettingsReducerEvent
 
     data object FullScreenAlarmSettingsRequestConsumed : SettingsReducerEvent
+
+    data object MedicalNewsRequested : SettingsReducerEvent
+
+    data object MedicalNewsRequestConsumed : SettingsReducerEvent
+
+    data object MedicalNewsFailed : SettingsReducerEvent
+
+    data object ErrorConsumed : SettingsReducerEvent
 }

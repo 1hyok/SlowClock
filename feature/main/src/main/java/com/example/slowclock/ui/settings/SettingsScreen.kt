@@ -43,7 +43,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.slowclock.data.model.ThemeMode
+import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.ScreenHeader
+import com.example.slowclock.ui.common.launchExternalActivity
 import com.example.slowclock.ui.mvi.ObserveSignal
 
 /** 메디컬타임즈 의료 뉴스 목록. 기사는 앱이 읽거나 저장하지 않고 브라우저로만 연다. */
@@ -68,6 +70,15 @@ fun SettingsScreen(
         onIntent = viewModel::onIntent,
     ) {
         context.openFullScreenAlarmSettings()
+    }
+    ObserveSignal(
+        signal = state.openMedicalNews,
+        consumed = SettingsIntent.ConsumeMedicalNewsRequest,
+        onIntent = viewModel::onIntent,
+    ) {
+        if (!launchExternalActivity(open = { context.startActivity(Intent(Intent.ACTION_VIEW, MEDICAL_NEWS_URL.toUri())) })) {
+            viewModel.onIntent(SettingsIntent.MedicalNewsUnavailable)
+        }
     }
     SettingsContent(state = state, onIntent = viewModel::onIntent, modifier = modifier)
 }
@@ -116,7 +127,10 @@ internal fun SettingsContent(
             FullScreenAlarmCard(onOpenSettings = { onIntent(SettingsIntent.OpenFullScreenAlarmSettings) })
         }
         ThemeModeCard(selected = state.themeMode, onSelect = { onIntent(SettingsIntent.SelectThemeMode(it)) })
-        MedicalNewsCard()
+        state.error?.let { error ->
+            ErrorCard(error = error, canRetry = false, onDismiss = { onIntent(SettingsIntent.ConsumeError) })
+        }
+        MedicalNewsCard(onOpen = { onIntent(SettingsIntent.OpenMedicalNews) })
     }
 }
 
@@ -240,15 +254,15 @@ private fun FullScreenAlarmCard(
 }
 
 @Composable
-private fun MedicalNewsCard(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
+private fun MedicalNewsCard(
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Card(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, MEDICAL_NEWS_URL.toUri()))
-                },
+                .clickable(onClick = onOpen),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
