@@ -158,6 +158,26 @@ class ScheduleRepository
             }
         }
 
+        /**
+         * 사용자의 공유 코드를 읽는다. 던지는 예외는 부르는 쪽의 try 가 받는다.
+         *
+         * 코드가 비어 있으면 그 일정은 가족이 어떤 코드로도 읽을 수 없다. 보안 규칙의 공유
+         * 읽기 조건이 `sharedCode != ""` 이기 때문이다. 그래서 비어 있는 것을 경고로 남긴다.
+         */
+        private suspend fun fetchShareCode(uid: String): String {
+            val userShareCode =
+                usersCollection
+                    .document(uid)
+                    .get()
+                    .await()
+                    .getString("shareCode")
+                    .orEmpty()
+            if (userShareCode.isBlank()) {
+                Log.w("ScheduleRepo", "공유 코드가 비어 있어 이 일정은 가족에게 보이지 않는다")
+            }
+            return userShareCode
+        }
+
         // 일정 추가
         suspend fun addSchedule(schedule: Schedule): ScheduleResult<String> {
             val uid = auth.currentUser?.uid
@@ -171,27 +191,20 @@ class ScheduleRepository
                 return ScheduleResult.Error(AppError.InvalidDataError)
             }
 
-            // Fetch user's shareCode
-            val userDoc =
-                usersCollection
-                    .document(uid)
-                    .get()
-                    .await()
-            val userShareCode = userDoc.getString("shareCode") ?: ""
-            Log.d("ScheduleRepo", "Fetched userShareCode: '$userShareCode'")
-            if (userShareCode.isBlank()) {
-                Log.w("ScheduleRepo", "User's shareCode is blank! Schedule will be saved without a sharedCode.")
-            }
-
-            val newSchedule =
-                schedule.copy(
-                    userId = uid,
-                    sharedCode = userShareCode,
-                    createdAt = Timestamp.now(),
-                    updatedAt = Timestamp.now(),
-                )
-
             return try {
+                // 공유 코드 읽기도 저장과 같은 try 안에 둔다. 이 읽기는 오프라인이거나 토큰이
+                // 무효해지면 그대로 던지는데, 호출자인 ViewModel 은 viewModelScope 에서 부르고
+                // 잡지 않는다. try 밖에 두면 저장 실패는 안내가 되고 이 읽기 실패만 앱을
+                // 강제 종료시킨다(#133).
+                val userShareCode = fetchShareCode(uid)
+                val newSchedule =
+                    schedule.copy(
+                        userId = uid,
+                        sharedCode = userShareCode,
+                        createdAt = Timestamp.now(),
+                        updatedAt = Timestamp.now(),
+                    )
+
                 val docRef = schedulesCollection.document()
                 val scheduleWithId = newSchedule.copy(id = docRef.id)
                 Log.d("ScheduleRepo", "일정 저장 시도: ${scheduleWithId.title}")
@@ -406,9 +419,16 @@ class ScheduleRepository
             }
         }
 
-        // 공유 코드로 일정(리마인더) 목록 실시간 가져오기
-        fun observeSchedulesBySharedCode(sharedCode: String): Flow<List<Schedule>> =
-            callbackFlow {
+        /**
+         * 공유 코드로 일정(리마인더) 목록을 실시간 구독한다.
+         *
+         * 로그인 전이면 빈 목록을 한 번 내고 끝난다. 보안 규칙의 schedules 읽기가 전부
+         * `isSignedIn()` 을 요구하므로, 가드가 없으면 로그인 전에 건 리스너가
+         * PERMISSION_DENIED 로 닫히고 그 흐름은 다시 붙지 않는다(#134).
+         */
+        fun observeSchedulesBySharedCode(sharedCode: String): Flow<List<Schedule>> {
+            auth.currentUser?.uid ?: return flowOf(emptyList())
+            return callbackFlow {
                 val listener =
                     schedulesCollection
                         .whereEqualTo("sharedCode", sharedCode)
@@ -425,6 +445,7 @@ class ScheduleRepository
                         }
                 awaitClose { listener.remove() }
             }
+        }
 
         // 계정 삭제용: 사용자가 만든 일정 전부 삭제
         suspend fun deleteAllSchedulesOf(userId: String): Boolean =

@@ -5,12 +5,14 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import com.example.slowclock.core.alarm.R
+import com.example.slowclock.core.alarm.SnoozePolicy
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -46,6 +48,21 @@ class AlarmFullScreenActivity : Activity() {
         findViewById<Button>(R.id.dismissButton).setOnClickListener {
             dismissAlarm()
             finish()
+        }
+
+        // 다시 알림. 예약도 소리 끄기도 서비스가 한다. 화면은 시키기만 한다(#122 와 같은 자리).
+        val snoozeCount = intent.getIntExtra(AlarmTriggerService.EXTRA_SNOOZE_COUNT, 0)
+        val snoozeButton = findViewById<Button>(R.id.snoozeButton)
+        if (SnoozePolicy.canSnooze(snoozeCount)) {
+            // 라벨의 분과 실제 미루는 분이 어긋날 수 없게 상수에서 만든다.
+            snoozeButton.text = getString(R.string.alarm_snooze_action, SnoozePolicy.MINUTES)
+            snoozeButton.setOnClickListener {
+                startService(AlarmTriggerService.snoozeIntent(this))
+                finish()
+            }
+        } else {
+            // 다 쓴 뒤 눌리지 않는 버튼을 남기면 이 이슈가 그대로 되풀이된다. 아예 감춘다(#129).
+            snoozeButton.visibility = View.GONE
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

@@ -93,9 +93,12 @@ internal fun MainContent(
     onNavigateToSettings: () -> Unit,
     onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
+    // 날짜 머리글의 기준이 되는 날. 미리보기와 스크린샷 테스트는 고정된 날을 넣어, 그린 날에
+    // 따라 그림이 달라지지 않게 한다. 시계를 읽으면 baseline 이 하루 만에 어긋난다(#143).
+    today: Date = Date(),
 ) {
     val isSignedOut = state.isSignedInKnown && state.currentUserId.isBlank()
-    val dateText = rememberDayText(Date())
+    val dateText = rememberDayText(today)
     // 지금 할 일은 위에 크게 나오므로 아래 목록에서 뺀다. 같은 일정이 한 화면에 두 번 보이면
     // 두 개인지 하나인지 알 수 없다(#109).
     val listedSchedules =

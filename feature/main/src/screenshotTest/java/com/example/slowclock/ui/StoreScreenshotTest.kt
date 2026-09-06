@@ -48,6 +48,18 @@ private val storeSchedules =
         Schedule(id = "6", title = "저녁 약 먹기", startTime = storeTime(19, 0)),
     )
 
+/**
+ * 미리보기가 그려질 날. 시계를 읽으면 baseline 을 만든 날이 지나는 순간 날짜 머리글이 어긋나
+ * 검사가 매일 빨개진다. 위의 일정 시각과 같은 날로 고정한다(#143).
+ */
+private val fixedToday: Date =
+    Calendar
+        .getInstance()
+        .apply {
+            set(2026, Calendar.SEPTEMBER, 6, 12, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.time
+
 private val storeMainState =
     MainUiState(
         todaySchedules = storeSchedules,
@@ -71,6 +83,7 @@ internal fun StoreMainScreenshot() {
             onNavigateToProfile = {},
             onNavigateToSettings = {},
             onSignIn = {},
+            today = fixedToday,
         )
     }
 }
@@ -81,7 +94,11 @@ internal fun StoreMainScreenshot() {
 internal fun StoreDoneScreenshot() {
     SlowClockTheme(darkTheme = false) {
         AppBackground {
-            DoneContent(state = DoneUiState(schedules = storeSchedules), onIntent = {})
+            DoneContent(
+                state = DoneUiState(schedules = storeSchedules),
+                onIntent = {},
+                today = fixedToday,
+            )
         }
     }
 }
@@ -118,6 +135,7 @@ internal fun StoreDarkScreenshot() {
             onNavigateToProfile = {},
             onNavigateToSettings = {},
             onSignIn = {},
+            today = fixedToday,
         )
     }
 }
