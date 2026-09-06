@@ -38,6 +38,11 @@ class ScheduleRepositoryUpdateTest {
         val firestore = mockk<FirebaseFirestore>()
         every { firestore.collection("schedules") } returns schedules
         every { firestore.collection("users") } returns mockk()
+        val registry = mockk<CollectionReference>()
+        val codeRef = mockk<DocumentReference>()
+        every { firestore.collection("shareCodes") } returns registry
+        every { registry.document("OLD123") } returns codeRef
+        every { codeRef.set(mapOf("userId" to "owner")) } returns Tasks.forResult(null)
         return ScheduleRepository(auth, firestore)
     }
 

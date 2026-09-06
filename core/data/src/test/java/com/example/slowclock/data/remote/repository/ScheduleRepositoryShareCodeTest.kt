@@ -145,7 +145,7 @@ class ScheduleRepositoryShareCodeTest {
             assertTrue(repository.updateSchedule(schedule.copy(sharedCode = "")) is ScheduleRepository.ScheduleResult.Success)
 
             verify(exactly = 0) { firestore.collection("shareCodes") }
-            verify(atLeast = 1) { scheduleRef.set(match<Schedule> { it.sharedCode == "" }) }
+            verify(exactly = 1) { scheduleRef.set(match<Schedule> { it.sharedCode == "" }) }
         }
 
     @Test

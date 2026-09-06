@@ -323,7 +323,7 @@ class ScheduleRepository
                 )
 
             return try {
-                firestore.ensureShareCodeOwner(uid, updatedSchedule.sharedCode)
+                firestore.ensureShareCodeOwner(uid, schedule.sharedCode)
                 schedulesCollection
                     .document(schedule.id)
                     .update(changes)
