@@ -8,6 +8,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import com.example.slowclock.data.remote.repository.AuthRepository
+import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.firebase.ui.auth.AuthUI
 import com.firebase.ui.auth.IdpResponse
@@ -21,6 +22,7 @@ class AuthManager(
     private val activity: ComponentActivity,
     private val userRepository: UserRepository,
     private val authRepository: AuthRepository,
+    private val scheduleRepository: ScheduleRepository,
 ) {
     private companion object {
         // GitHub Pages(docs/) 에 게시된 문서. Play 콘솔의 개인정보처리방침 URL 과 같은 주소를 쓴다.
@@ -53,14 +55,21 @@ class AuthManager(
             }
     }
 
-    /** 사용자 문서와 공유 코드를 보장한다. 이름·이메일이 바뀌었으면 함께 맞춘다. */
+    /**
+     * 사용자 문서와 공유 코드를 보장한다. 이름·이메일이 바뀌었으면 함께 맞춘다.
+     *
+     * 코드를 얻은 뒤에는 코드 없이 저장돼 있던 일정에도 채운다. 코드만 만들면 그 전에 만든
+     * 일정은 가족이 영영 못 읽는다(#178).
+     */
     fun ensureShareCodeForUser(
         uid: String,
         name: String,
         email: String,
     ) {
         activity.lifecycleScope.launch {
-            if (!userRepository.ensureShareCode(uid, name, email)) {
+            if (userRepository.ensureShareCode(uid, name, email)) {
+                scheduleRepository.fillMissingSharedCode(uid)
+            } else {
                 Log.e("AUTH", "공유 코드 생성/저장 실패")
             }
         }

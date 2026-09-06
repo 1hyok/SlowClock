@@ -2,6 +2,7 @@ package com.example.slowclock.ui.profile
 
 import com.example.slowclock.data.model.User
 import com.example.slowclock.data.remote.repository.AuthRepository
+import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.domain.profile.DeleteAccountResult
 import com.example.slowclock.domain.profile.DeleteAccountStep
@@ -37,6 +38,7 @@ class ProfileViewModelTest {
     private val authRepository = mockk<AuthRepository>()
     private val deleteAccount = mockk<DeleteAccountUseCase>()
     private val signOutUseCase = mockk<SignOutUseCase>(relaxed = true)
+    private val scheduleRepository = mockk<ScheduleRepository>()
 
     @Before
     fun setUp() {
@@ -46,6 +48,7 @@ class ProfileViewModelTest {
         coEvery { userRepository.getCurrentUser() } returns
             User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "ABC123")
         justRun { authRepository.signOut() }
+        coEvery { scheduleRepository.fillMissingSharedCode(any()) } returns 0
     }
 
     @After
@@ -53,7 +56,7 @@ class ProfileViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = ProfileViewModel(userRepository, authRepository, deleteAccount, signOutUseCase)
+    private fun createViewModel() = ProfileViewModel(userRepository, authRepository, scheduleRepository, deleteAccount, signOutUseCase)
 
     @Test
     fun `Firestore 사용자 문서로 이름·이메일·공유 코드를 채운다`() =
@@ -179,6 +182,34 @@ class ProfileViewModelTest {
 
             assertEquals("XYZ789", viewModel.uiState.value.shareCode)
             assertFalse(viewModel.uiState.value.isRetryingShareCode)
+        }
+
+    @Test
+    fun `공유 코드를 만들면 코드 없이 저장된 일정도 함께 맞춘다`() =
+        runTest {
+            // 코드만 만들면 그 전에 저장한 일정은 sharedCode 가 빈 채라 가족이 영영 못 읽는다.
+            // 다시 시도 버튼이 「고쳤다」 는 잘못된 안심을 주면 안 된다(#178).
+            coEvery { userRepository.getCurrentUser() } returns
+                User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "")
+            coEvery { userRepository.ensureShareCode("uid-1", any(), any()) } returns true
+            val viewModel = createViewModel()
+
+            viewModel.onIntent(ProfileIntent.RetryShareCode)
+
+            coVerify(exactly = 1) { scheduleRepository.fillMissingSharedCode("uid-1") }
+        }
+
+    @Test
+    fun `공유 코드를 못 만들면 일정은 건드리지 않는다`() =
+        runTest {
+            coEvery { userRepository.getCurrentUser() } returns
+                User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "")
+            coEvery { userRepository.ensureShareCode(any(), any(), any()) } returns false
+            val viewModel = createViewModel()
+
+            viewModel.onIntent(ProfileIntent.RetryShareCode)
+
+            coVerify(exactly = 0) { scheduleRepository.fillMissingSharedCode(any()) }
         }
 
     @Test

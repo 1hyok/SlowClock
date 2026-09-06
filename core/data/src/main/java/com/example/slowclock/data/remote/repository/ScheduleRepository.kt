@@ -495,6 +495,52 @@ class ScheduleRepository
                 null
             }
 
+        /**
+         * 공유 코드 없이 저장된 내 일정에 코드를 채운다. 채운 건수를 낸다.
+         *
+         * 일정은 저장할 때의 공유 코드를 문서에 굳혀 넣는다. 신호가 약한 곳에서 처음 로그인하면
+         * 코드가 비어 있고, 그 사이에 만든 일정은 `sharedCode` 가 빈 채로 남는다. 보안 규칙의
+         * 공유 읽기가 `sharedCode != ""` 를 요구하므로, 나중에 코드를 만들어도 그 일정들은
+         * 가족이 어떤 코드로도 읽지 못한다.
+         *
+         * 사용자 쪽에서는 코드를 만들어 가족에게 알려 줬는데 일정이 안 보인다. 화면 어디에도
+         * 이유가 없고 되돌릴 길도 없다 — 「공유 코드 다시 만들기」(#134)는 사용자 문서만 고쳤다.
+         * 그래서 코드를 보장하는 자리에서 이미 저장된 일정도 함께 맞춘다(#178).
+         *
+         * 실패해도 던지지 않는다. 코드를 만든 결과를 이 일이 뒤집으면 안 되고, 다음 로그인에서
+         * 다시 맞추면 된다.
+         */
+        suspend fun fillMissingSharedCode(userId: String): Int =
+            try {
+                val shareCode = fetchShareCode(userId)
+                if (shareCode.isBlank()) {
+                    0
+                } else {
+                    val stale =
+                        schedulesCollection
+                            .whereEqualTo("userId", userId)
+                            .whereEqualTo("sharedCode", "")
+                            .get()
+                            .await()
+                            .documents
+                    stale.chunked(FirestoreCollections.BATCH_LIMIT).forEach { chunk ->
+                        val batch = firestore.batch()
+                        chunk.forEach { document ->
+                            batch.update(
+                                document.reference,
+                                mapOf("sharedCode" to shareCode, "updatedAt" to Timestamp.now()),
+                            )
+                        }
+                        batch.commit().await()
+                    }
+                    if (stale.isNotEmpty()) Log.d("ScheduleRepo", "공유 코드를 채운 일정: ${stale.size}건")
+                    stale.size
+                }
+            } catch (e: Exception) {
+                Log.e("ScheduleRepo", "빠진 공유 코드 채우기 실패", e)
+                0
+            }
+
         // 계정 삭제용: 사용자가 만든 일정 전부 삭제
         suspend fun deleteAllSchedulesOf(userId: String): Boolean =
             try {
