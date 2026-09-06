@@ -7,8 +7,11 @@ import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.util.AppError
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -18,6 +21,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -91,5 +95,41 @@ class AddScheduleDraftTest {
             assertFalse(vm.uiState.value.canRetry)
             assertEquals("수정한 입력", vm.uiState.value.title)
             verify(exactly = 0) { alarms.schedule(any()) }
+        }
+
+    @Test fun `예약 실패 뒤 시스템 복원에서도 같은 제출 ID와 서버 모델을 쓴다`() =
+        runTest {
+            val handle = SavedStateHandle()
+            val requests = mutableListOf<Schedule>()
+            var saved: Schedule? = null
+            coEvery { repository.addSchedule(capture(requests)) } answers {
+                if (saved == null) saved = firstArg<Schedule>().copy(sharedCode = "SERVER", completed = true)
+                ScheduleRepository.ScheduleResult.Success(requireNotNull(saved))
+            }
+            every { alarms.schedule(any()) } throws IllegalStateException("alarm unavailable")
+            val vm = AddScheduleViewModel(repository, alarms, handle)
+            vm.onIntent(AddScheduleIntent.UpdateTitle("약"))
+            vm.onIntent(AddScheduleIntent.Save)
+            assertEquals(saved, vm.uiState.value.pendingAlarmSchedule)
+            val restoredHandle = SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) })
+            val restored = AddScheduleViewModel(repository, alarms, restoredHandle)
+            justRun { alarms.schedule(any()) }
+            restored.onIntent(AddScheduleIntent.Save)
+            assertEquals(2, requests.size)
+            assertEquals(requests.first().id, requests.last().id)
+            verify(exactly = 2) { alarms.schedule(requireNotNull(saved)) }
+            assertTrue(restored.uiState.value.isSaved)
+        }
+
+    @Test fun `알람 후처리 취소를 예약 실패 안내로 삼키지 않는다`() =
+        runTest {
+            coEvery { repository.addSchedule(any()) } answers { ScheduleRepository.ScheduleResult.Success(firstArg<Schedule>()) }
+            every { alarms.schedule(any()) } throws CancellationException("cancelled")
+            val vm = AddScheduleViewModel(repository, alarms, SavedStateHandle())
+            vm.onIntent(AddScheduleIntent.UpdateTitle("약"))
+            vm.onIntent(AddScheduleIntent.Save)
+            assertNull(vm.uiState.value.pendingAlarmSchedule)
+            assertNull(vm.uiState.value.error)
+            assertFalse(vm.uiState.value.isSaved)
         }
 }

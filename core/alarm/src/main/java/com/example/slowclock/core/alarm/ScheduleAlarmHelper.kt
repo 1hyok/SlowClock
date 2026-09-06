@@ -84,10 +84,19 @@ internal object ScheduleAlarmHelper {
             Log.w(TAG, "정시 알람 권한이 없어 부정확 알람으로 겁니다.")
         }
 
-        scheduleOne(context, alarmManager, schedule, AlarmKind.START, schedule.startTime.toDate().time, now, isFullScreen)
-        schedule.endTime?.let { end ->
-            scheduleOne(context, alarmManager, schedule, AlarmKind.END, end.toDate().time, now, isFullScreen)
-        }
+        val start =
+            runCatching {
+                scheduleOne(context, alarmManager, schedule, AlarmKind.START, schedule.startTime.toDate().time, now, isFullScreen)
+            }
+        val end =
+            runCatching {
+                schedule.endTime?.let { end ->
+                    scheduleOne(context, alarmManager, schedule, AlarmKind.END, end.toDate().time, now, isFullScreen)
+                }
+            }
+        // 한쪽이 실패해도 다른 알람은 시도한다. 실패를 삼키면 호출자가 성공 장부를 남긴다.
+        start.exceptionOrNull()?.let { throw it }
+        end.exceptionOrNull()?.let { throw it }
     }
 
     /**
@@ -157,6 +166,7 @@ internal object ScheduleAlarmHelper {
             Log.d(TAG, "${kind.label} 알람 예약: ${schedule.title} at ${Date(triggerTime)} (requestCode=${slot.requestCode})")
         } catch (e: Exception) {
             Log.e(TAG, "${kind.label} 알람 예약 실패: ${e.message}")
+            throw e
         }
     }
 
@@ -233,6 +243,7 @@ internal object ScheduleAlarmHelper {
             Log.d(TAG, "다시 알림 예약: $title at ${Date(triggerTime)} (자리=$baseRequestCode, 횟수=$snoozeCount)")
         } catch (e: Exception) {
             Log.e(TAG, "다시 알림 예약 실패: ${e.message}")
+            throw e
         }
     }
 

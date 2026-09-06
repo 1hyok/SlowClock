@@ -64,6 +64,7 @@ class MainViewModelTest {
         coEvery { userRepository.registerShareCodeWatcher(any()) } returns true
         // 기본값은 정시 알람이 허용된 기기다. 안내 다이얼로그를 다루는 테스트만 이 값을 뒤집는다.
         every { alarmScheduler.canScheduleExactAlarms() } returns true
+        every { alarmScheduler.canShowAlarmControls() } returns true
         every { settingsRepository.hasSeenExactAlarmNotice() } returns false
         every { settingsRepository.markExactAlarmNoticeSeen() } returns Unit
     }
@@ -72,6 +73,21 @@ class MainViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun `알림 차단 안내는 설정에서 허용한 뒤 화면 복귀하면 사라진다`() =
+        runTest {
+            every { alarmScheduler.canShowAlarmControls() } returns false
+            val viewModel = createViewModel()
+            assertFalse(viewModel.uiState.value.alarmControlsAvailable)
+            viewModel.onIntent(MainIntent.OpenNotificationSettings)
+            assertNotNull(viewModel.uiState.value.openNotificationSettings)
+            viewModel.onIntent(MainIntent.ConsumeNotificationSettingsRequest)
+            assertNull(viewModel.uiState.value.openNotificationSettings)
+            every { alarmScheduler.canShowAlarmControls() } returns true
+            viewModel.onIntent(MainIntent.ScreenResumed)
+            assertTrue(viewModel.uiState.value.alarmControlsAvailable)
+        }
 
     private fun createViewModel() = MainViewModel(scheduleRepository, userRepository, authRepository, settingsRepository, alarmScheduler)
 
@@ -314,6 +330,7 @@ class MainViewModelTest {
     fun `정시 알람을 못 걸고 안내를 본 적 없으면 안내 다이얼로그를 띄운다`() =
         runTest {
             every { alarmScheduler.canScheduleExactAlarms() } returns false
+            every { alarmScheduler.canShowAlarmControls() } returns true
 
             val state = createViewModel().uiState.value
 
@@ -325,6 +342,7 @@ class MainViewModelTest {
     fun `안내를 이미 봤으면 다시 띄우지 않는다`() =
         runTest {
             every { alarmScheduler.canScheduleExactAlarms() } returns false
+            every { alarmScheduler.canShowAlarmControls() } returns true
             every { settingsRepository.hasSeenExactAlarmNotice() } returns true
 
             assertFalse(createViewModel().uiState.value.showExactAlarmNotice)
@@ -334,6 +352,7 @@ class MainViewModelTest {
     fun `설정 열기는 본 것으로 표시하고 설정 열기 신호를 냈다가 소비한다`() =
         runTest {
             every { alarmScheduler.canScheduleExactAlarms() } returns false
+            every { alarmScheduler.canShowAlarmControls() } returns true
             val viewModel = createViewModel()
 
             viewModel.onIntent(MainIntent.OpenExactAlarmSettings)
@@ -352,6 +371,7 @@ class MainViewModelTest {
     fun `나중에를 누르면 안내를 닫고 본 것으로 표시한다`() =
         runTest {
             every { alarmScheduler.canScheduleExactAlarms() } returns false
+            every { alarmScheduler.canShowAlarmControls() } returns true
             val viewModel = createViewModel()
 
             viewModel.onIntent(MainIntent.DismissExactAlarmNotice)

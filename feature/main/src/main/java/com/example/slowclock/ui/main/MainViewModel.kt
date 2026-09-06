@@ -59,6 +59,7 @@ class MainViewModel
 
         init {
             observeSignedInUser()
+            dispatch(MainReducerEvent.AlarmControlsChecked(alarmScheduler.canShowAlarmControls()))
             // 정확한 알람 권한이 없으면 첫 진입에 한 번만 이유를 설명한다. 설정으로 보내는 건
             // 사용자가 「설정 열기」 를 눌렀을 때다(#83).
             if (!alarmScheduler.canScheduleExactAlarms() && !settingsRepository.hasSeenExactAlarmNotice()) {
@@ -71,6 +72,7 @@ class MainViewModel
         override fun onIntent(intent: MainIntent) {
             when (intent) {
                 MainIntent.ScreenResumed -> {
+                    dispatch(MainReducerEvent.AlarmControlsChecked(alarmScheduler.canShowAlarmControls()))
                     resubscribeIfDayChanged()
                     authRepository.currentUid?.let(::syncAlarms)
                 }
@@ -134,6 +136,14 @@ class MainViewModel
                 MainIntent.DismissExactAlarmNotice -> {
                     settingsRepository.markExactAlarmNoticeSeen()
                     dispatch(MainReducerEvent.ExactAlarmNoticeDismissed)
+                }
+
+                MainIntent.OpenNotificationSettings -> {
+                    dispatch(MainReducerEvent.NotificationSettingsRequested)
+                }
+
+                MainIntent.ConsumeNotificationSettingsRequest -> {
+                    dispatch(MainReducerEvent.NotificationSettingsRequestConsumed)
                 }
 
                 MainIntent.ConsumeExactAlarmSettingsRequest -> {
@@ -293,6 +303,18 @@ class MainViewModel
 
                 MainReducerEvent.ErrorConsumed -> {
                     state.copy(error = null, canRetry = false, failedDelete = null)
+                }
+
+                is MainReducerEvent.AlarmControlsChecked -> {
+                    state.copy(alarmControlsAvailable = event.available)
+                }
+
+                MainReducerEvent.NotificationSettingsRequested -> {
+                    state.copy(openNotificationSettings = Unit)
+                }
+
+                MainReducerEvent.NotificationSettingsRequestConsumed -> {
+                    state.copy(openNotificationSettings = null)
                 }
 
                 MainReducerEvent.ExactAlarmNoticeShown -> {

@@ -144,3 +144,21 @@ internal fun SettingsContentWithNoticeScreenshot() {
         )
     }
 }
+
+@PreviewTest
+@Preview(name = "알람 알림 차단 안내", showBackground = true, device = "spec:width=360dp,height=1100dp", fontScale = 1.5f)
+@Composable
+internal fun MainNotificationsDisabledScreenshot() {
+    SlowClockTheme(darkTheme = false) {
+        MainContent(
+            state = loadedState.copy(alarmControlsAvailable = false),
+            onIntent = {},
+            onAddSchedule = {},
+            onEditSchedule = {},
+            onNavigateToProfile = {},
+            onNavigateToSettings = {},
+            onSignIn = {},
+            today = fixedToday,
+        )
+    }
+}
