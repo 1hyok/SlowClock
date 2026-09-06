@@ -61,6 +61,12 @@ data class ScheduledAlarm(
             // 되풀이하지 않는 일정은 첫 회차가 전부다. 시작이 지났어도 종료가 남았으면 건다.
             return startMillis.takeIf { it > nowMillis || it + durationMillis > nowMillis }
         }
+        // 아직 아무것도 안 걸었는데 진행 중인 회차가 있으면 그것부터 건다. 시작이 지난 뒤에
+        // 저장하거나 재부팅한 경우다. 다음 회차부터 세면 오늘 종료 알람을 통째로 놓친다(#163).
+        RecurrenceRule
+            .occurrenceOn(startMillis, rule, nowMillis)
+            ?.takeIf { it + durationMillis > nowMillis }
+            ?.let { return it }
         return RecurrenceRule.nextOccurrenceAfter(startMillis, rule, nowMillis)
     }
 

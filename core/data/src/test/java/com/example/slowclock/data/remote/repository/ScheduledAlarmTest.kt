@@ -166,4 +166,24 @@ class ScheduledAlarmTest {
         assertNull(restored.bookedStartMillis)
         assertEquals(Recurrence.NONE, restored.rule)
     }
+
+    @Test
+    fun `시작이 지난 뒤에 저장해도 그날 종료 알람은 건다`() {
+        // 09시 30분에 「매일 09~10시」 를 저장하면 오늘 회차가 진행 중이다. 다음 회차부터
+        // 세면 오늘 10시 종료 알람을 통째로 놓친다(#163).
+        val start = 1_800_000_000_000
+        val end = start + 60 * 60 * 1000
+        val record = daily(start, end, booked = null)
+
+        assertEquals(start, record.occurrenceToBook(nowMillis = start + 30 * 60 * 1000))
+    }
+
+    @Test
+    fun `진행 중인 회차가 없으면 다음 회차를 낸다`() {
+        val start = 1_800_000_000_000
+        val end = start + 60 * 60 * 1000
+        val record = daily(start, end, booked = null)
+
+        assertEquals(start + day, record.occurrenceToBook(nowMillis = end + 10))
+    }
 }
