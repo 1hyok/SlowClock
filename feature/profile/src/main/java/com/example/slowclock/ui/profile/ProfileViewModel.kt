@@ -6,6 +6,7 @@ import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.domain.profile.DeleteAccountResult
 import com.example.slowclock.domain.profile.DeleteAccountStep
 import com.example.slowclock.domain.profile.DeleteAccountUseCase
+import com.example.slowclock.domain.profile.SignOutUseCase
 import com.example.slowclock.ui.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
@@ -18,6 +19,7 @@ class ProfileViewModel
         private val userRepository: UserRepository,
         private val authRepository: AuthRepository,
         private val deleteAccount: DeleteAccountUseCase,
+        private val signOutUseCase: SignOutUseCase,
     ) : MviViewModel<ProfileIntent, ProfileUiState, ProfileReducerEvent>(ProfileUiState()) {
         init {
             loadProfile()
@@ -145,7 +147,8 @@ class ProfileViewModel
         }
 
         private fun signOut() {
-            authRepository.signOut()
+            // 세션만 끊으면 이 기기에 걸린 알람과 등록해 둔 공유 코드가 남는다(#165).
+            signOutUseCase()
             dispatch(ProfileReducerEvent.Left(ProfileLeaveReason.SIGNED_OUT))
         }
 

@@ -29,6 +29,16 @@ class SettingsRepository
             prefs.edit().putString(KEY_SHARE_CODE, shareCode.trim()).apply()
         }
 
+        /**
+         * 등록해 둔 가족의 공유 코드를 지운다. 세션이 끝날 때 부른다.
+         *
+         * 남겨 두면 같은 기기에 다른 사람이 로그인했을 때 앞 사람이 등록한 가족의 일정이
+         * 그대로 보인다. 어르신 폰을 자녀가 잠깐 쓰는 일이 이 앱에서는 드물지 않다(#165).
+         */
+        fun clearShareCode() {
+            prefs.edit().remove(KEY_SHARE_CODE).apply()
+        }
+
         fun getThemeMode(): ThemeMode = ThemeMode.fromName(prefs.getString(KEY_THEME_MODE, null))
 
         fun setThemeMode(mode: ThemeMode) {
