@@ -34,7 +34,7 @@ export function compareSize(currentBytes, baselineBytes) {
 export const NO_MAPPING = "none";
 
 export function buildReport(current, baseline = null, generatedAt = new Date().toISOString()) {
-    // v1 은 release 에서 minify 를 끄고 있어 R8 mapping 이 없다. 켜는 순간 preflight 가 digest 를 남긴다.
+    // release 는 R8 을 켠다(#113). mapping 이 없으면 그 사실을 그대로 보고한다 — 꺼졌다는 신호다.
     const mappingPresent = current.mappingSha256 !== NO_MAPPING;
     const comparison = baseline
         ? {
