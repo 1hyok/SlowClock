@@ -6,6 +6,7 @@ import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.domain.profile.DeleteAccountResult
 import com.example.slowclock.domain.profile.DeleteAccountStep
 import com.example.slowclock.domain.profile.DeleteAccountUseCase
+import com.example.slowclock.domain.profile.SignOutUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -35,6 +36,7 @@ class ProfileViewModelTest {
     private val userRepository = mockk<UserRepository>()
     private val authRepository = mockk<AuthRepository>()
     private val deleteAccount = mockk<DeleteAccountUseCase>()
+    private val signOutUseCase = mockk<SignOutUseCase>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -51,7 +53,7 @@ class ProfileViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = ProfileViewModel(userRepository, authRepository, deleteAccount)
+    private fun createViewModel() = ProfileViewModel(userRepository, authRepository, deleteAccount, signOutUseCase)
 
     @Test
     fun `Firestore 사용자 문서로 이름·이메일·공유 코드를 채운다`() =
@@ -94,7 +96,7 @@ class ProfileViewModelTest {
 
             viewModel.onIntent(ProfileIntent.SignOut)
 
-            verify(exactly = 1) { authRepository.signOut() }
+            verify(exactly = 1) { signOutUseCase() }
             assertEquals(ProfileLeaveReason.SIGNED_OUT, viewModel.uiState.value.leave)
 
             viewModel.onIntent(ProfileIntent.ConsumeLeave)

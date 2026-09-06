@@ -23,6 +23,7 @@ import com.example.slowclock.data.model.ThemeMode
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
+import com.example.slowclock.domain.profile.SignOutUseCase
 import com.example.slowclock.navigation.AppNavigation
 import com.example.slowclock.ui.theme.SlowClockTheme
 import com.firebase.ui.auth.AuthUI
@@ -43,6 +44,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var signOutUseCase: SignOutUseCase
+
     private fun handleNewInstallation() {
         val prefs = getSharedPreferences("app_state", MODE_PRIVATE)
         val isAppEverLaunched = prefs.getBoolean("app_launched", false)
@@ -51,7 +55,9 @@ class MainActivity : ComponentActivity() {
             // 이 앱이 처음 실행됨 = 새 설치
             Log.d("INSTALL", "새 설치 감지 - Firebase 로그아웃")
 
-            authRepository.signOut()
+            // 앱을 지웠다 다시 깐 기기다. 세션뿐 아니라 앞 설치가 남긴 알람 장부와 공유 코드도
+            // 함께 비운다. 남기면 목록에 없는 알람이 계속 울린다(#165).
+            signOutUseCase()
             AuthUI.getInstance().signOut(this)
 
             // 플래그 저장

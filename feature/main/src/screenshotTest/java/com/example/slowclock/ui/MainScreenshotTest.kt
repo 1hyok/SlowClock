@@ -8,6 +8,8 @@ import com.example.slowclock.ui.done.DoneContent
 import com.example.slowclock.ui.done.DoneUiState
 import com.example.slowclock.ui.main.MainContent
 import com.example.slowclock.ui.main.MainUiState
+import com.example.slowclock.ui.settings.SettingsContent
+import com.example.slowclock.ui.settings.SettingsUiState
 import com.example.slowclock.ui.theme.SlowClockTheme
 import com.google.firebase.Timestamp
 import java.util.Calendar
@@ -121,6 +123,24 @@ internal fun DoneContentScreenshot() {
             state = DoneUiState(schedules = sampleSchedules),
             onIntent = {},
             today = fixedToday,
+        )
+    }
+}
+
+/**
+ * 정보 화면. 전체 화면 알람 안내 카드까지 보이는 상태다.
+ *
+ * 카드를 하나 더 얹으면 화면을 넘겨 맨 아래 카드에 닿을 수 없게 되는 일이 실제로 있었다(#166).
+ * 카드가 가장 많은 상태를 굳혀 두면 다음에 더할 때 바로 드러난다.
+ */
+@PreviewTest
+@Preview(name = "정보 안내 있음", showBackground = true, device = "spec:width=411dp,height=1000dp")
+@Composable
+internal fun SettingsContentWithNoticeScreenshot() {
+    SlowClockTheme(darkTheme = false) {
+        SettingsContent(
+            state = SettingsUiState(showFullScreenAlarmNotice = true),
+            onIntent = {},
         )
     }
 }
