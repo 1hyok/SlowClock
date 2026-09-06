@@ -12,6 +12,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -477,15 +479,17 @@ class ScheduleRepository
          * 있는 일정도 지금 걸어 두어야 그날 울린다(#176).
          *
          * 실패하면 null 이다. 빈 목록과 갈라야 한다 — 빈 목록으로 맞추면 걸려 있던 알람을 전부
-         * 지우게 된다.
+         * 지우게 된다. 캐시는 일부 문서만 담을 수 있으므로 서버 응답으로만 맞춘다.
          */
         suspend fun getSchedulesOf(userId: String): List<Schedule>? =
             try {
                 schedulesCollection
                     .whereEqualTo("userId", userId)
-                    .get()
+                    .get(Source.SERVER)
                     .await()
                     .mapNotNull { parseScheduleFromDocument(it) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("ScheduleRepo", "알람을 맞출 일정 목록 조회 실패", e)
                 null

@@ -14,8 +14,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -23,6 +25,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -58,6 +61,7 @@ class MainViewModelTest {
         every { scheduleRepository.observeSchedulesBySharedCode(any()) } returns flowOf(emptyList())
         coEvery { userRepository.getUserNames(any()) } returns emptyMap()
         coEvery { scheduleRepository.getSchedulesOf(any()) } returns emptyList()
+        coEvery { userRepository.registerShareCodeWatcher(any()) } returns true
         // 기본값은 정시 알람이 허용된 기기다. 안내 다이얼로그를 다루는 테스트만 이 값을 뒤집는다.
         every { alarmScheduler.canScheduleExactAlarms() } returns true
         every { settingsRepository.hasSeenExactAlarmNotice() } returns false
@@ -93,6 +97,74 @@ class MainViewModelTest {
             createViewModel()
 
             verify(exactly = 0) { alarmScheduler.syncWith(any()) }
+        }
+
+    @Test
+    fun `로그아웃 뒤 돌아온 일정 목록은 알람을 되살리지 않는다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            every { authRepository.currentUid } answers { uid.value }
+            val pending = CompletableDeferred<List<Schedule>?>()
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } coAnswers {
+                withContext(NonCancellable) { pending.await() }
+            }
+            createViewModel()
+
+            uid.value = null
+            pending.complete(listOf(soon))
+
+            verify(exactly = 0) { alarmScheduler.syncWith(any()) }
+        }
+
+    @Test
+    fun `계정을 바꾼 뒤 앞 계정의 응답이 새 계정 알람을 덮지 않는다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            every { authRepository.currentUid } answers { uid.value }
+            val pending = CompletableDeferred<List<Schedule>?>()
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } coAnswers {
+                withContext(NonCancellable) { pending.await() }
+            }
+            val other = soon.copy(id = "other-schedule", userId = "uid-2")
+            coEvery { scheduleRepository.getSchedulesOf("uid-2") } returns listOf(other)
+            createViewModel()
+
+            uid.value = "uid-2"
+            pending.complete(listOf(soon))
+
+            verify(exactly = 1) { alarmScheduler.syncWith(listOf(other)) }
+            verify(exactly = 0) { alarmScheduler.syncWith(listOf(soon)) }
+        }
+
+    @Test
+    fun `같은 계정으로 다시 로그인해도 비운 알람을 다시 맞춘다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            every { authRepository.currentUid } answers { uid.value }
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } returns listOf(soon)
+            createViewModel()
+
+            uid.value = null
+            uid.value = "uid-1"
+
+            verify(exactly = 2) { alarmScheduler.syncWith(listOf(soon)) }
+        }
+
+    @Test
+    fun `서버를 못 읽었다가 화면으로 돌아오면 알람 맞추기를 다시 시도한다`() =
+        runTest {
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } returnsMany listOf(null, listOf(soon))
+            val viewModel = createViewModel()
+            verify(exactly = 0) { alarmScheduler.syncWith(any()) }
+
+            viewModel.onIntent(MainIntent.ScreenResumed)
+            viewModel.onIntent(MainIntent.ScreenResumed)
+
+            verify(exactly = 1) { alarmScheduler.syncWith(listOf(soon)) }
+            coVerify(exactly = 2) { scheduleRepository.getSchedulesOf("uid-1") }
         }
 
     @Test

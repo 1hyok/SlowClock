@@ -237,6 +237,14 @@ internal object ScheduleAlarmHelper {
     }
 
     /** 미뤄 둔 다시 알림 하나를 지운다. 자리는 일정 알람과 번호가 같고 action 으로 갈린다. */
+    fun cancelSnooze(
+        context: Context,
+        baseRequestCode: Int,
+    ) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        cancelSnooze(context, alarmManager, baseRequestCode)
+    }
+
     private fun cancelSnooze(
         context: Context,
         alarmManager: AlarmManager,

@@ -68,6 +68,12 @@ class AlarmScheduler
                 scheduledAlarms.remove(stale.id)
                 forgetSnoozesOf(stale.id)
             }
+            // 마지막 회차가 끝난 미룸은 일정 장부에 없을 수 있다. 다른 기기에서 그 일정을
+            // 지웠다면 미룸 예약도 따로 찾아 지운다.
+            snoozedAlarms.all().filterNot { incoming.containsKey(it.scheduleId) }.forEach { stale ->
+                ScheduleAlarmHelper.cancelSnooze(context, stale.baseRequestCode)
+                snoozedAlarms.remove(stale.baseRequestCode)
+            }
             val bookedById = booked.associateBy { it.id }
             incoming.values.forEach { schedule ->
                 val fresh = schedule.toRecord()
@@ -143,21 +149,26 @@ class AlarmScheduler
          *
          * 이미 그 회차가 걸려 있으면 손대지 않는다. 예약·복원·다음 회차가 모두 이 자리를 지나므로
          * 「어느 회차가 걸려 있나」 를 아는 곳이 하나뿐이다.
+         * [preserveSnoozes] 는 재부팅 복원 때만 쓴다. 그때는 미룸을 뒤에서 다시 걸고, 그 밖의
+         * 재예약은 기존 미룸 예약을 취소하므로 복원 장부도 함께 지워야 한다.
          */
         private fun book(
             record: ScheduledAlarm,
             nowMillis: Long,
+            preserveSnoozes: Boolean = false,
         ) {
             val occurrence = record.occurrenceToBook(nowMillis)
             if (occurrence == null) {
                 // 걸 것이 없으면 자리도 장부도 비운다. 남기면 부팅마다 훑고 버려야 한다.
                 ScheduleAlarmHelper.cancelAlarm(context, record.toSchedule())
                 scheduledAlarms.remove(record.id)
+                if (!preserveSnoozes) forgetSnoozesOf(record.id)
                 return
             }
             if (occurrence == record.bookedStartMillis) return
 
             ScheduleAlarmHelper.scheduleAlarm(context, record.toSchedule(occurrence))
+            if (!preserveSnoozes) forgetSnoozesOf(record.id)
             scheduledAlarms.save(record.copy(bookedStartMillis = occurrence))
         }
 
@@ -169,8 +180,9 @@ class AlarmScheduler
         fun cancelAll() {
             scheduledAlarms.all().forEach { ScheduleAlarmHelper.cancelAlarm(context, it.toSchedule()) }
             scheduledAlarms.clear()
-            // 미뤄 둔 알람은 일정 알람과 자리 번호가 같아 위 취소로 함께 지워진다. 장부만 남으면
-            // 다음 부팅에 근거 없는 알람이 되살아나므로 여기서 함께 비운다(#177).
+            // 마지막 회차가 울리면 일정 장부는 먼저 비워진다. 그 뒤 미룬 알람은 미룸 장부에만
+            // 있으므로, 일정 장부와 별개로 예약을 취소해야 로그아웃 뒤에도 울리지 않는다.
+            snoozedAlarms.all().forEach { ScheduleAlarmHelper.cancelSnooze(context, it.baseRequestCode) }
             snoozedAlarms.clear()
         }
 
@@ -195,7 +207,7 @@ class AlarmScheduler
             val nowMillis = System.currentTimeMillis()
             scheduledAlarms.all().forEach { record ->
                 // 재부팅으로 걸린 것이 전부 사라졌으므로, 지키던 회차라도 다시 걸어야 한다.
-                book(record.copy(bookedStartMillis = null), nowMillis)
+                book(record.copy(bookedStartMillis = null), nowMillis, preserveSnoozes = true)
             }
             restoreSnoozes(nowMillis)
         }

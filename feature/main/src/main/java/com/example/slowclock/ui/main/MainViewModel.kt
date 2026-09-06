@@ -13,8 +13,11 @@ import com.example.slowclock.util.toAppError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -45,6 +48,7 @@ class MainViewModel
 
         /** 알람을 이미 맞춘 사용자. 화면이 다시 만들어져도 한 번만 맞춘다(#176). */
         private var alarmSyncedFor: String? = null
+        private var alarmSyncJob: Job? = null
 
         init {
             observeSignedInUser()
@@ -61,11 +65,13 @@ class MainViewModel
             when (intent) {
                 MainIntent.ScreenResumed -> {
                     resubscribeIfDayChanged()
+                    authRepository.currentUid?.let(::syncAlarms)
                 }
 
                 MainIntent.Retry -> {
                     dispatch(MainReducerEvent.ErrorConsumed)
                     observeTodaySchedules()
+                    authRepository.currentUid?.let(::syncAlarms)
                 }
 
                 is MainIntent.ToggleComplete -> {
@@ -250,7 +256,12 @@ class MainViewModel
          */
         private fun observeSignedInUser() {
             viewModelScope.launch {
-                authRepository.observeCurrentUid().collect { uid ->
+                authRepository.observeCurrentUid().distinctUntilChanged().collect { uid ->
+                    // 로그아웃 뒤 늦게 돌아온 목록이 알람을 되살리지 않게 이전 조회를 끊는다.
+                    // 같은 계정으로 다시 로그인해도 로그아웃이 비운 알람은 다시 맞춰야 한다.
+                    alarmSyncJob?.cancel()
+                    alarmSyncJob = null
+                    alarmSyncedFor = null
                     dispatch(MainReducerEvent.UserResolved(uid.orEmpty()))
                     if (uid != null) {
                         observeTodaySchedules()
@@ -274,18 +285,20 @@ class MainViewModel
          * 목록을 못 읽으면 아무것도 하지 않는다. 빈 목록으로 맞추면 걸려 있던 알람을 전부 지운다.
          */
         private fun syncAlarms(uid: String) {
-            if (alarmSyncedFor == uid) return
-            alarmSyncedFor = uid
-            viewModelScope.launch {
-                val schedules = scheduleRepository.getSchedulesOf(uid)
-                if (schedules == null) {
-                    Log.w(TAG, "일정 목록을 못 읽어 알람을 맞추지 못했다")
-                    alarmSyncedFor = null
-                    return@launch
+            if (alarmSyncedFor == uid || alarmSyncJob?.isActive == true) return
+            alarmSyncJob =
+                viewModelScope.launch {
+                    val schedules = scheduleRepository.getSchedulesOf(uid)
+                    currentCoroutineContext().ensureActive()
+                    if (authRepository.currentUid != uid) return@launch
+                    if (schedules == null) {
+                        Log.w(TAG, "일정 목록을 못 읽어 알람을 맞추지 못했다")
+                        return@launch
+                    }
+                    runCatching { alarmScheduler.syncWith(schedules) }
+                        .onSuccess { alarmSyncedFor = uid }
+                        .onFailure { Log.e(TAG, "알람 맞추기 실패", it) }
                 }
-                runCatching { alarmScheduler.syncWith(schedules) }
-                    .onFailure { Log.e(TAG, "알람 맞추기 실패", it) }
-            }
         }
 
         private fun observeTodaySchedules() {
@@ -324,6 +337,12 @@ class MainViewModel
                         if (uid == null || shareCode.isNullOrBlank()) {
                             flowOf(emptyList())
                         } else {
+                            // 감시자 등록이 곧 공유 일정을 읽을 권한이다. 코드는 저장됐는데 등록만
+                            // 실패한 채로 남아 있으면 가족 일정이 영영 비어 보이므로 구독 전에 다시
+                            // 세운다. 같은 문서에 다시 쓰는 것이라 값은 그대로고, 그 사이 바뀐 FCM
+                            // 토큰이 함께 갱신된다(#174).
+                            val registered = userRepository.registerShareCodeWatcher(shareCode)
+                            if (!registered) Log.w(TAG, "감시자 등록에 실패해 공유 일정을 못 읽을 수 있다")
                             scheduleRepository.observeSchedulesBySharedCode(shareCode).catch { e ->
                                 Log.e(TAG, "공유 일정 구독 실패", e)
                                 emit(emptyList())

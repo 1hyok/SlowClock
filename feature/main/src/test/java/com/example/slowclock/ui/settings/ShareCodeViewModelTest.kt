@@ -17,6 +17,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -63,6 +65,37 @@ class ShareCodeViewModelTest {
 
             viewModel.onIntent(ShareCodeIntent.ConsumeSaved)
             assertFalse(viewModel.uiState.value.isSaved)
+        }
+
+    @Test
+    fun `감시자 등록에 실패하면 코드를 저장하지 않고 앞 코드도 그대로 둔다`() =
+        runTest {
+            // 등록이 곧 공유 일정을 읽을 권한이다. 등록 못 한 코드를 저장하면 가족 일정이 빈 채로
+            // 남고, 앞 코드까지 지우면 되돌아갈 자리도 없다(#174).
+            coEvery { userRepository.registerShareCodeWatcher("NEW002") } returns false
+            val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
+
+            viewModel.onIntent(ShareCodeIntent.UpdateInput("NEW002"))
+            viewModel.onIntent(ShareCodeIntent.Save)
+
+            verify(exactly = 0) { settingsRepository.setShareCode(any()) }
+            coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
+            assertFalse(viewModel.uiState.value.isSaved)
+            assertFalse(viewModel.uiState.value.isSaving)
+            assertNotNull(viewModel.uiState.value.saveError)
+        }
+
+    @Test
+    fun `입력을 고치면 실패 안내가 사라진다`() =
+        runTest {
+            coEvery { userRepository.registerShareCodeWatcher(any()) } returns false
+            val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
+
+            viewModel.onIntent(ShareCodeIntent.UpdateInput("NEW002"))
+            viewModel.onIntent(ShareCodeIntent.Save)
+            viewModel.onIntent(ShareCodeIntent.UpdateInput("NEW003"))
+
+            assertNull(viewModel.uiState.value.saveError)
         }
 
     @Test
