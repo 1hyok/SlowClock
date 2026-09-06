@@ -19,6 +19,7 @@ import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.slowclock.auth.AuthManager
+import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.model.ThemeMode
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
@@ -29,6 +30,7 @@ import com.example.slowclock.navigation.AppNavigation
 import com.example.slowclock.ui.theme.SlowClockTheme
 import com.firebase.ui.auth.AuthUI
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -50,6 +52,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var signOutUseCase: SignOutUseCase
+
+    @Inject
+    lateinit var alarmScheduler: AlarmScheduler
 
     private fun handleNewInstallation() {
         val prefs = getSharedPreferences("app_state", MODE_PRIVATE)
@@ -74,6 +79,12 @@ class MainActivity : ComponentActivity() {
         Log.d("MAIN", "onCreate 시작")
 
         handleNewInstallation()
+        // API 32–34에서는 강제 종료 해제 시 BOOT_COMPLETED가 오지 않는다.
+        // 설치 정리 이후, 네트워크와 독립적으로 프로세스당 한 번만 복원한다.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { alarmScheduler.restoreOnAppStart() }
+                .onFailure { Log.e("ALARM", "앱 시작 알람 복원 실패", it) }
+        }
 
         try {
             // AuthManager 초기화

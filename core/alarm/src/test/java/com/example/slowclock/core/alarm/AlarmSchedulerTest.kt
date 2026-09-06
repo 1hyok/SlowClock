@@ -26,7 +26,10 @@ class AlarmSchedulerTest {
         every { scheduled.all() } returns emptyList()
         every { snoozed.all() } returns snoozes
         val pending = snoozes.map { it.baseRequestCode }.toMutableSet()
-        mockkObject(ScheduleAlarmHelper)
+        mockkObject(ScheduleAlarmHelper, AlarmNotifications)
+        every { AlarmNotifications.invalidate(any(), any()) } returns Unit
+        every { AlarmNotifications.clear(any()) } returns Unit
+        every { AlarmNotifications.retainSchedules(any(), any()) } returns Unit
         try {
             every { ScheduleAlarmHelper.cancelSnooze(context, any()) } answers {
                 pending.remove(secondArg<Int>())
@@ -38,7 +41,7 @@ class AlarmSchedulerTest {
             assertTrue("로그아웃 뒤에도 미룸 예약이 남아 있다", pending.isEmpty())
             verify(exactly = 1) { snoozed.clear() }
         } finally {
-            unmockkObject(ScheduleAlarmHelper)
+            unmockkObject(ScheduleAlarmHelper, AlarmNotifications)
         }
     }
 }

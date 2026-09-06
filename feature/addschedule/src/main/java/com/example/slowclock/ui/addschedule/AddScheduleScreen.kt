@@ -37,9 +37,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.feature.addschedule.R
 import com.example.slowclock.ui.addschedule.components.RecommendationPlaceholder
 import com.example.slowclock.ui.addschedule.components.RecurringSection
 import com.example.slowclock.ui.addschedule.components.TimePickerSection
@@ -206,22 +208,39 @@ internal fun AddScheduleContent(
                             style = MaterialTheme.typography.bodyLarge,
                         )
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            OutlinedButton(
-                                onClick = { onIntent(AddScheduleIntent.ConsumeError) },
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                Text("닫기")
-                            }
-
-                            if (state.canRetry) {
+                        if (state.pendingAlarmSchedule != null) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Button(
                                     onClick = { onIntent(AddScheduleIntent.Retry) },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                                ) {
+                                    Text(stringResource(R.string.retry_saved_alarm))
+                                }
+                                OutlinedButton(
+                                    onClick = { onIntent(AddScheduleIntent.ConsumeError) },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                                ) {
+                                    Text(stringResource(R.string.return_to_saved_schedules))
+                                }
+                            }
+                        } else {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                OutlinedButton(
+                                    onClick = { onIntent(AddScheduleIntent.ConsumeError) },
                                     modifier = Modifier.weight(1f),
                                 ) {
-                                    Text("다시 시도")
+                                    Text("닫기")
+                                }
+
+                                if (state.canRetry) {
+                                    Button(
+                                        onClick = { onIntent(AddScheduleIntent.Retry) },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Text("다시 시도")
+                                    }
                                 }
                             }
                         }
