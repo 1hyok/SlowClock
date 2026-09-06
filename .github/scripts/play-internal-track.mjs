@@ -1,6 +1,9 @@
-import { appendFile, readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { execFile } from "node:child_process";
+import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 // Google Play Android Publisher v3 로 internal track 에만 게시한다 (#852).
 //
@@ -27,7 +30,7 @@ export function toVersionCode(rawValue) {
 }
 
 /**
- * 릴리스 PR 본문에서 이슈 번호만 남긴다. 순서는 본문 등장 순서, 중복은 첫 등장만 남긴다.
+ * 주어진 텍스트에서 이슈 번호만 남긴다. PR 섹션 검증은 호출자가 먼저 한다.
  */
 export function parseIssueReferences(body) {
     const seen = new Set();
@@ -37,22 +40,50 @@ export function parseIssueReferences(body) {
     return [...seen];
 }
 
+async function readValidatedReleaseMetadata(bodyFile) {
+    if (!bodyFile) {
+        throw new Error("RELEASE_PR_BODY_FILE 이 필요하다.");
+    }
+    const privateDirectory = await mkdtemp(join(tmpdir(), "slowclock-play-notes-"));
+    try {
+        const outputPath = join(privateDirectory, "distribution-notes.txt");
+        const renderer = fileURLToPath(new URL("./render-distribution-release-notes.sh", import.meta.url));
+        // 같은 renderer 가 PR 템플릿을 검증하고 코드·주석을 제외한다. 본문을 shell 코드로 넣지 않는다.
+        await promisify(execFile)("bash", [renderer, outputPath], {
+            env: { ...process.env, EVENT_NAME: "push", RELEASE_PR_BODY_FILE: resolve(bodyFile) },
+        });
+        const lines = (await readFile(outputPath, "utf8")).split("\n");
+        const issuesStart = lines.indexOf("포함 이슈");
+        const changesStart = lines.indexOf("변경 내용", issuesStart + 1);
+        if (issuesStart < 0 || changesStart < 0) {
+            throw new Error("배포 renderer의 릴리스 노트 형식을 확인할 수 없다.");
+        }
+        return {
+            issues: parseIssueReferences(lines.slice(issuesStart + 1, changesStart).join("\n")),
+            changes: lines.slice(changesStart + 1).filter((line) => line.trim()),
+        };
+    } finally {
+        await rm(privateDirectory, { recursive: true, force: true });
+    }
+}
+
 /**
  * Play Console 의 «What's new» 로 그대로 보이는 문구. source SHA 를 항상 먼저 적어 두어
  * Console 에서 본 릴리스가 어느 commit 인지 사후에 되짚을 수 있게 한다.
  */
-export function renderInternalReleaseNotes({ sourceRef, sourceSha, versionCode, issues = [] }) {
+export function renderInternalReleaseNotes({ sourceRef, sourceSha, versionCode, issues = [], changes = [] }) {
     const ref = String(sourceRef ?? "").replace(/^refs\/heads\//, "") || "unknown";
     const sha = String(sourceSha ?? "unknown");
     const header = `SlowClock 내부 테스트 ${versionCode}\n기준: ${ref} @ ${sha.slice(0, 7)}`;
     const body = issues.length > 0 ? `\n포함 이슈: ${issues.join(", ")}` : "";
-    const notes = `${header}${body}`;
-    if (notes.length <= MAX_RELEASE_NOTES_LENGTH) {
+    const notes = `${header}${body}${changes.length ? `\n\n변경 내용\n${changes.join("\n")}` : ""}`;
+    const characters = Array.from(notes);
+    if (characters.length <= MAX_RELEASE_NOTES_LENGTH) {
         return notes;
     }
     // 잘렸다는 사실이 Console 에서 보여야 한다 — 이슈 목록이 조용히 사라지면 릴리스 기록과
     // Console 표시가 어긋난 걸 아무도 눈치채지 못한다.
-    return `${notes.slice(0, MAX_RELEASE_NOTES_LENGTH - 1)}…`;
+    return `${characters.slice(0, MAX_RELEASE_NOTES_LENGTH - 1).join("")}…`;
 }
 
 /**
@@ -246,12 +277,12 @@ async function main(argv) {
             throw new Error("notes <출력 파일> 형식으로 호출한다.");
         }
         const bodyFile = process.env.RELEASE_PR_BODY_FILE;
-        const body = bodyFile ? await readFile(bodyFile, "utf8").catch(() => "") : "";
+        const metadata = await readValidatedReleaseMetadata(bodyFile);
         const notes = renderInternalReleaseNotes({
             sourceRef: process.env.SOURCE_REF,
             sourceSha: process.env.SOURCE_SHA,
             versionCode: process.env.SLOWCLOCK_VERSION_CODE,
-            issues: parseIssueReferences(body),
+            ...metadata,
         });
         await writeFile(outputFile, notes, "utf8");
         console.log(notes);

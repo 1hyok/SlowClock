@@ -117,6 +117,7 @@ jobs:
             echo "::error::업로드할 release APK가 정확히 1개여야 합니다."
             exit 1
           fi
+          bash scripts/verify-release-apk.sh "${apk_files[0]}"
           echo "path=${apk_files[0]}" >> "$GITHUB_OUTPUT"
           node .github/scripts/verify-release-attestation.mjs \
             digest "${apk_files[0]}" "$GITHUB_OUTPUT"
