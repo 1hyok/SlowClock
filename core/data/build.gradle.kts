@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.slowclock.android.library)
     alias(libs.plugins.slowclock.android.hilt)
+    // 걸어 둔 알람 장부를 JSON 으로 남긴다(#127).
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -13,4 +15,7 @@ dependencies {
 
     implementation(libs.firebase.auth)
     implementation(libs.firebase.messaging)
+    implementation(libs.kotlinx.serialization.json)
+
+    testImplementation(libs.junit)
 }

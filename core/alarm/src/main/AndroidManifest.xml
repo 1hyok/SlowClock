@@ -5,6 +5,9 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 재부팅 뒤 걸어 둔 알람을 다시 건다. 수신기가 이 모듈에 있다(#127). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- 알람이 울리는 동안 진동한다. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 

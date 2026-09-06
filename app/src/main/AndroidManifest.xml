@@ -22,6 +22,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- 기기를 껐다 켜면 걸어 둔 알람이 전부 취소된다. 다시 걸려면 이 방송을 받아야 한다(#127). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- Firebase Analytics 가 병합하는 광고 ID 권한을 뺀다 — 광고가 없고, Play 데이터 보안 양식에서
          광고 ID 수집 항목을 「아니오」로 유지하기 위해서다. Analytics 자체는 광고 ID 없이 동작한다. -->
     <uses-permission
@@ -86,6 +89,17 @@
         <receiver
             android:name=".receiver.AlarmReceiver"
             android:exported="false" />
+
+        <!-- 보호된 시스템 방송만 받는다. exported="false" 여도 시스템은 배달한다(#127). -->
+        <receiver
+            android:name=".receiver.AlarmRestoreReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

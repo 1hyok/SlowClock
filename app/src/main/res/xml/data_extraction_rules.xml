@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+  https://developer.android.com/about/versions/12/backup-restore#xml-changes
+
+  걸어 둔 알람 장부(scheduled_alarms)는 이 기기에서만 뜻이 있다. 새 기기로 복원되면 그 기기가
+  남의 일정으로 알람을 울린다. 클라우드 백업과 기기 이전 양쪽에서 뺀다(#127).
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude
+            domain="sharedpref"
+            path="scheduled_alarms.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude
+            domain="sharedpref"
+            path="scheduled_alarms.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>
