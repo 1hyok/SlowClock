@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -49,6 +51,7 @@ internal fun ShareCodeContent(
         modifier =
             modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -60,13 +63,28 @@ internal fun ShareCodeContent(
             onValueChange = { onIntent(ShareCodeIntent.UpdateInput(it)) },
             label = { Text("공유 코드") },
             singleLine = true,
+            enabled = !state.isSaving,
         )
+        if (state.hasRegisteredCode) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                "공유 일정을 그만 보려면 코드를 모두 지우고 저장하세요.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+            )
+        }
         Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = { onIntent(ShareCodeIntent.Save) },
             enabled = state.canSave,
         ) {
-            Text(if (state.isSaving) "저장 중..." else "저장하고 돌아가기")
+            Text(
+                when {
+                    state.isSaving -> "저장 중..."
+                    state.input.isBlank() && state.hasRegisteredCode -> "공유 해제하고 돌아가기"
+                    else -> "저장하고 돌아가기"
+                },
+            )
         }
         // 등록이 곧 읽기 권한이라, 실패를 알리지 않으면 가족 일정이 왜 비어 있는지 알 수 없다(#174).
         if (state.saveError != null) {
