@@ -35,9 +35,10 @@ service cloud.firestore {
     match /publicProfiles/{userId} {
       allow get: if isSignedIn();
       allow list: if false;
-      allow write: if isSelf(userId)
+      allow create, update: if isSelf(userId)
         && request.resource.data.keys().hasOnly(['id', 'name'])
         && request.resource.data.id == userId;
+      allow delete: if isSelf(userId);
     }
 
     // 공유 코드 등록부. 코드 자체가 문서 이름이다.
@@ -56,10 +57,12 @@ service cloud.firestore {
 
     // 일정
     match /schedules/{scheduleId} {
-      // 본인이 만든 일정
-      allow read, write: if isSignedIn() &&
-        (request.auth.uid == resource.data.userId ||
-         request.auth.uid == request.resource.data.userId);
+      // 생성할 때 소유자를 확인하고, 기존 일정은 저장된 소유자를 기준으로 확인한다.
+      // 일정을 고칠 때도 소유자는 그대로 유지한다.
+      allow read, delete: if isSelf(resource.data.userId);
+      allow create: if isSelf(request.resource.data.userId);
+      allow update: if isSelf(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId;
 
       // 공유 일정은 그 코드의 감시자로 등록한 사람만 읽는다.
       allow read: if resource.data.sharedCode is string &&

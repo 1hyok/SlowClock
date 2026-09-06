@@ -179,6 +179,22 @@ describe("publicProfiles", () => {
         await assertFails(setDoc(doc(db, "publicProfiles", OTHER), { id: OTHER, name: "가로채기" }));
     });
 
+    it("계정을 삭제할 때 본인 공개 프로필도 지운다", async () => {
+        // UserRepository.deleteUserDocument 와 같은 순서다. 사용자 문서가 없어도 본인 확인은
+        // 인증 uid 로 해야 하며, 삭제에는 request.resource 의 새 필드가 없다.
+        const db = owner();
+        await assertSucceeds(deleteDoc(doc(db, "shareCodes", SHARE_CODE)));
+        await assertSucceeds(deleteDoc(doc(db, "users", OWNER)));
+        await assertSucceeds(deleteDoc(doc(db, "publicProfiles", OWNER)));
+        assert.equal((await getDoc(doc(db, "publicProfiles", OWNER))).exists(), false);
+        await assertSucceeds(deleteDoc(doc(db, "publicProfiles", OWNER)));
+    });
+
+    it("남의 공개 프로필이나 로그인하지 않은 요청으로는 지우지 못한다", async () => {
+        await assertFails(deleteDoc(doc(other(), "publicProfiles", OWNER)));
+        await assertFails(deleteDoc(doc(anonymous(), "publicProfiles", OWNER)));
+    });
+
     it("이름 밖의 값은 넣지 못한다", async () => {
         // 이메일이나 토큰이 공개 프로필로 새어 나가지 않게 필드를 묶는다.
         const db = owner();
@@ -242,6 +258,7 @@ describe("schedules", () => {
         await assertSucceeds(
             setDoc(doc(db, "schedules", "new-1"), { id: "new-1", userId: OWNER, title: "새 일정", sharedCode: "" }),
         );
+        await assertSucceeds(updateDoc(doc(db, "schedules", "own-1"), { title: "바꾼 일정" }));
         await assertSucceeds(deleteDoc(doc(db, "schedules", "own-1")));
     });
 
@@ -249,10 +266,44 @@ describe("schedules", () => {
         await assertFails(getDoc(doc(other(), "schedules", "own-1")));
     });
 
-    it("남의 일정을 자기 것으로 만들지 못한다", async () => {
+    it("남의 소유자 ID로 일정을 만들지 못한다", async () => {
         await assertFails(
             setDoc(doc(other(), "schedules", "steal-1"), { id: "steal-1", userId: OWNER, title: "가로채기" }),
         );
+    });
+
+    for (const scheduleId of ["own-1", "shared-1"]) {
+        it(`${scheduleId}의 기존 소유자를 타인이 바꾸지 못한다`, async () => {
+            // 일부 필드 수정과 문서 교체를 모두 확인한다. 공유 코드를 받은 가족도 소유자는 아니다.
+            await assertFails(updateDoc(doc(other(), "schedules", scheduleId), { userId: OTHER }));
+            await assertFails(updateDoc(doc(stranger(), "schedules", scheduleId), { userId: STRANGER }));
+            await assertFails(
+                setDoc(doc(other(), "schedules", scheduleId), {
+                    id: scheduleId, userId: OTHER, title: "바뀐 일정", sharedCode: "",
+                }),
+            );
+            await assertFails(
+                setDoc(doc(stranger(), "schedules", scheduleId), {
+                    id: scheduleId, userId: STRANGER, title: "바뀐 일정", sharedCode: "",
+                }),
+            );
+        });
+    }
+
+    it("본인 일정도 다른 사람에게 소유권을 넘기지 못한다", async () => {
+        await assertFails(updateDoc(doc(owner(), "schedules", "own-1"), { userId: OTHER }));
+    });
+
+    it("남의 일정은 지우지 못한다", async () => {
+        await assertFails(deleteDoc(doc(other(), "schedules", "own-1")));
+        await assertFails(deleteDoc(doc(other(), "schedules", "shared-1")));
+    });
+
+    it("로그인하지 않으면 일정을 만들거나 고치거나 지우지 못한다", async () => {
+        const db = anonymous();
+        await assertFails(setDoc(doc(db, "schedules", "new-1"), { userId: OWNER }));
+        await assertFails(updateDoc(doc(db, "schedules", "own-1"), { title: "바뀐 일정" }));
+        await assertFails(deleteDoc(doc(db, "schedules", "own-1")));
     });
 
     it("코드를 등록한 가족은 공유 일정을 조회하고 완료만 바꾼다", async () => {
