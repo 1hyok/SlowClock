@@ -101,7 +101,15 @@ jobs:
       # «애초에 저장하지 않는다» 로 바뀌었다).
       - name: Build signed release APK
         id: release_apk
+        # 테스터에게 나가는 빌드마다 다른 versionCode·versionName 을 준다. 값을 주지 않으면
+        # 모든 배포본이 «1.0 (1)» 이라, R8 을 켜고 Crashlytics 를 켜 두고도 크래시가 어느
+        # 빌드에서 왔는지 대시보드에서 가릴 수 없다(#139). Play 트랙과는 별개의 번호 공간이라
+        # 여기서 run_number 를 그대로 써도 Play 의 단조 증가를 건드리지 않는다.
+        env:
+          SLOWCLOCK_VERSION_CODE: ${{ github.run_number }}
         run: |
+          # versionName 접미사는 40자 이하여야 한다. 커밋은 앞 7자만 쓴다.
+          export SLOWCLOCK_VERSION_NAME_SUFFIX="dist.${GITHUB_RUN_NUMBER}.${GITHUB_SHA:0:7}"
           ./gradlew assembleRelease --no-daemon
 
           mapfile -t apk_files < <(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print)
