@@ -181,6 +181,8 @@ class ScheduleRepository
             if (userShareCode.isBlank()) {
                 Log.w("ScheduleRepo", "공유 코드가 비어 있어 이 일정은 가족에게 보이지 않는다")
             }
+            // 앱 시작의 비동기 복구보다 저장이 먼저 실행돼도 등록부를 확인한 뒤 쓴다.
+            firestore.ensureShareCodeOwner(uid, userShareCode)
             return userShareCode
         }
 
@@ -218,6 +220,8 @@ class ScheduleRepository
                 docRef.set(scheduleWithId).await()
                 Log.d("ScheduleRepo", "일정 저장 성공: ${docRef.id}")
                 ScheduleResult.Success(docRef.id)
+            } catch (e: ShareCodeOwnershipException) {
+                ScheduleResult.Error(AppError.GeneralError(e.message.orEmpty()))
             } catch (e: FirebaseFirestoreException) {
                 Log.e("ScheduleRepo", "Firestore 저장 에러: ${e.code}", e)
                 val error =
@@ -319,6 +323,7 @@ class ScheduleRepository
                 )
 
             return try {
+                firestore.ensureShareCodeOwner(uid, schedule.sharedCode)
                 schedulesCollection
                     .document(schedule.id)
                     .update(changes)
@@ -326,6 +331,8 @@ class ScheduleRepository
 
                 Log.d("ScheduleRepo", "일정 수정 성공: ${schedule.id}")
                 ScheduleResult.Success(Unit)
+            } catch (e: ShareCodeOwnershipException) {
+                ScheduleResult.Error(AppError.GeneralError(e.message.orEmpty()))
             } catch (e: FirebaseFirestoreException) {
                 Log.e("ScheduleRepo", "일정 수정 실패: ${e.code}", e)
                 val error =
