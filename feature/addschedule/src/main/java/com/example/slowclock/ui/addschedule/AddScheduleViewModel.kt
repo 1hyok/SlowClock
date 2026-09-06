@@ -9,6 +9,8 @@ import com.example.slowclock.ui.mvi.MviViewModel
 import com.example.slowclock.util.AppError
 import com.google.firebase.Timestamp
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
@@ -23,7 +25,11 @@ class AddScheduleViewModel
         private val scheduleRepository: ScheduleRepository,
         private val alarmScheduler: AlarmScheduler,
     ) : MviViewModel<AddScheduleIntent, AddScheduleUiState, AddScheduleReducerEvent>(AddScheduleUiState()) {
+        private var editLoadJob: Job? = null
+
         override fun onIntent(intent: AddScheduleIntent) {
+            // 폼이 읽히거나 저장되는 중의 중복 입력·저장은 진행 중인 작업을 바꾸지 않는다.
+            if (currentState.isLoading && (intent !is AddScheduleIntent.LoadForEdit || editLoadJob?.isActive != true)) return
             when (intent) {
                 is AddScheduleIntent.UpdateTitle -> {
                     dispatch(AddScheduleReducerEvent.TitleChanged(intent.value))
@@ -39,6 +45,10 @@ class AddScheduleViewModel
 
                 is AddScheduleIntent.UpdateEndTime -> {
                     dispatch(AddScheduleReducerEvent.EndTimeChanged(intent.time?.copyOf()))
+                }
+
+                is AddScheduleIntent.UpdateTimeInput -> {
+                    dispatch(AddScheduleReducerEvent.TimeInputChanged(intent.value, intent.isEnd))
                 }
 
                 is AddScheduleIntent.UpdateRecurring -> {
@@ -59,7 +69,12 @@ class AddScheduleViewModel
 
                 AddScheduleIntent.Retry -> {
                     dispatch(AddScheduleReducerEvent.ErrorConsumed)
-                    save()
+                    val state = currentState
+                    if (state.isEditMode && state.editingSchedule == null) {
+                        state.editScheduleId?.let(::loadForEdit)
+                    } else {
+                        save()
+                    }
                 }
 
                 AddScheduleIntent.ConsumeError -> {
@@ -86,11 +101,11 @@ class AddScheduleViewModel
                 }
 
                 is AddScheduleReducerEvent.TimeChanged -> {
-                    state.copy(selectedTime = event.time)
+                    state.copy(selectedTime = event.time, startTimeInput = ScheduleTimeInput.from(event.time))
                 }
 
                 is AddScheduleReducerEvent.EndTimeChanged -> {
-                    state.copy(endTime = event.time)
+                    state.copy(endTime = event.time, endTimeInput = ScheduleTimeInput.from(event.time))
                 }
 
                 is AddScheduleReducerEvent.RecurringChanged -> {
@@ -101,8 +116,35 @@ class AddScheduleViewModel
                     state.copy(recurringType = event.type)
                 }
 
-                AddScheduleReducerEvent.EditLoading -> {
-                    state.copy(isLoading = true, error = null, isEditMode = true)
+                is AddScheduleReducerEvent.TimeInputChanged -> {
+                    if (event.isEnd) {
+                        state.copy(
+                            endTimeInput = event.value,
+                            endTime =
+                                if (event.value.isEmpty) {
+                                    null
+                                } else {
+                                    event.value.onDate(state.endTime ?: state.selectedTime)
+                                        ?: state.endTime
+                                },
+                        )
+                    } else {
+                        state.copy(
+                            startTimeInput = event.value,
+                            selectedTime = event.value.onDate(state.selectedTime) ?: state.selectedTime,
+                        )
+                    }
+                }
+
+                is AddScheduleReducerEvent.EditLoading -> {
+                    state.copy(
+                        isLoading = true,
+                        error = null,
+                        isEditMode = true,
+                        editingSchedule = null,
+                        editScheduleId = event.scheduleId,
+                        canRetry = false,
+                    )
                 }
 
                 is AddScheduleReducerEvent.EditLoaded -> {
@@ -111,6 +153,8 @@ class AddScheduleViewModel
                         description = event.schedule.description,
                         selectedTime = event.startTime,
                         endTime = event.endTime,
+                        startTimeInput = ScheduleTimeInput.from(event.startTime),
+                        endTimeInput = ScheduleTimeInput.from(event.endTime),
                         recurring = event.schedule.recurring,
                         recurringType = event.schedule.recurringType ?: "daily",
                         isLoading = false,
@@ -140,29 +184,39 @@ class AddScheduleViewModel
             }
 
         private fun loadForEdit(scheduleId: String) {
-            dispatch(AddScheduleReducerEvent.EditLoading)
-            viewModelScope.launch {
-                when (val result = scheduleRepository.getScheduleById(scheduleId)) {
-                    is ScheduleRepository.ScheduleResult.Success -> {
-                        val schedule = result.data
-                        dispatch(
-                            AddScheduleReducerEvent.EditLoaded(
-                                schedule = schedule,
-                                startTime = Calendar.getInstance().apply { time = schedule.startTime.toDate() },
-                                endTime = schedule.endTime?.let { end -> Calendar.getInstance().apply { time = end.toDate() } },
-                            ),
-                        )
-                    }
+            if (currentState.editingSchedule?.id == scheduleId ||
+                (currentState.editScheduleId == scheduleId && editLoadJob?.isActive == true)
+            ) {
+                return
+            }
+            editLoadJob?.cancel()
+            dispatch(AddScheduleReducerEvent.EditLoading(scheduleId))
+            editLoadJob =
+                viewModelScope.launch {
+                    val result = scheduleRepository.getScheduleById(scheduleId)
+                    if (!isActive || currentState.editScheduleId != scheduleId) return@launch
+                    when (result) {
+                        is ScheduleRepository.ScheduleResult.Success -> {
+                            val schedule = result.data
+                            dispatch(
+                                AddScheduleReducerEvent.EditLoaded(
+                                    schedule = schedule,
+                                    startTime = Calendar.getInstance().apply { time = schedule.startTime.toDate() },
+                                    endTime = schedule.endTime?.let { end -> Calendar.getInstance().apply { time = end.toDate() } },
+                                ),
+                            )
+                        }
 
-                    is ScheduleRepository.ScheduleResult.Error -> {
-                        dispatch(AddScheduleReducerEvent.Failed(result.error, canRetry = false))
+                        is ScheduleRepository.ScheduleResult.Error -> {
+                            dispatch(AddScheduleReducerEvent.Failed(result.error, canRetry = true))
+                        }
                     }
                 }
-            }
         }
 
         private fun save() {
             val state = currentState
+            if (state.isLoading || state.isSaved) return
             val title = state.title.trim()
             validationError(state, title)?.let { message ->
                 dispatch(AddScheduleReducerEvent.Failed(AppError.GeneralError(message), canRetry = false))
@@ -199,6 +253,14 @@ class AddScheduleViewModel
             title: String,
         ): String? =
             when {
+                state.isEditMode && state.editingSchedule == null -> {
+                    "수정할 일정을 먼저 불러와 주세요"
+                }
+
+                !state.hasValidTimeInput -> {
+                    "시간을 확인해 주세요 (시 0~23, 분 0~59)"
+                }
+
                 title.isBlank() -> {
                     "할 일을 입력해주세요"
                 }
@@ -217,7 +279,7 @@ class AddScheduleViewModel
             }
 
         private fun AddScheduleUiState.toSchedule(title: String): Schedule {
-            val base = if (isEditMode) editingSchedule ?: Schedule() else Schedule()
+            val base = if (isEditMode) requireNotNull(editingSchedule) else Schedule()
             return base.copy(
                 title = title,
                 description = description.trim(),

@@ -1,11 +1,13 @@
 package com.example.slowclock.navigation
 
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -82,14 +84,20 @@ private fun NavBackStack<NavKey>.showTab(key: SlowClockKey) {
     if (key != MainKey) add(key)
 }
 
+private val recommendationSaver =
+    listSaver<ScheduleRecommendation?, String>(
+        save = { value -> value?.let { listOf(it.target, it.title) } ?: emptyList() },
+        restore = { values -> if (values.size == 2) ScheduleRecommendation(values[0], values[1]) else null },
+    )
+
 @Composable
 fun AppNavigation(
     onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val backStack = rememberNavBackStack(MainKey)
-    // 추천 화면이 고른 제목. 일정 추가 entry 를 바꾸지 않고 전달하므로 그 화면의 ViewModel 이 유지된다.
-    var recommendedTitle by rememberSaveable { mutableStateOf<String?>(null) }
+    // 대상 entry 를 바꾸지 않고 결과만 전달하므로 입력 중인 ViewModel 이 유지된다.
+    var recommendation by rememberSaveable(stateSaver = recommendationSaver) { mutableStateOf<ScheduleRecommendation?>(null) }
     val currentRoute = backStack.lastOrNull()?.tabRoute()
 
     Scaffold(
@@ -108,8 +116,11 @@ fun AppNavigation(
     ) { innerPadding ->
         NavDisplay(
             backStack = backStack,
-            modifier = Modifier.padding(innerPadding),
-            onBack = { backStack.popBack() },
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding),
+            onBack = {
+                recommendation = recommendation?.afterLeaving(backStack.lastOrNull())
+                backStack.popBack()
+            },
             entryDecorators =
                 listOf(
                     rememberSaveableStateHolderNavEntryDecorator(),
@@ -131,9 +142,10 @@ fun AppNavigation(
                     entry<SettingsKey> { SettingsScreen() }
                     entry<AddScheduleKey> {
                         AddScheduleScreen(
-                            initialTitle = recommendedTitle,
+                            initialTitle = recommendation?.titleFor(AddScheduleKey),
+                            onInitialTitleConsume = { recommendation = null },
                             onNavigateBack = {
-                                recommendedTitle = null
+                                recommendation = null
                                 backStack.popBack()
                             },
                             onNavigateToRecommendation = { backStack.add(RecommendationKey) },
@@ -142,14 +154,19 @@ fun AppNavigation(
                     entry<EditScheduleKey> { key ->
                         AddScheduleScreen(
                             scheduleId = key.scheduleId,
-                            onNavigateBack = { backStack.popBack() },
+                            initialTitle = recommendation?.titleFor(key),
+                            onInitialTitleConsume = { recommendation = null },
+                            onNavigateBack = {
+                                recommendation = null
+                                backStack.popBack()
+                            },
                             onNavigateToRecommendation = { backStack.add(RecommendationKey) },
                         )
                     }
                     entry<RecommendationKey> {
                         RecommendationScreen(
                             onSelectRecommendation = { title ->
-                                recommendedTitle = title
+                                recommendation = ScheduleRecommendation.selected(backStack, title)
                                 backStack.popBack()
                             },
                         )
