@@ -5,6 +5,10 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 잠금 화면을 덮는 큰 알람 화면을 띄운다. 이 모듈이 setFullScreenIntent 를 부르고
+         권한 상태도 여기서 읽으므로 모듈 manifest 에도 적는다(#128). -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- 알람이 울리는 동안 진동한다. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
