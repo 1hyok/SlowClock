@@ -76,6 +76,7 @@ fun MainScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val notificationSettingsUnavailable = stringResource(R.string.notification_settings_unavailable)
     ObserveSignal(
         signal = state.userMessage,
         consumed = MainIntent.ConsumeUserMessage,
@@ -117,7 +118,7 @@ fun MainScreen(
                 },
             )
         if (!opened) {
-            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.notification_settings_unavailable)) }
+            scope.launch { snackbarHostState.showSnackbar(notificationSettingsUnavailable) }
         }
     }
     MainContent(
