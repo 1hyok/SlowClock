@@ -11,6 +11,13 @@ const JVM_LIBRARY_PLUGIN_PATTERN =
     /id\("(?:java-library|org\.jetbrains\.kotlin\.jvm)"\)|alias\(libs\.plugins\.kotlin\.jvm\)/;
 const ANDROID_TEST_PLUGIN_PATTERN =
     /(?:id\("com\.android\.test"\)|alias\(libs\.plugins\.android\.test\))/;
+const CONVENTION_PLUGIN_SOURCES = new Map([
+    ["slowclock.android.application", "AndroidApplicationConventionPlugin.kt"],
+    ["slowclock.android.library", "AndroidLibraryConventionPlugin.kt"],
+    ["slowclock.android.library.compose", "AndroidLibraryComposeConventionPlugin.kt"],
+    ["slowclock.android.hilt", "AndroidHiltConventionPlugin.kt"],
+    ["slowclock.android.feature", "AndroidFeatureConventionPlugin.kt"],
+]);
 const GLOBAL_GRADLE_PATHS = new Set([
     "build.gradle.kts",
     "settings.gradle.kts",
@@ -236,6 +243,11 @@ export function resolvePrImpact(changedFiles, modules, dependencies) {
         }
         if (filePath === `${module.directory}/build.gradle.kts`) {
             codeqlJavaKotlin = true;
+            // 배포 정책 테스트는 이 파일의 R8·리소스 축소·버전 설정도 읽는다.
+            runNodeTests = true;
+        }
+        if (relative.endsWith(".pro")) {
+            runNodeTests = true;
         }
 
         if (relative.startsWith("src/test/") || relative.startsWith("src/testDebug/")) {
@@ -254,6 +266,10 @@ export function resolvePrImpact(changedFiles, modules, dependencies) {
         }
     }
 
+    if (productionSeeds.size > 0 && modules.some(({ unresolvedConvention }) => unresolvedConvention)) {
+        // 모르는 컨벤션이 있으면 역의존 그래프가 불완전할 수 있다.
+        forceFull = true;
+    }
     if (forceFull || globalGradleChange) {
         productionSeeds.clear();
         allProjects.forEach((projectPath) => productionSeeds.add(projectPath));
@@ -346,19 +362,66 @@ export async function inspectModules(root) {
         (match) => match[1],
     );
     const modules = [];
+    const conventionSourceCache = new Map();
     for (const projectPath of projectPaths) {
         const directory = moduleDirectory(projectPath);
         const buildFile = path.join(root, directory, "build.gradle.kts");
         const source = await fs.readFile(buildFile, "utf8");
+        const convention = await inspectConventionSources(root, source, conventionSourceCache);
         modules.push({
             projectPath,
             directory,
             android: isAndroidModuleBuild(source),
             screenshot: await pathExists(path.join(root, directory, "src", "screenshotTest")),
             buildSource: source,
+            ...convention,
         });
     }
     return modules;
+}
+
+function conventionPluginIds(source) {
+    const ids = new Set();
+    for (const match of source.matchAll(/\b(?:id|apply)\s*\(\s*"(slowclock\.[A-Za-z0-9_.-]+)"\s*\)/g)) {
+        ids.add(match[1]);
+    }
+    for (const match of source.matchAll(/\balias\s*\(\s*libs\.plugins\.(slowclock\.[A-Za-z0-9_.]+)\s*\)/g)) {
+        ids.add(match[1]);
+    }
+    return ids;
+}
+
+async function inspectConventionSources(root, buildSource, sourceCache) {
+    const dependencySources = [buildSource];
+    const pending = [...conventionPluginIds(buildSource)];
+    const visited = new Set();
+    let unresolvedConvention = false;
+    for (const pluginId of pending) {
+        if (visited.has(pluginId)) continue;
+        visited.add(pluginId);
+        const filename = CONVENTION_PLUGIN_SOURCES.get(pluginId);
+        if (!filename) {
+            unresolvedConvention = true;
+            continue;
+        }
+        if (!sourceCache.has(filename)) {
+            const sourcePath = path.join(root, "build-logic/convention/src/main/kotlin", filename);
+            try {
+                sourceCache.set(filename, await fs.readFile(sourcePath, "utf8"));
+            } catch (error) {
+                if (error.code !== "ENOENT") throw error;
+                sourceCache.set(filename, null);
+            }
+        }
+        const source = sourceCache.get(filename);
+        if (source === null) {
+            unresolvedConvention = true;
+            continue;
+        }
+        dependencySources.push(source);
+        pending.push(...conventionPluginIds(source));
+    }
+    return { dependencySources, unresolvedConvention };
 }
 
 export function inspectDependencies(modules) {
@@ -370,13 +433,15 @@ export function inspectDependencies(modules) {
 
     for (const module of modules) {
         const consumed = new Set();
-        for (const match of module.buildSource.matchAll(/projects\.([A-Za-z0-9_.]+)/g)) {
+        // 컨벤션의 project 의존도 실제 소스에서 읽어 간선 목록을 따로 유지하지 않는다.
+        const source = (module.dependencySources ?? [module.buildSource]).join("\n");
+        for (const match of source.matchAll(/projects\.([A-Za-z0-9_.]+)/g)) {
             const projectPath = accessorToProject.get(match[1]);
             if (projectPath && projectPath !== module.projectPath) {
                 consumed.add(projectPath);
             }
         }
-        for (const match of module.buildSource.matchAll(/project\(\s*"(:[^"]+)"\s*\)/g)) {
+        for (const match of source.matchAll(/project\(\s*"(:[^"]+)"\s*\)/g)) {
             if (knownProjects.has(match[1]) && match[1] !== module.projectPath) {
                 consumed.add(match[1]);
             }
