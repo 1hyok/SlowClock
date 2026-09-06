@@ -9,19 +9,49 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // 이 사람이 그 공유 코드의 감시자로 등록돼 있는가.
+    //
+    // 「로그인했는가」 만 보면 공유로 표시된 일정은 관계 없는 계정에게도 열린다. 공유 코드를
+    // 실제로 받아 등록한 사람인지까지 봐야 범위가 가족으로 좁아진다(#174).
+    function watchesShareCode(shareCode) {
+      return isSignedIn() && exists(
+        /databases/$(database)/documents/shareCodeWatchers/$(shareCode)/tokens/$(request.auth.uid)
+      );
+    }
+
     // 사용자 문서. 이메일과 FCM 토큰이 함께 있어 본인만 읽고 쓴다.
-    // 다른 사람에게 보여야 하는 이름·공유 코드는 publicProfiles 에 따로 둔다(#93).
+    // 다른 사람에게 보여야 하는 이름은 publicProfiles 에 따로 둔다(#93).
     match /users/{userId} {
       allow read, write: if isSelf(userId);
     }
 
-    // 공개 프로필. 공유 일정 소유자의 이름을 보여 주고 공유 코드로 사람을 찾는 데 쓴다.
-    // 읽기는 로그인한 사용자 전체, 쓰기는 본인 문서만이고 담을 수 있는 필드도 셋으로 묶는다.
+    // 공개 프로필. 공유 일정 소유자의 이름을 보여 주는 데만 쓴다.
+    //
+    // get 만 열고 list 는 막는다. 목록을 열어 두면 문서 이름을 몰라도 컬렉션을 통째로 훑을 수
+    // 있어 「아는 사람만 본다」 라는 전제가 성립하지 않는다. 소유자 uid 는 이미 읽을 수 있는
+    // 공유 일정에서만 나오므로 get 하나로 충분하다(#174).
+    //
+    // 공유 코드는 여기에 두지 않는다. 사람을 찾는 열쇠라 이름 옆에 둘 값이 아니다.
     match /publicProfiles/{userId} {
-      allow read: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if false;
       allow write: if isSelf(userId)
-        && request.resource.data.keys().hasOnly(['id', 'name', 'shareCode'])
+        && request.resource.data.keys().hasOnly(['id', 'name'])
         && request.resource.data.id == userId;
+    }
+
+    // 공유 코드 등록부. 코드 자체가 문서 이름이다.
+    //
+    // 중복 확인을 질의로 하면 컬렉션을 훑을 권한이 필요하고, 확인과 저장 사이에 같은 코드를
+    // 두 사람이 가져가는 틈도 남는다. 문서 만들기 한 번으로 두 문제가 함께 사라진다.
+    // 읽기는 아무에게도 열지 않는다. 코드 목록은 그 자체가 사람을 찾는 열쇠 꾸러미다(#174).
+    match /shareCodes/{shareCode} {
+      allow read: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['userId'])
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     // 일정
@@ -31,16 +61,16 @@ service cloud.firestore {
         (request.auth.uid == resource.data.userId ||
          request.auth.uid == request.resource.data.userId);
 
-      // 공유 일정은 sharedCode 가 비어 있지 않으면 읽을 수 있다.
-      allow read: if isSignedIn() &&
-        resource.data.sharedCode != null &&
-        resource.data.sharedCode != "";
+      // 공유 일정은 그 코드의 감시자로 등록한 사람만 읽는다.
+      allow read: if resource.data.sharedCode is string &&
+        resource.data.sharedCode != "" &&
+        watchesShareCode(resource.data.sharedCode);
 
       // 공유 일정의 완료 상태만 바꿀 수 있다. 반복 일정은 회차마다 따로 남으므로
       // completedDates 도 같은 범위에 든다(#130).
-      allow update: if isSignedIn() &&
-        resource.data.sharedCode != null &&
+      allow update: if resource.data.sharedCode is string &&
         resource.data.sharedCode != "" &&
+        watchesShareCode(resource.data.sharedCode) &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['completed', 'completedDates', 'updatedAt']);
     }
@@ -63,7 +93,9 @@ service cloud.firestore {
          request.auth.uid in resource.data.memberIds);
     }
 
-    // 공유코드 감시자 (FCM 토큰 저장용). 서버(Cloud Functions)가 관리자 권한으로 읽어 알림을 보낸다.
+    // 공유코드 감시자. 이 문서가 있다는 것이 곧 「그 코드를 받은 사람」 이라는 표시라,
+    // 공유 일정 읽기 권한의 근거가 된다. 서버(Cloud Functions)가 관리자 권한으로 읽어
+    // 알림을 보낸다.
     match /shareCodeWatchers/{shareCode}/tokens/{userId} {
       allow read, write: if isSelf(userId);
     }

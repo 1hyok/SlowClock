@@ -57,6 +57,7 @@ class MainViewModelTest {
         every { settingsRepository.observeShareCode() } returns shareCode
         every { scheduleRepository.observeSchedulesBySharedCode(any()) } returns flowOf(emptyList())
         coEvery { userRepository.getUserNames(any()) } returns emptyMap()
+        coEvery { userRepository.registerShareCodeWatcher(any()) } returns true
         // 기본값은 정시 알람이 허용된 기기다. 안내 다이얼로그를 다루는 테스트만 이 값을 뒤집는다.
         every { alarmScheduler.canScheduleExactAlarms() } returns true
         every { settingsRepository.hasSeenExactAlarmNotice() } returns false

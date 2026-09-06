@@ -296,6 +296,12 @@ class MainViewModel
                         if (uid == null || shareCode.isNullOrBlank()) {
                             flowOf(emptyList())
                         } else {
+                            // 감시자 등록이 곧 공유 일정을 읽을 권한이다. 코드는 저장됐는데 등록만
+                            // 실패한 채로 남아 있으면 가족 일정이 영영 비어 보이므로 구독 전에 다시
+                            // 세운다. 같은 문서에 다시 쓰는 것이라 값은 그대로고, 그 사이 바뀐 FCM
+                            // 토큰이 함께 갱신된다(#174).
+                            val registered = userRepository.registerShareCodeWatcher(shareCode)
+                            if (!registered) Log.w(TAG, "감시자 등록에 실패해 공유 일정을 못 읽을 수 있다")
                             scheduleRepository.observeSchedulesBySharedCode(shareCode).catch { e ->
                                 Log.e(TAG, "공유 일정 구독 실패", e)
                                 emit(emptyList())

@@ -28,7 +28,13 @@ import {
 } from "firebase/firestore";
 
 const OWNER = "uid-owner";
+
+/** 공유 코드를 받아 감시자로 등록한 가족. 앱에서 「보호자」 자리다. */
 const OTHER = "uid-other";
+
+/** 코드를 받은 적 없는 제3자. 로그인만 한 계정이 어디까지 닿는지 이 계정으로 잰다(#174). */
+const STRANGER = "uid-stranger";
+
 const SHARE_CODE = "ABC123";
 
 let testEnv;
@@ -88,15 +94,23 @@ beforeEach(async () => {
             completed: false,
             sharedCode: "",
         });
-        await setDoc(doc(db, "publicProfiles", OWNER), {
-            id: OWNER,
-            name: "느린 사용자",
-            shareCode: SHARE_CODE,
+        // 코드를 받은 적 없는 사람에게도 공유 일정이 열리는지 보려면, 감시자가 붙지 않은
+        // 다른 코드의 공유 일정이 하나 있어야 한다.
+        await setDoc(doc(db, "schedules", "other-shared-1"), {
+            id: "other-shared-1",
+            userId: OTHER,
+            title: "남의 공유 일정",
+            completed: false,
+            sharedCode: "ZZZ999",
         });
-        await setDoc(doc(db, "publicProfiles", OTHER), {
-            id: OTHER,
-            name: "다른 사용자",
-            shareCode: "ZZZ999",
+        await setDoc(doc(db, "publicProfiles", OWNER), { id: OWNER, name: "느린 사용자" });
+        await setDoc(doc(db, "publicProfiles", OTHER), { id: OTHER, name: "다른 사용자" });
+        await setDoc(doc(db, "shareCodes", SHARE_CODE), { userId: OWNER });
+        await setDoc(doc(db, "shareCodes", "ZZZ999"), { userId: OTHER });
+        // 가족이 코드를 입력해 감시자로 등록한 상태. 이 문서가 공유 읽기 권한의 근거다(#174).
+        await setDoc(doc(db, "shareCodeWatchers", SHARE_CODE, "tokens", OTHER), {
+            userId: OTHER,
+            fcmToken: "token-other",
         });
         await setDoc(doc(db, "notifications", "n-own"), { userId: OWNER, message: "알림" });
         await setDoc(doc(db, "notifications", "n-other"), { userId: OTHER, message: "남의 알림" });
@@ -110,6 +124,10 @@ function owner() {
 
 function other() {
     return testEnv.authenticatedContext(OTHER).firestore();
+}
+
+function stranger() {
+    return testEnv.authenticatedContext(STRANGER).firestore();
 }
 
 function anonymous() {
@@ -143,45 +161,77 @@ describe("users", () => {
 });
 
 describe("publicProfiles", () => {
-    it("공유 일정 소유자 이름 조회 질의가 통과한다", async () => {
-        // UserRepository.getUserNames 가 쓰는 질의다.
-        const db = other();
-        await assertSucceeds(getDocs(query(collection(db, "publicProfiles"), where("id", "in", [OWNER]))));
+    it("공유 일정 소유자 이름을 문서 하나씩 읽는다", async () => {
+        // UserRepository.getUserNames 가 쓰는 경로다. 소유자 uid 는 읽을 수 있는 공유 일정에서 나온다.
+        await assertSucceeds(getDoc(doc(other(), "publicProfiles", OWNER)));
     });
 
-    it("공유 코드 중복 확인 질의가 통과한다", async () => {
-        // UserRepository.generateUniqueShareCode 가 쓰는 질의다.
-        const db = owner();
-        await assertSucceeds(
-            getDocs(query(collection(db, "publicProfiles"), where("shareCode", "==", "NEW123"))),
-        );
+    it("목록으로는 훑지 못한다", async () => {
+        // 목록을 열어 두면 문서 이름을 몰라도 컬렉션을 통째로 가져갈 수 있다(#174).
+        const db = other();
+        await assertFails(getDocs(collection(db, "publicProfiles")));
+        await assertFails(getDocs(query(collection(db, "publicProfiles"), where("id", "in", [OWNER]))));
     });
 
     it("본인 프로필만 쓴다", async () => {
         const db = owner();
-        await assertSucceeds(
-            setDoc(doc(db, "publicProfiles", OWNER), { id: OWNER, name: "새 이름", shareCode: SHARE_CODE }),
-        );
-        await assertFails(
-            setDoc(doc(db, "publicProfiles", OTHER), { id: OTHER, name: "가로채기", shareCode: "ZZZ999" }),
-        );
+        await assertSucceeds(setDoc(doc(db, "publicProfiles", OWNER), { id: OWNER, name: "새 이름" }));
+        await assertFails(setDoc(doc(db, "publicProfiles", OTHER), { id: OTHER, name: "가로채기" }));
     });
 
-    it("이름·공유 코드 밖의 값은 넣지 못한다", async () => {
+    it("이름 밖의 값은 넣지 못한다", async () => {
         // 이메일이나 토큰이 공개 프로필로 새어 나가지 않게 필드를 묶는다.
         const db = owner();
         await assertFails(
             setDoc(doc(db, "publicProfiles", OWNER), {
                 id: OWNER,
                 name: "느린 사용자",
-                shareCode: SHARE_CODE,
                 email: "owner@example.com",
+            }),
+        );
+    });
+
+    it("공유 코드는 공개 프로필에 담지 못한다", async () => {
+        // 코드는 사람을 찾는 열쇠라 이름 옆에 둘 값이 아니다(#174).
+        await assertFails(
+            setDoc(doc(owner(), "publicProfiles", OWNER), {
+                id: OWNER,
+                name: "느린 사용자",
+                shareCode: SHARE_CODE,
             }),
         );
     });
 
     it("로그인하지 않으면 읽지 못한다", async () => {
         await assertFails(getDoc(doc(anonymous(), "publicProfiles", OWNER)));
+    });
+});
+
+describe("shareCodes", () => {
+    it("비어 있는 코드는 본인 것으로 만들 수 있다", async () => {
+        // UserRepository.generateUniqueShareCode 가 쓰는 경로다.
+        await assertSucceeds(setDoc(doc(owner(), "shareCodes", "NEW123"), { userId: OWNER }));
+    });
+
+    it("이미 임자가 있는 코드는 가져가지 못한다", async () => {
+        // 중복 확인과 저장이 한 번의 만들기로 합쳐져 그 사이의 틈이 없다(#174).
+        await assertFails(setDoc(doc(other(), "shareCodes", SHARE_CODE), { userId: OTHER }));
+    });
+
+    it("남의 이름으로 코드를 만들지 못한다", async () => {
+        await assertFails(setDoc(doc(other(), "shareCodes", "NEW456"), { userId: OWNER }));
+    });
+
+    it("코드 등록부는 읽지 못한다", async () => {
+        // 코드 목록은 그 자체가 열쇠 꾸러미다. 누구에게도 열지 않는다.
+        const db = other();
+        await assertFails(getDoc(doc(db, "shareCodes", SHARE_CODE)));
+        await assertFails(getDocs(collection(db, "shareCodes")));
+    });
+
+    it("본인 코드만 반납한다", async () => {
+        await assertSucceeds(deleteDoc(doc(owner(), "shareCodes", SHARE_CODE)));
+        await assertFails(deleteDoc(doc(other(), "shareCodes", SHARE_CODE)));
     });
 });
 
@@ -205,7 +255,7 @@ describe("schedules", () => {
         );
     });
 
-    it("공유 코드로 조회한 일정은 읽고 완료만 바꾼다", async () => {
+    it("코드를 등록한 가족은 공유 일정을 조회하고 완료만 바꾼다", async () => {
         const db = other();
         await assertSucceeds(getDocs(query(collection(db, "schedules"), where("sharedCode", "==", SHARE_CODE))));
         await assertSucceeds(updateDoc(doc(db, "schedules", "shared-1"), { completed: true }));
@@ -221,6 +271,49 @@ describe("schedules", () => {
 
     it("공유 일정이라도 제목은 바꾸지 못한다", async () => {
         await assertFails(updateDoc(doc(other(), "schedules", "shared-1"), { title: "바뀐 제목" }));
+    });
+
+    it("코드를 받지 않은 제3자는 공유 일정을 읽지 못한다", async () => {
+        // 「공유로 표시됐는가」 만 보면 로그인만 한 계정에게도 열린다. 병원·복약 같은 제목이
+        // 그대로 나가므로 관계를 확인한다(#174).
+        const db = stranger();
+        await assertFails(getDoc(doc(db, "schedules", "shared-1")));
+        await assertFails(getDocs(query(collection(db, "schedules"), where("sharedCode", "==", SHARE_CODE))));
+    });
+
+    it("코드를 받지 않은 제3자는 완료 상태를 바꾸지 못한다", async () => {
+        // 읽기보다 이쪽이 더 아프다. 남이 완료로 바꿔 두면 어르신이 약을 이미 먹은 줄로 안다.
+        const db = stranger();
+        await assertFails(updateDoc(doc(db, "schedules", "shared-1"), { completed: true }));
+        await assertFails(updateDoc(doc(db, "schedules", "shared-1"), { completedDates: ["2026-09-06"] }));
+    });
+
+    it("공유로 표시된 일정을 통째로 훑지 못한다", async () => {
+        // 코드를 하나 받았다고 다른 집 일정까지 딸려 오면 안 된다.
+        const db = other();
+        await assertFails(getDocs(query(collection(db, "schedules"), where("sharedCode", ">", ""))));
+        await assertFails(getDocs(collection(db, "schedules")));
+    });
+
+    it("한 코드에 공유 일정이 많아도 목록 조회가 통과한다", async () => {
+        // 공유 읽기 규칙이 문서마다 감시자 등록을 확인한다. 규칙의 문서 접근 횟수에는 한도가
+        // 있으므로, 일정이 늘어도 조회가 막히지 않는지 실제로 재 둔다(#174).
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            const db = context.firestore();
+            for (let i = 0; i < 40; i += 1) {
+                await setDoc(doc(db, "schedules", `bulk-${i}`), {
+                    id: `bulk-${i}`,
+                    userId: OWNER,
+                    title: `일정 ${i}`,
+                    completed: false,
+                    sharedCode: SHARE_CODE,
+                });
+            }
+        });
+        const snapshot = await assertSucceeds(
+            getDocs(query(collection(other(), "schedules"), where("sharedCode", "==", SHARE_CODE))),
+        );
+        assert.equal(snapshot.size, 41);
     });
 });
 
@@ -242,15 +335,22 @@ describe("notifications", () => {
 describe("shareCodeWatchers", () => {
     it("자기 토큰만 등록하고 지운다", async () => {
         // UserRepository.registerShareCodeWatcher / unregisterShareCodeWatcher 가 쓰는 경로다.
-        const db = other();
-        const ref = doc(db, "shareCodeWatchers", SHARE_CODE, "tokens", OTHER);
-        await assertSucceeds(setDoc(ref, { fcmToken: "token-other" }));
+        const db = stranger();
+        const ref = doc(db, "shareCodeWatchers", SHARE_CODE, "tokens", STRANGER);
+        await assertSucceeds(setDoc(ref, { userId: STRANGER, fcmToken: "token-stranger" }));
         await assertSucceeds(deleteDoc(ref));
     });
 
     it("남의 토큰 자리에는 쓰지 못한다", async () => {
         const ref = doc(other(), "shareCodeWatchers", SHARE_CODE, "tokens", OWNER);
         await assertFails(setDoc(ref, { fcmToken: "가짜" }));
+    });
+
+    it("FCM 토큰이 없어도 등록된다", async () => {
+        // 이 문서가 읽기 권한의 근거라, 토큰을 못 받았다고 만들지 못하면 가족 일정이 통째로
+        // 안 보인다. 토큰은 알림을 보내기 위한 값일 뿐이다(#174).
+        const ref = doc(stranger(), "shareCodeWatchers", SHARE_CODE, "tokens", STRANGER);
+        await assertSucceeds(setDoc(ref, { userId: STRANGER }));
     });
 });
 
