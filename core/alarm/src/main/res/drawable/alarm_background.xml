@@ -1,8 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?><!--
+  색은 values/colors.xml 이 정본이다. 여기에 값을 다시 적지 않는다(#132).
+-->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <gradient
-        android:startColor="#1A1A2E"
-        android:centerColor="#16213E"
-        android:endColor="#0F3460"
-        android:angle="45" />
+        android:angle="45"
+        android:centerColor="@color/alarm_background_center"
+        android:endColor="@color/alarm_background_end"
+        android:startColor="@color/alarm_background_start" />
 </shape>

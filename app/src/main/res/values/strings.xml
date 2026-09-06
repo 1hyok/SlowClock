@@ -1,3 +1,8 @@
 <resources>
-    <string name="app_name">SlowClock</string>
+    <!--
+      런처 아이콘 밑, 설정의 앱 목록, 알림 채널 설정, 권한 대화상자에 뜨는 이름이다.
+      Play 등록 이름(docs/play/listing.md)과 한 글자도 달라선 안 된다. 어르신이 스토어에서
+      본 이름과 홈 화면의 이름이 다르면 방금 깐 앱을 찾지 못한다(#136).
+    -->
+    <string name="app_name">느린 시계</string>
 </resources>

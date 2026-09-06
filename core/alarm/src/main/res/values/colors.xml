@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  알람 전체 화면의 색. 이 화면만 XML 레이아웃이라 Compose 테마 토큰을 쓸 수 없어, 같은 값을
+  여기 한 번 더 적는다. 값은 core/ui 의 팔레트(Color.kt)에서 가져왔고 뜻도 같다 —
+  주황은 「지금 할 일」, 빨강은 「끄기」 다.
+
+  흰 글자를 얹으므로 배경색은 전부 대비 4.5:1 이상이다. 종전의 #FFA726 은 1.94:1,
+  #FF6B6B 은 2.77:1 이라 어둑한 방에서 두 버튼이 구별되지 않았다(#132).
+-->
+<resources>
+    <!-- 배경 그라데이션. 어두운 남색 계열이라 흰 글자가 15:1 이상으로 뜬다. -->
+    <color name="alarm_background_start">#FF1A1A2E</color>
+    <color name="alarm_background_center">#FF16213E</color>
+    <color name="alarm_background_end">#FF0F3460</color>
+
+    <!-- 글자. 제목은 흰색, 설명은 한 단계 낮추되 배경 대비 9:1 이상을 지킨다. -->
+    <color name="alarm_on_background">#FFFFFFFF</color>
+    <color name="alarm_on_background_variant">#FFD9E2EC</color>
+
+    <!-- 다시 알림. core/ui 의 EmberOrange(#B4460F). 흰 글자 대비 5.5:1. -->
+    <color name="alarm_snooze_button">#FFB4460F</color>
+
+    <!-- 끄기. core/ui 의 RedError(#B3261E). 흰 글자 대비 6.5:1. -->
+    <color name="alarm_dismiss_button">#FFB3261E</color>
+
+    <!-- 알람 아이콘. 배경 위에서 눈에 띄되 글자보다 앞서지 않는다. -->
+    <color name="alarm_icon_tint">#FFF3A26D</color>
+</resources>

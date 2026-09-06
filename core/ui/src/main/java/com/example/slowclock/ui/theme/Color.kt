@@ -2,7 +2,7 @@ package com.example.slowclock.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ============== 느린시계 색 ==============
+// ============== 느린 시계 색 ==============
 // 고령자 대상이라 본문 대비를 WCAG AA(4.5:1) 이상으로 잡는다. 라이트와 다크는 역할을 뒤집지 않고
 // 각자 계조를 따로 둔다. 화면은 이 값을 직접 쓰지 않고 Theme.kt 의 역할 토큰만 쓴다.
 //
