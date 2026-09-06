@@ -41,8 +41,8 @@ Cloud Function `sendFcmToShareCodeWatchers`는 `notification` 없이 다음 문�
 ## 출시 전 전환 순서와 한계
 
 1. 서버와 앱 변경을 함께 검증한다. 아래 자동 검증은 실제 운영 토큰에 알림을 보내지 않는다.
-2. 배포 담당자가 data-only Function을 배포한다. #102의 Firebase 운영 배포 선행조건은 별개이며 이 PR이 배포나 과금 설정을 수행하지 않는다.
-3. 테스터가 새 앱 버전으로 갱신했는지 확인한 뒤 background 수신·코드 변경·로그아웃 후 미표시를 검증한다. 새 sender + 새 receiver 조합에서만 보장한다.
+2. [Firestore 전환 절차](../firestore.md)에 따라 기존 데이터·권한 inventory를 확인하고 새 rules를 배포한다. 새 rules와 data-only Function 배포를 모두 완료하는 것이 새 앱 출시의 선행 조건이다. #102의 Firebase 운영 배포 선행조건은 별개이며 이 PR이 배포나 과금 설정을 수행하지 않는다.
+3. 선행 배포를 확인한 뒤 새 앱을 출시하고, 테스터의 업데이트 여부와 background 수신·코드 변경·로그아웃 후 미표시를 검증한다. 새 sender + 새 receiver 조합에서만 보장한다.
 4. 전환 전 큐에 남은 legacy notification 메시지는 OS가 자동 표시할 수 있다. 서버 전환으로 그 큐가 소급 삭제되지 않는다. 이 경계와 구버전 테스터 잔존 여부를 출시 판정에 기록한다.
 
 새 앱 + 기존 sender는 background OS 표시를 막을 수 없고, 기존 앱 + 새 sender도 기존 앱의 무조건 기본 알림 경로 때문에 로그아웃 미표시를 보장하지 않는다. 구버전 호환이 필요하면 별도 capability/전환 정책이 필요하다. 현재 릴리스 전환은 구앱까지의 보장을 주장하지 않는다. 이미 표시된 legacy 알림은 다음 세션 변경 때 좁게 정리하지만 그 뒤 도착한 legacy 큐까지 차단하는 것은 아니다.
