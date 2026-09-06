@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -195,11 +196,40 @@ private fun ProfileBody(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        Text(
-            text = state.shareCode.ifBlank { "-" },
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        if (state.shareCode.isBlank()) {
+            // 코드가 비어 있으면 그 뒤에 만든 일정은 가족이 어떤 코드로도 읽지 못한다. 비어
+            // 있다는 사실만 보여 주면 사용자가 할 수 있는 일이 없으므로 다시 시도할 길을 준다(#134).
+            Text(
+                text = "아직 만들지 못했습니다",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "코드가 없으면 가족이 내 일정을 볼 수 없습니다. 인터넷에 연결한 뒤 다시 시도해 주세요.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = { onIntent(ProfileIntent.RetryShareCode) },
+                enabled = !state.isRetryingShareCode,
+                modifier = Modifier.widthIn(min = 200.dp).heightIn(min = 64.dp),
+            ) {
+                Text(
+                    text = if (state.isRetryingShareCode) "만드는 중입니다" else "공유 코드 다시 만들기",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+        } else {
+            Text(
+                text = state.shareCode,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
 
         Spacer(modifier = Modifier.height(56.dp))
 

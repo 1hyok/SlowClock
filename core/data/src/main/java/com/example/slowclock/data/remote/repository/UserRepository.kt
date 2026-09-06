@@ -65,6 +65,10 @@ class UserRepository
                 publicProfilesCollection.document(userId).delete().await()
                 true
             } catch (e: Exception) {
+                // 공유 코드가 없으면 그 뒤에 만든 일정이 sharedCode 없이 저장되고, 보안 규칙의
+                // 공유 읽기 조건이 sharedCode != "" 라 가족이 어떤 코드로도 읽지 못한다.
+                // 조용히 넘기면 사용자도 보호자도 무엇이 잘못됐는지 알 방법이 없다(#134).
+                Log.e(TAG, "공유 코드 보장 실패", e)
                 false
             }
 
@@ -105,6 +109,10 @@ class UserRepository
                 }
                 true
             } catch (e: Exception) {
+                // 공유 코드가 없으면 그 뒤에 만든 일정이 sharedCode 없이 저장되고, 보안 규칙의
+                // 공유 읽기 조건이 sharedCode != "" 라 가족이 어떤 코드로도 읽지 못한다.
+                // 조용히 넘기면 사용자도 보호자도 무엇이 잘못됐는지 알 방법이 없다(#134).
+                Log.e(TAG, "공유 코드 보장 실패", e)
                 false
             }
 
@@ -156,6 +164,10 @@ class UserRepository
                 usersCollection.document(uid).update("fcmToken", token).await()
                 true
             } catch (e: Exception) {
+                // 공유 코드가 없으면 그 뒤에 만든 일정이 sharedCode 없이 저장되고, 보안 규칙의
+                // 공유 읽기 조건이 sharedCode != "" 라 가족이 어떤 코드로도 읽지 못한다.
+                // 조용히 넘기면 사용자도 보호자도 무엇이 잘못됐는지 알 방법이 없다(#134).
+                Log.e(TAG, "공유 코드 보장 실패", e)
                 false
             }
         }
@@ -168,6 +180,10 @@ class UserRepository
                 shareCodeWatcherTokens(shareCode).document(uid).set(mapOf("fcmToken" to token)).await()
                 true
             } catch (e: Exception) {
+                // 공유 코드가 없으면 그 뒤에 만든 일정이 sharedCode 없이 저장되고, 보안 규칙의
+                // 공유 읽기 조건이 sharedCode != "" 라 가족이 어떤 코드로도 읽지 못한다.
+                // 조용히 넘기면 사용자도 보호자도 무엇이 잘못됐는지 알 방법이 없다(#134).
+                Log.e(TAG, "공유 코드 보장 실패", e)
                 false
             }
         }
@@ -178,6 +194,10 @@ class UserRepository
                 shareCodeWatcherTokens(shareCode).document(uid).delete().await()
                 true
             } catch (e: Exception) {
+                // 공유 코드가 없으면 그 뒤에 만든 일정이 sharedCode 없이 저장되고, 보안 규칙의
+                // 공유 읽기 조건이 sharedCode != "" 라 가족이 어떤 코드로도 읽지 못한다.
+                // 조용히 넘기면 사용자도 보호자도 무엇이 잘못됐는지 알 방법이 없다(#134).
+                Log.e(TAG, "공유 코드 보장 실패", e)
                 false
             }
         }
