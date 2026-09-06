@@ -87,6 +87,41 @@ class MainViewModelTest {
             every { alarmScheduler.canShowAlarmControls() } returns true
             viewModel.onIntent(MainIntent.ScreenResumed)
             assertTrue(viewModel.uiState.value.alarmControlsAvailable)
+            assertNull(viewModel.uiState.value.openNotificationSettings)
+        }
+
+    @Test
+    fun `알림 차단 상태로 로그인하고 복귀해도 설정을 자동으로 열지 않는다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>(null)
+            every { authRepository.currentUid } answers { uid.value }
+            every { authRepository.observeCurrentUid() } returns uid
+            every { alarmScheduler.canShowAlarmControls() } returns false
+            val viewModel = createViewModel()
+            assertNull(viewModel.uiState.value.openNotificationSettings)
+
+            uid.value = "uid-1"
+            viewModel.onIntent(MainIntent.ScreenResumed)
+
+            assertFalse(viewModel.uiState.value.alarmControlsAvailable)
+            assertNull(viewModel.uiState.value.openNotificationSettings)
+        }
+
+    @Test
+    fun `알림을 허용하지 않고 설정에서 돌아오면 안내를 유지하고 다시 누를 수 있다`() =
+        runTest {
+            every { alarmScheduler.canShowAlarmControls() } returns false
+            val viewModel = createViewModel()
+            viewModel.onIntent(MainIntent.OpenNotificationSettings)
+            assertNotNull(viewModel.uiState.value.openNotificationSettings)
+            viewModel.onIntent(MainIntent.ConsumeNotificationSettingsRequest)
+
+            viewModel.onIntent(MainIntent.ScreenResumed)
+
+            assertFalse(viewModel.uiState.value.alarmControlsAvailable)
+            assertNull(viewModel.uiState.value.openNotificationSettings)
+            viewModel.onIntent(MainIntent.OpenNotificationSettings)
+            assertNotNull(viewModel.uiState.value.openNotificationSettings)
         }
 
     private fun createViewModel() = MainViewModel(scheduleRepository, userRepository, authRepository, settingsRepository, alarmScheduler)
