@@ -24,6 +24,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.example.slowclock.core.alarm.R
+import com.example.slowclock.core.alarm.canUseFullScreenAlarm
 
 /**
  * 알람을 실제로 울리는 서비스.
@@ -191,11 +192,8 @@ class AlarmTriggerService : Service() {
         return builder.build()
     }
 
-    private fun canUseFullScreen(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        return manager.canUseFullScreenIntent()
-    }
+    // 같은 질문의 답이 서비스와 정보 화면에서 갈리지 않도록 한 함수를 본다(#128).
+    private fun canUseFullScreen(): Boolean = canUseFullScreenAlarm()
 
     private fun startSound() {
         stopSound()
