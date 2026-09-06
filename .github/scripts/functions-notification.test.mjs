@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../../functions/index.js", import.meta.url), "utf8");
 
-function fixture({ tokens = ["private-token"], sendError, readError, failed = 0 } = {}) {
+function fixture({ watchers = [{ id: "recipient-uid", token: "private-token" }], sendError, readError, failed = 0 } = {}) {
     const messages = [];
     const logs = [];
     const codes = [];
@@ -20,15 +20,15 @@ function fixture({ tokens = ["private-token"], sendError, readError, failed = 0 
                     assert.equal(nested, "tokens");
                     return { get: async () => {
                         if (readError) throw readError;
-                        return { forEach: (visit) => tokens.forEach((fcmToken) => visit({ data: () => ({ fcmToken }) })) };
+                        return { forEach: (visit) => watchers.forEach(({ id, token, userId }) => visit({ id, data: () => ({ fcmToken: token, userId }) })) };
                     } };
                 } };
             } };
         } }),
-        messaging: () => ({ sendEachForMulticast: async (message) => {
+        messaging: () => ({ sendEach: async (message) => {
             messages.push(JSON.parse(JSON.stringify(message)));
             if (sendError) throw sendError;
-            return { successCount: message.tokens.length - failed, failureCount: failed };
+            return { successCount: message.length - failed, failureCount: failed };
         } }),
     };
     vm.runInNewContext(source, {
@@ -63,7 +63,11 @@ for (const [name, before, after, title] of [
         const f = fixture();
         await f.handle(change(before, after));
         assert.deepEqual(f.codes, ["ABC123"]);
-        assert.deepEqual(f.messages, [{ notification: { title, body: (after || before).title }, tokens: ["private-token"] }]);
+        assert.deepEqual(f.messages, [[{
+            token: "private-token",
+            data: { type: "shared_schedule", schemaVersion: "1", recipientUid: "recipient-uid", shareCode: "ABC123", scheduleId: "schedule-id", title, body: (after || before).title },
+            android: { priority: "high" },
+        }]]);
         const logged = JSON.stringify(f.logs);
         assert.doesNotMatch(logged, /private-token|private schedule|updated title|ABC123/);
     });
@@ -76,23 +80,24 @@ test("missing event, unshared schedule and no recipients do not send", async () 
         assert.equal(f.messages.length, 0);
         assert.equal(f.codes.length, 0);
     }
-    const f = fixture({ tokens: [undefined, "", "   ", 42] });
+    const f = fixture({ watchers: [undefined, "", "   ", 42].map((token) => ({ id: "recipient", token })) });
     assert.equal(await f.handle(change(undefined, schedule)), null);
     assert.equal(f.messages.length, 0);
 });
 
-test("deduplicates registration tokens and splits at the real multicast limit", async () => {
+test("deduplicates UID-token pairs and splits at the real sendEach limit", async () => {
     const tokens = Array.from({ length: 1001 }, (_, index) => `token-${index}`);
-    const f = fixture({ tokens: [...tokens, tokens[0], tokens[1000]] });
+    const watchers = tokens.map((token, index) => ({ id: `uid-${index}`, token }));
+    const f = fixture({ watchers: [...watchers, watchers[0], watchers[1000]] });
     const result = await f.handle(change(undefined, schedule));
-    assert.deepEqual(f.messages.map((message) => message.tokens.length), [500, 500, 1]);
-    assert.deepEqual(f.messages.flatMap((message) => message.tokens), tokens);
+    assert.deepEqual(f.messages.map((message) => message.length), [500, 500, 1]);
+    assert.deepEqual(f.messages.flat().map((message) => message.token), tokens);
     assert.equal(result.successCount, 1001);
     assert.equal(result.failureCount, 0);
 });
 
 test("records partial delivery counts without exposing token or payload", async () => {
-    const f = fixture({ tokens: ["one", "two"], failed: 1 });
+    const f = fixture({ watchers: ["one", "two"].map((token) => ({ id: "uid", token })), failed: 1 });
     const result = await f.handle(change(undefined, schedule));
     assert.equal(result.successCount, 1);
     assert.equal(result.failureCount, 1);
@@ -105,4 +110,30 @@ test("Firestore and total FCM failures reject instead of claiming success", asyn
         await assert.rejects(f.handle(change(undefined, schedule)), /failed/);
         assert.equal(f.logs.length, 0);
     }
+});
+
+
+test("same token under two UIDs preserves both recipients and ignores forged userId fields", async () => {
+    const f = fixture({ watchers: [
+        { id: "old-uid", token: "same-token", userId: "new-uid" },
+        { id: "new-uid", token: "same-token", userId: "old-uid" },
+        { id: "new-uid", token: "same-token" },
+    ] });
+    await f.handle(change(undefined, schedule));
+    assert.deepEqual(f.messages.flat().map(({ data }) => data.recipientUid), ["old-uid", "new-uid"]);
+    assert.equal(f.messages.flat().length, 2);
+});
+
+test("missing schedule ID, invalid code or invalid watcher UID fails closed", async () => {
+    for (const event of [
+        { ...change(undefined, schedule), params: {} },
+        change(undefined, { ...schedule, sharedCode: " " }),
+        change(undefined, { ...schedule, sharedCode: 123 }),
+    ]) {
+        const f = fixture();
+        assert.equal(await f.handle(event), null);
+        assert.equal(f.messages.length, 0);
+    }
+    const f = fixture({ watchers: [undefined, "", " ", 7].map((id) => ({ id, token: "valid" })) });
+    assert.equal(await f.handle(change(undefined, schedule)), null);
 });

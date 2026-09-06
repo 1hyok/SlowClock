@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
+import com.example.slowclock.notification.SharedScheduleNotifier
 import com.example.slowclock.ui.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
@@ -17,6 +18,7 @@ class ShareCodeViewModel
     constructor(
         private val settingsRepository: SettingsRepository,
         private val userRepository: UserRepository,
+        private val sharedScheduleNotifier: SharedScheduleNotifier,
     ) : MviViewModel<ShareCodeIntent, ShareCodeUiState, ShareCodeReducerEvent>(ShareCodeUiState()) {
         init {
             dispatch(ShareCodeReducerEvent.Initialized(settingsRepository.getShareCode().orEmpty().uppercase(Locale.ROOT)))
@@ -77,12 +79,18 @@ class ShareCodeViewModel
             if (!currentState.canSave) return
             val shareCode = currentState.input.trim().uppercase(Locale.ROOT)
             // 바꾸기 전 코드. 등록을 지우지 않으면 그 사람에게 내 토큰이 계속 남는다(#124).
-            val previousShareCode = settingsRepository.getShareCode()
+            val session = sharedScheduleNotifier.snapshot()
+            val previousShareCode = session.shareCode
+            val uid = session.userId
+            if (uid.isNullOrBlank()) {
+                dispatch(ShareCodeReducerEvent.SaveFailed("로그인한 뒤 공유 설정을 다시 확인해주세요"))
+                return
+            }
             dispatch(ShareCodeReducerEvent.Saving)
             viewModelScope.launch {
                 if (shareCode.isBlank()) {
                     if (!previousShareCode.isNullOrBlank() &&
-                        !userRepository.unregisterShareCodeWatcher(previousShareCode)
+                        !userRepository.unregisterShareCodeWatcher(previousShareCode, uid)
                     ) {
                         dispatch(
                             ShareCodeReducerEvent.SaveFailed(
@@ -91,7 +99,10 @@ class ShareCodeViewModel
                         )
                         return@launch
                     }
-                    settingsRepository.clearShareCode()
+                    if (!sharedScheduleNotifier.replaceShareCode(session, null)) {
+                        dispatch(ShareCodeReducerEvent.SaveFailed("로그인 또는 공유 설정이 변경되었습니다. 다시 확인해주세요"))
+                        return@launch
+                    }
                     dispatch(ShareCodeReducerEvent.Saved)
                     return@launch
                 }
@@ -100,15 +111,22 @@ class ShareCodeViewModel
                 // 저장한다. 실패하면 앞 코드도 그대로 둔다 — 새 코드가 안 됐는데 앞의 것까지
                 // 잃으면 되돌아갈 자리가 없다(#174).
                 if (!userRepository.registerShareCodeWatcher(shareCode)) {
-                    Log.w("ShareCodeWatcher", "watcher register failed shareCode=$shareCode")
+                    Log.w("ShareCodeWatcher", "공유 감시자 등록 실패")
                     dispatch(ShareCodeReducerEvent.SaveFailed())
                     return@launch
                 }
-                if (!previousShareCode.isNullOrBlank() && previousShareCode != shareCode) {
-                    val unregistered = userRepository.unregisterShareCodeWatcher(previousShareCode)
-                    Log.d("ShareCodeWatcher", "watcher unregistered=$unregistered shareCode=$previousShareCode")
+                if (sharedScheduleNotifier.snapshot() != session) {
+                    dispatch(ShareCodeReducerEvent.SaveFailed("로그인 또는 공유 설정이 변경되었습니다. 다시 확인해주세요"))
+                    return@launch
                 }
-                settingsRepository.setShareCode(shareCode)
+                if (!previousShareCode.isNullOrBlank() && previousShareCode != shareCode) {
+                    val unregistered = userRepository.unregisterShareCodeWatcher(previousShareCode, uid)
+                    Log.d("ShareCodeWatcher", "공유 감시자 해제 결과: $unregistered")
+                }
+                if (!sharedScheduleNotifier.replaceShareCode(session, shareCode)) {
+                    dispatch(ShareCodeReducerEvent.SaveFailed("로그인 또는 공유 설정이 변경되었습니다. 다시 확인해주세요"))
+                    return@launch
+                }
                 dispatch(ShareCodeReducerEvent.Saved)
             }
         }

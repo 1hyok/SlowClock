@@ -11,6 +11,7 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.toObject
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
@@ -230,11 +231,33 @@ class UserRepository
             val uid = auth.currentUser?.uid ?: return false
             return try {
                 val token = messaging.token.await()
+                if (auth.currentUser?.uid != uid) return false
                 usersCollection.document(uid).update("fcmToken", token).await()
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.e(TAG, "FCM 토큰 저장 실패", e)
+                Log.e(TAG, "FCM 토큰 저장 실패")
                 false
+            }
+        }
+
+        /** FCM 콜백은 서버 응답을 기다리지 않고 현재 세션의 갱신 쓰기만 제출한다. */
+        fun updateFcmRegistration(
+            token: String,
+            expectedUid: String,
+            shareCode: String?,
+        ) {
+            if (token.isBlank() || expectedUid.isBlank() || auth.currentUser?.uid != expectedUid) return
+            usersCollection
+                .document(expectedUid)
+                .update("fcmToken", token)
+                .addOnFailureListener { Log.w(TAG, "사용자 FCM 등록 갱신 실패") }
+            if (!shareCode.isNullOrBlank() && auth.currentUser?.uid == expectedUid) {
+                shareCodeWatcherTokens(shareCode)
+                    .document(expectedUid)
+                    .set(mapOf("userId" to expectedUid, "fcmToken" to token), SetOptions.merge())
+                    .addOnFailureListener { Log.w(TAG, "공유 FCM 등록 갱신 실패") }
             }
         }
 
@@ -248,26 +271,42 @@ class UserRepository
         suspend fun registerShareCodeWatcher(shareCode: String): Boolean {
             val uid = auth.currentUser?.uid ?: return false
             return try {
-                val token = runCatching { messaging.token.await() }.getOrNull()
+                val token =
+                    try {
+                        messaging.token.await()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                if (auth.currentUser?.uid != uid) return false
                 if (token == null) Log.w(TAG, "FCM 토큰 없이 감시자를 등록한다. 알림은 다음 등록에서 붙는다")
                 val fields = mutableMapOf<String, Any>("userId" to uid)
                 token?.let { fields["fcmToken"] = it }
                 // merge 로 쓴다. 토큰을 못 받은 등록이 앞서 저장해 둔 토큰을 지우면 안 된다.
                 shareCodeWatcherTokens(shareCode).document(uid).set(fields, SetOptions.merge()).await()
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.e(TAG, "공유 코드 감시자 등록 실패", e)
+                Log.e(TAG, "공유 코드 감시자 등록 실패")
                 false
             }
         }
 
-        suspend fun unregisterShareCodeWatcher(shareCode: String): Boolean {
+        suspend fun unregisterShareCodeWatcher(
+            shareCode: String,
+            expectedUid: String,
+        ): Boolean {
             val uid = auth.currentUser?.uid ?: return false
+            if (uid != expectedUid) return false
             return try {
                 shareCodeWatcherTokens(shareCode).document(uid).delete().await()
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.e(TAG, "공유 코드 감시자 해제 실패", e)
+                Log.e(TAG, "공유 코드 감시자 해제 실패")
                 false
             }
         }

@@ -3,6 +3,8 @@ package com.example.slowclock.domain.profile
 import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.SettingsRepository
+import com.example.slowclock.notification.SharedScheduleNotifier
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verifyOrder
 import org.junit.Test
@@ -18,7 +20,11 @@ class SignOutUseCaseTest {
     private val alarmScheduler = mockk<AlarmScheduler>(relaxed = true)
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
 
-    private val signOut = SignOutUseCase(authRepository, alarmScheduler, settingsRepository)
+    private val notifier =
+        mockk<SharedScheduleNotifier> {
+            every { changeSession(any()) } answers { firstArg<() -> Unit>().invoke() }
+        }
+    private val signOut = SignOutUseCase(authRepository, alarmScheduler, settingsRepository, notifier)
 
     @Test
     fun `세션을 끊기 전에 기기 잔재를 먼저 지운다`() {
@@ -27,6 +33,7 @@ class SignOutUseCaseTest {
 
         verifyOrder {
             alarmScheduler.cancelAll()
+            notifier.changeSession(any())
             settingsRepository.clearShareCode()
             authRepository.signOut()
         }
