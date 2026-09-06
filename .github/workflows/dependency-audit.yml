@@ -65,12 +65,19 @@ jobs:
             ./gradlew "$@" --console=plain > "$REPORT_DIR/resolved/$name.txt" 2>&1
             status=$?
             set -e
+            # dependencies 보고서는 일부 해석 실패에도 exit 0 을 반환한다.
+            if [ "$status" -eq 0 ] && grep -q ' FAILED' "$REPORT_DIR/resolved/$name.txt"; then
+              status=1
+            fi
             printf '%s=%s\n' "$name" "$status" >> "$REPORT_DIR/resolution-status.txt"
           }
 
-          # :app 의 debug runtime classpath 에 core/feature 모듈의 런타임 의존이 모두 들어온다.
+          # 앱 런타임뿐 아니라 별도 해석되는 App Distribution, ktlint, UTP 및 included build도 감사한다.
           run_report root-build-environment buildEnvironment
+          run_report app-build-environment :app:buildEnvironment
           run_report app-debug-runtime :app:dependencies --configuration debugRuntimeClasspath
+          run_report app-configurations :app:dependencies
+          run_report convention-compile -p build-logic :convention:dependencies --configuration compileClasspath
 
       - name: Run current SDK and JVM compatibility gate
         id: compatibility
@@ -90,7 +97,10 @@ jobs:
           node .github/scripts/collect-dependency-audit.mjs \
             --root . \
             --resolved-report "$REPORT_DIR/resolved/root-build-environment.txt" \
+            --resolved-report "$REPORT_DIR/resolved/app-build-environment.txt" \
             --resolved-report "$REPORT_DIR/resolved/app-debug-runtime.txt" \
+            --resolved-report "$REPORT_DIR/resolved/app-configurations.txt" \
+            --resolved-report "$REPORT_DIR/resolved/convention-compile.txt" \
             --resolution-status "$REPORT_DIR/resolution-status.txt" \
             --compatibility-status "$REPORT_DIR/compatibility-status.json" \
             --output "$REPORT_DIR/dependency-audit.json" \

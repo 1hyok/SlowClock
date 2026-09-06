@@ -8,6 +8,7 @@ import {
     detectCatalogUsage,
     parseBomPom,
     parseResolvedDependencies,
+    parseResolutionFailures,
     parseVersionCatalog,
     renderSummary,
     firstPatchedVersion,
@@ -85,6 +86,8 @@ test("extracts selected Gradle versions after conflict resolution", () => {
     const dependencies = parseResolvedDependencies(
         "+--- androidx.compose.runtime:runtime:1.10.6 -> 1.11.4\n" +
             "+--- unused.constraint:only:9.9.9 (c)\n" +
+            "+--- unresolved.declaration:only:0.1.0 (n)\n" +
+            "+--- failed.resolution:only:0.2.0 FAILED\n" +
             "\\--- com.squareup.okhttp3:okhttp:5.4.0",
         "app-runtime.txt",
     );
@@ -265,4 +268,18 @@ test("summarizes whether a security finding has a stable version to move to", ()
         ],
     });
     assert.match(fixed, /정식 패치판 `2\.4\.20`/);
+});
+
+test("keeps failed dependency resolution visible without treating declarations as selected versions", () => {
+    const report = [
+        "+--- failed.resolution:only:0.2.0 FAILED",
+        "|    \\--- failed.other:only:0.3.0 -> 0.4.0 FAILED",
+        "+--- unresolved.declaration:only:0.1.0 (n)",
+        "BUILD FAILED in 1s",
+    ].join("\n");
+    assert.deepEqual(parseResolutionFailures(report, "app-configurations.txt"), [
+        "Gradle 미해석 의존성 (app-configurations.txt): +--- failed.resolution:only:0.2.0 FAILED",
+        "Gradle 미해석 의존성 (app-configurations.txt): |    \\--- failed.other:only:0.3.0 -> 0.4.0 FAILED",
+    ]);
+    assert.deepEqual(parseResolvedDependencies(report), []);
 });
