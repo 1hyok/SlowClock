@@ -5,8 +5,7 @@ import android.util.Log
 import com.example.slowclock.data.FirestoreCollections
 import com.example.slowclock.data.model.Schedule
 import com.example.slowclock.util.AppError
-import com.example.slowclock.util.Recurrence
-import com.example.slowclock.util.RecurrenceRule
+import com.example.slowclock.util.occurrenceOn
 import com.example.slowclock.util.toAppError
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
@@ -121,32 +120,6 @@ class ScheduleRepository
                 Log.e("ScheduleRepo", "일정 파싱 실패: ${doc.id}", e)
                 null
             }
-        }
-
-        /**
-         * 문서 하나를 [dayMillis] 가 속한 날의 회차로 펼친다. 그날에 없으면 null.
-         *
-         * 반복 일정은 문서가 하나지만 날마다 다시 온다. 시작·종료 시각을 그날로 옮기고, 완료
-         * 여부는 그 회차의 것만 본다. 이 펼침이 없으면 반복 일정이 만든 날 하루만 보이고
-         * 다음 날부터 목록에서도 알람에서도 사라진다(#130).
-         */
-        private fun Schedule.occurrenceOn(dayMillis: Long): Schedule? {
-            val recurrence = Recurrence.of(recurring, recurringType)
-            val start =
-                RecurrenceRule.occurrenceOn(
-                    baseMillis = startTime.toDate().time,
-                    recurrence = recurrence,
-                    dayMillis = dayMillis,
-                ) ?: return null
-            val key = RecurrenceRule.occurrenceKey(start)
-            // 종료 시각은 시작에서 떨어진 만큼 그대로 옮긴다. 자정을 넘는 일정도 길이가 유지된다.
-            val shifted = start - startTime.toDate().time
-            return copy(
-                startTime = Timestamp(Date(start)),
-                endTime = endTime?.let { Timestamp(Date(it.toDate().time + shifted)) },
-                completed = if (recurrence == Recurrence.NONE) completed else completedDates.contains(key),
-                occurrenceDate = key,
-            )
         }
 
         // 특정 날짜의 data 가져오기
