@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  알람이 울리는 동안 쓰는 문구. 전체 화면 버튼과 알림 액션이 같은 문자열을 쓴다.
+  분은 SnoozePolicy.MINUTES 가 넣으므로 라벨과 실제가 어긋나지 않는다(#129).
+-->
+<resources>
+    <string name="alarm_snooze_action">다시 알림 (%1$d분)</string>
+    <string name="alarm_dismiss_action">알람 끄기</string>
+</resources>

@@ -56,7 +56,6 @@
 
         <Button
             android:id="@+id/snoozeButton"
-            android:text="다시 알림 (5분)"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="16dp"
@@ -66,7 +65,7 @@
 
         <Button
             android:id="@+id/dismissButton"
-            android:text="닫기"
+            android:text="@string/alarm_dismiss_action"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:backgroundTint="#FF6B6B"
