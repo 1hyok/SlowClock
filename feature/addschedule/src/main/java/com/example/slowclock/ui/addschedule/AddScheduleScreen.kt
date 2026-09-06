@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,6 +34,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -53,15 +57,21 @@ fun AddScheduleScreen(
     modifier: Modifier = Modifier,
     scheduleId: String? = null,
     initialTitle: String? = null,
+    onInitialTitleConsume: () -> Unit = {},
     viewModel: AddScheduleViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val consumeInitialTitle by rememberUpdatedState(onInitialTitleConsume)
 
     LaunchedEffect(scheduleId) {
         if (!scheduleId.isNullOrBlank()) viewModel.onIntent(AddScheduleIntent.LoadForEdit(scheduleId))
     }
-    LaunchedEffect(initialTitle) {
-        if (!initialTitle.isNullOrBlank()) viewModel.onIntent(AddScheduleIntent.UpdateTitle(initialTitle))
+    LaunchedEffect(initialTitle, state.isLoading, state.editingSchedule?.id, state.isSaved) {
+        if (!initialTitle.isNullOrBlank() && viewModel.uiState.value.canApplyRecommendedTitle(scheduleId)) {
+            viewModel.onIntent(AddScheduleIntent.UpdateTitle(initialTitle))
+            // 조회가 끝나 입력에 반영한 뒤에만 소비한다. 회전하거나 다시 돌아와도 덮어쓰지 않는다.
+            consumeInitialTitle()
+        }
     }
     ObserveSignal(
         signal = state.isSaved.takeIf { it },
@@ -73,7 +83,7 @@ fun AddScheduleScreen(
         state = state,
         onIntent = viewModel::onIntent,
         onNavigateBack = onNavigateBack,
-        onNavigateToRecommendation = onNavigateToRecommendation,
+        onNavigateToRecommendation = { if (!state.isLoading && !state.isSaved) onNavigateToRecommendation() },
         modifier = modifier,
     )
 }
@@ -88,6 +98,10 @@ internal fun AddScheduleContent(
     onNavigateToRecommendation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val errorInView = remember { BringIntoViewRequester() }
+    LaunchedEffect(state.error) {
+        if (state.error != null) errorInView.bringIntoView()
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -160,10 +174,10 @@ internal fun AddScheduleContent(
             )
 
             TimePickerSection(
-                selectedTime = state.selectedTime,
-                endTime = state.endTime,
-                onTimeSelect = { onIntent(AddScheduleIntent.UpdateTime(it)) },
-                onEndTimeSelect = { onIntent(AddScheduleIntent.UpdateEndTime(it)) },
+                startTime = state.startTimeInput,
+                endTime = state.endTimeInput,
+                onTimeSelect = { onIntent(AddScheduleIntent.UpdateTimeInput(it)) },
+                onEndTimeSelect = { onIntent(AddScheduleIntent.UpdateTimeInput(it, isEnd = true)) },
             )
 
             RecurringSection(
@@ -179,6 +193,7 @@ internal fun AddScheduleContent(
 
             state.error?.let { error ->
                 Card(
+                    modifier = Modifier.bringIntoViewRequester(errorInView),
                     colors =
                         CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -191,17 +206,17 @@ internal fun AddScheduleContent(
                             style = MaterialTheme.typography.bodyLarge,
                         )
 
-                        if (state.canRetry) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = { onIntent(AddScheduleIntent.ConsumeError) },
+                                modifier = Modifier.weight(1f),
                             ) {
-                                OutlinedButton(
-                                    onClick = { onIntent(AddScheduleIntent.ConsumeError) },
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("닫기")
-                                }
+                                Text("닫기")
+                            }
 
+                            if (state.canRetry) {
                                 Button(
                                     onClick = { onIntent(AddScheduleIntent.Retry) },
                                     modifier = Modifier.weight(1f),
