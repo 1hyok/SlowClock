@@ -1,80 +1,58 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
 const admin = require("firebase-admin");
+const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 
 admin.initializeApp();
-
-const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 
 exports.sendFcmToShareCodeWatchers = onDocumentWritten(
     {document: "schedules/{scheduleId}"},
     async (event) => {
-    // Debug log to ensure function is triggered
-      console.log("FCM triggered for scheduleId:",
-          event.params.scheduleId);
-
-      const schedule = event.data.after.data();
+      if (!event.data) return null;
+      const before = event.data.before.data();
+      const after = event.data.after.data();
+      // 삭제 이벤트에는 after 데이터가 없다. 공유 대상과 제목은 삭제 전 값에서 읽는다.
+      const schedule = after || before;
       if (!schedule || !schedule.sharedCode) return null;
 
-      const shareCode = schedule.sharedCode;
       const tokensSnapshot = await admin
           .firestore()
           .collection("shareCodeWatchers")
-          .doc(shareCode)
+          .doc(schedule.sharedCode)
           .collection("tokens")
           .get();
-
-      const tokens = [];
+      const uniqueTokens = new Set();
       tokensSnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.fcmToken) tokens.push(data.fcmToken);
+        const token = doc.data().fcmToken;
+        if (typeof token === "string" && token.trim()) uniqueTokens.add(token);
       });
-
+      const tokens = [...uniqueTokens];
       if (tokens.length === 0) return null;
 
-      // Detect completion state change
       let notificationTitle = "일정이 변경되었습니다";
       if (!event.data.before.exists) {
         notificationTitle = "일정이 추가되었습니다";
       } else if (!event.data.after.exists) {
         notificationTitle = "일정이 삭제되었습니다";
-      } else {
-        const before = event.data.before.data();
-        const after = event.data.after.data();
-        if (before && after && before.completed !== after.completed) {
-          if (after.completed === true) {
-            notificationTitle = "완료되었습니다";
-          } else if (after.completed === false) {
-            notificationTitle = "상태 미완료로 바꿨습니다";
-          }
-        }
+      } else if (before.completed !== after.completed) {
+        notificationTitle = after.completed === true ?
+          "완료되었습니다" : "상태 미완료로 바꿨습니다";
       }
 
-      const payload = {
-        notification: {
-          title: notificationTitle,
-          body: `${schedule.title}`,
-        },
-      };
-
-      // Log tokens and payload for debugging
-      console.log("Sending FCM to tokens:", tokens, payload);
-
-      // Use sendEachForMulticast for recent firebase-admin SDKs
-      const multicastMessage = {
-        notification: {
-          title: notificationTitle,
-          body: `${schedule.title}`,
-        },
-        tokens: tokens,
-      };
-      console.log("Sending FCM to tokens:", tokens, multicastMessage);
-      return admin.messaging().sendEachForMulticast(multicastMessage);
+      // multicast는 호출마다 최대 500개다. 토큰이나 일정 내용을 로그에 남기지 않는다.
+      // https://firebase.google.com/docs/cloud-messaging/send/admin-sdk
+      let successCount = 0;
+      let failureCount = 0;
+      for (let offset = 0; offset < tokens.length; offset += 500) {
+        const result = await admin.messaging().sendEachForMulticast({
+          notification: {
+            title: notificationTitle,
+            body: typeof schedule.title === "string" ? schedule.title : "",
+          },
+          tokens: tokens.slice(offset, offset + 500),
+        });
+        successCount += result.successCount;
+        failureCount += result.failureCount;
+      }
+      console.log("공유 일정 알림 전송 결과", {successCount, failureCount});
+      return {successCount, failureCount};
     },
 );
