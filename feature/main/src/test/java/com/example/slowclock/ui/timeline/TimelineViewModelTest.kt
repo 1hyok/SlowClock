@@ -26,7 +26,7 @@ class TimelineViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        every { scheduleRepository.observeSchedulesForDate(any()) } returns flowOf(listOf(Schedule(id = "a", title = "a")))
+        every { scheduleRepository.observeSchedulesForDate(any(), any()) } returns flowOf(listOf(Schedule(id = "a", title = "a")))
     }
 
     @After
@@ -38,7 +38,7 @@ class TimelineViewModelTest {
     fun `처음에는 오늘 자정을 기준으로 구독한다`() =
         runTest {
             val requested = slot<Calendar>()
-            every { scheduleRepository.observeSchedulesForDate(capture(requested)) } returns flowOf(emptyList())
+            every { scheduleRepository.observeSchedulesForDate(capture(requested), any()) } returns flowOf(emptyList())
 
             val state = TimelineViewModel(scheduleRepository).uiState.value
 
@@ -64,7 +64,7 @@ class TimelineViewModelTest {
                 viewModel.uiState.value.schedules
                     .map { it.id },
             )
-            verify(exactly = 2) { scheduleRepository.observeSchedulesForDate(any()) }
+            verify(exactly = 2) { scheduleRepository.observeSchedulesForDate(any(), any()) }
         }
 
     @Test

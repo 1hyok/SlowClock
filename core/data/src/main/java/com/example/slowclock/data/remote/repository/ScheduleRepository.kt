@@ -399,10 +399,20 @@ class ScheduleRepository
             }
         }
 
-        // 특정 날짜의 일정 실시간 구독. 로그인 전이면 빈 목록을 한 번 내고 끝난다.
-        fun observeSchedulesForDate(calendar: Calendar): Flow<List<Schedule>> {
+        /**
+         * 특정 날짜의 일정 실시간 구독. 로그인 전이면 빈 목록을 한 번 내고 끝난다.
+         *
+         * [today] 가 true 면 「오늘」 을 구독하는 것이고, 회차를 펼칠 날짜를 스냅샷이 올 때마다
+         * 다시 읽는다. 붙잡아 두면 자정을 넘긴 뒤에도 어제 회차로 펼쳐지고, 그 회차 식별자가
+         * 완료 기록의 열쇠라 잘못된 날짜가 서버에 남는다(#171). 날짜를 사용자가 고르는 화면은
+         * false 로 두어 고른 날이 흔들리지 않게 한다.
+         */
+        fun observeSchedulesForDate(
+            calendar: Calendar,
+            today: Boolean = false,
+        ): Flow<List<Schedule>> {
             val uid = auth.currentUser?.uid ?: return flowOf(emptyList())
-            val dayMillis = calendar.timeInMillis
+            val fixedDayMillis = calendar.timeInMillis
             return callbackFlow {
                 val listener =
                     schedulesCollection
@@ -412,6 +422,7 @@ class ScheduleRepository
                                 close(error)
                                 return@addSnapshotListener
                             }
+                            val dayMillis = if (today) System.currentTimeMillis() else fixedDayMillis
                             val schedules =
                                 snapshot
                                     ?.documents

@@ -40,6 +40,9 @@ class MainViewModel
     ) : MviViewModel<MainIntent, MainUiState, MainReducerEvent>(MainUiState()) {
         private var scheduleJob: Job? = null
 
+        /** 지금 구독이 보고 있는 날. 날이 바뀌면 다시 건다(#171). */
+        private var subscribedDay: String = ""
+
         init {
             observeSignedInUser()
             // 정확한 알람 권한이 없으면 첫 진입에 한 번만 이유를 설명한다. 설정으로 보내는 건
@@ -53,6 +56,10 @@ class MainViewModel
 
         override fun onIntent(intent: MainIntent) {
             when (intent) {
+                MainIntent.ScreenResumed -> {
+                    resubscribeIfDayChanged()
+                }
+
                 MainIntent.Retry -> {
                     dispatch(MainReducerEvent.ErrorConsumed)
                     observeTodaySchedules()
@@ -255,11 +262,12 @@ class MainViewModel
 
         private fun observeTodaySchedules() {
             scheduleJob?.cancel()
+            subscribedDay = todayKey()
             scheduleJob =
                 viewModelScope.launch {
                     dispatch(MainReducerEvent.Loading)
                     scheduleRepository
-                        .observeSchedulesForDate(Calendar.getInstance())
+                        .observeSchedulesForDate(Calendar.getInstance(), today = true)
                         .catch { e ->
                             Log.e(TAG, "일정 구독 실패", e)
                             dispatch(MainReducerEvent.LoadFailed(e.toAppError(), canRetry = true))
@@ -277,6 +285,7 @@ class MainViewModel
          * 공유 코드 값이 실제로 바뀌기 전까지 새 구독을 걸지 않기 때문이다. 그리고 로그인
          * 전에는 보안 규칙이 읽기를 막으므로 리스너가 그 자리에서 닫힌다(#134 · #137).
          */
+
         private fun observeSharedReminders() {
             viewModelScope.launch {
                 authRepository
@@ -301,6 +310,23 @@ class MainViewModel
                     }
             }
         }
+
+        /**
+         * 날이 바뀌었으면 오늘 회차로 다시 구독한다.
+         *
+         * 앱을 켜 둔 채 자정을 넘기면 구독은 어제 회차를 보고 있다. 그 회차 식별자가 완료 기록의
+         * 열쇠라, 그대로 두면 어제 날짜가 서버에 남는다(#171).
+         */
+        private fun resubscribeIfDayChanged() {
+            if (subscribedDay.isNotEmpty() && subscribedDay != todayKey()) {
+                observeTodaySchedules()
+            }
+        }
+
+        private fun todayKey(): String =
+            Calendar.getInstance().let {
+                "%04d-%03d".format(it.get(Calendar.YEAR), it.get(Calendar.DAY_OF_YEAR))
+            }
 
         private fun toggleComplete(scheduleId: String) {
             val schedule = currentState.todaySchedules.find { it.id == scheduleId } ?: return

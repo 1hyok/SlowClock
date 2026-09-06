@@ -10,6 +10,9 @@ import com.example.slowclock.util.AppError
 sealed interface MainIntent : MviIntent {
     data object Retry : MainIntent
 
+    /** 화면이 다시 보인다. 날이 바뀌었으면 오늘 회차로 다시 구독한다(#171). */
+    data object ScreenResumed : MainIntent
+
     data class ToggleComplete(
         val scheduleId: String,
     ) : MainIntent

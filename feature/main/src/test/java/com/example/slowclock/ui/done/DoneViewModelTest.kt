@@ -28,7 +28,7 @@ class DoneViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        every { scheduleRepository.observeSchedulesForDate(any()) } returns todaySchedules
+        every { scheduleRepository.observeSchedulesForDate(any(), any()) } returns todaySchedules
     }
 
     @After

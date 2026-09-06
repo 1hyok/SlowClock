@@ -8,6 +8,7 @@ import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.util.AppError
 import com.google.firebase.Timestamp
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -52,7 +53,7 @@ class MainViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { authRepository.currentUid } returns "uid-1"
         every { authRepository.observeCurrentUid() } returns flowOf("uid-1")
-        every { scheduleRepository.observeSchedulesForDate(any()) } returns todaySchedules
+        every { scheduleRepository.observeSchedulesForDate(any(), any()) } returns todaySchedules
         every { settingsRepository.observeShareCode() } returns shareCode
         every { scheduleRepository.observeSchedulesBySharedCode(any()) } returns flowOf(emptyList())
         coEvery { userRepository.getUserNames(any()) } returns emptyMap()
@@ -157,12 +158,12 @@ class MainViewModelTest {
     @Test
     fun `일정 구독이 실패하면 재시도 가능한 오류를 두고 Retry 가 다시 구독한다`() =
         runTest {
-            every { scheduleRepository.observeSchedulesForDate(any()) } returns flow { throw IllegalStateException("network down") }
+            every { scheduleRepository.observeSchedulesForDate(any(), any()) } returns flow { throw IllegalStateException("network down") }
             val viewModel = createViewModel()
             assertEquals(AppError.NetworkError, viewModel.uiState.value.error)
             assertTrue(viewModel.uiState.value.canRetry)
 
-            every { scheduleRepository.observeSchedulesForDate(any()) } returns flowOf(listOf(soon))
+            every { scheduleRepository.observeSchedulesForDate(any(), any()) } returns flowOf(listOf(soon))
             viewModel.onIntent(MainIntent.Retry)
 
             assertNull(viewModel.uiState.value.error)
@@ -312,5 +313,26 @@ class MainViewModelTest {
             createViewModel()
 
             verify(exactly = 0) { scheduleRepository.observeSchedulesBySharedCode(any()) }
+        }
+
+    @Test
+    fun `오늘 일정은 날짜를 다시 읽는 구독으로 건다`() =
+        runTest {
+            // 붙잡아 두면 자정을 넘긴 뒤에도 어제 회차로 펼쳐지고, 그 회차 식별자가 완료 기록의
+            // 열쇠라 어제 날짜가 서버에 남는다(#171).
+            createViewModel()
+
+            verify { scheduleRepository.observeSchedulesForDate(any(), today = true) }
+        }
+
+    @Test
+    fun `같은 날 화면이 다시 보이면 구독을 다시 걸지 않는다`() =
+        runTest {
+            val viewModel = createViewModel()
+            clearMocks(scheduleRepository, answers = false, recordedCalls = true)
+
+            viewModel.onIntent(MainIntent.ScreenResumed)
+
+            verify(exactly = 0) { scheduleRepository.observeSchedulesForDate(any(), any()) }
         }
 }

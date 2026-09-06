@@ -30,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.SignInPrompt
@@ -57,6 +59,8 @@ fun MainScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // 앱을 켜 둔 채 자정을 넘기면 구독이 어제 회차를 보고 있다(#171).
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onIntent(MainIntent.ScreenResumed) }
     ObserveSignal(
         signal = state.openExactAlarmSettings,
         consumed = MainIntent.ConsumeExactAlarmSettingsRequest,
