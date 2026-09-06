@@ -5,8 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
@@ -120,7 +124,11 @@ internal fun ProfileContent(
                 Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    // 글자를 크게 쓰면 아이콘과 이름과 공유 코드만으로 화면이 차서 아래 버튼이
+                    // 밀려난다. 스크롤이 없으면 로그아웃도 계정 삭제도 할 수 없다(#135).
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
+            // 내용이 짧을 때만 가운데로 모인다. 넘치면 위에서부터 그려지고 스크롤로 닿는다.
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -202,7 +210,8 @@ private fun ProfileBody(
                 ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.error,
                 ),
-            modifier = Modifier.size(width = 200.dp, height = 56.dp),
+            // 높이를 고정하면 글자 배율을 올렸을 때 글자가 위아래로 잘린다(#107 과 같은 함정).
+            modifier = Modifier.widthIn(min = 200.dp).heightIn(min = 64.dp),
         ) {
             Text(
                 text = "로그아웃",
@@ -224,7 +233,7 @@ private fun ProfileBody(
         } else {
             TextButton(
                 onClick = { onIntent(ProfileIntent.RequestDeleteAccount) },
-                modifier = Modifier.size(width = 200.dp, height = 56.dp),
+                modifier = Modifier.widthIn(min = 200.dp).heightIn(min = 64.dp),
             ) {
                 Text(
                     text = "계정 삭제",
