@@ -74,3 +74,18 @@ test("Firebase credential 은 빌드 단계까지 내려오지 않는다", () =>
   assert.doesNotMatch(buildStep, /GOOGLE_APPLICATION_CREDENTIALS/);
   assert.match(workflow, /GOOGLE_APPLICATION_CREDENTIALS/);
 });
+
+test("테스터에게 나가는 빌드는 배포본마다 다른 versionCode 와 versionName 을 갖는다", async () => {
+  // 값을 주지 않으면 app/build.gradle.kts 가 조용히 1 과 "1.0" 으로 떨어진다. 그러면 R8 을 켜고
+  // Crashlytics 를 켜 두고도 크래시가 어느 배포본에서 왔는지 대시보드에서 가릴 수 없다(#139).
+  assert.match(workflow, /SLOWCLOCK_VERSION_CODE: \$\{\{ github\.run_number \}\}/);
+  assert.match(workflow, /export SLOWCLOCK_VERSION_NAME_SUFFIX="dist\.\$\{GITHUB_RUN_NUMBER\}\.\$\{GITHUB_SHA:0:7\}"/);
+
+  const versionCode = indexOf("SLOWCLOCK_VERSION_CODE:");
+  const build = indexOf("./gradlew assembleRelease");
+  assert.ok(versionCode < build, "버전은 빌드 step 의 env 로 들어가야 한다");
+
+  const gradle = await readFile(new URL("../../app/build.gradle.kts", import.meta.url), "utf8");
+  assert.match(gradle, /versionCode = resolveSlowClockVersionCode\(System\.getenv\(slowClockVersionCodeEnv\)\)/);
+  assert.match(gradle, /versionName = resolveSlowClockVersionName\(System\.getenv\(slowClockVersionNameSuffixEnv\)\)/);
+});
