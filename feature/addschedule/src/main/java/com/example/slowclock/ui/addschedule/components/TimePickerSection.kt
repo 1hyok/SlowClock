@@ -21,36 +21,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
+import com.example.slowclock.ui.addschedule.ScheduleTimeInput
 
 @Composable
 fun TimePickerSection(
-    selectedTime: Calendar,
-    endTime: Calendar?,
-    onTimeSelect: (Calendar) -> Unit,
-    onEndTimeSelect: (Calendar?) -> Unit,
+    startTime: ScheduleTimeInput,
+    endTime: ScheduleTimeInput,
+    onTimeSelect: (ScheduleTimeInput) -> Unit,
+    onEndTimeSelect: (ScheduleTimeInput) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val timeFormat = SimpleDateFormat("a h:mm", Locale.KOREAN)
-
-    // 입력값을 기억할 상태
-    var hour by remember { mutableStateOf(selectedTime.get(Calendar.HOUR_OF_DAY).toString()) }
-    var minute by remember { mutableStateOf(selectedTime.get(Calendar.MINUTE).toString()) }
-
-    var endHour by remember { mutableStateOf(endTime?.get(Calendar.HOUR_OF_DAY)?.toString() ?: "") }
-    var endMinute by remember { mutableStateOf(endTime?.get(Calendar.MINUTE)?.toString() ?: "") }
-
     Column(
         modifier =
             modifier
@@ -77,10 +62,9 @@ fun TimePickerSection(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
-                        value = hour,
+                        value = startTime.hour,
                         onValueChange = {
-                            hour = it.filter { c -> c.isDigit() }.take(2)
-                            updateCalendarTime(hour, minute)?.let(onTimeSelect)
+                            onTimeSelect(startTime.copy(hour = it.filter { c -> c.isDigit() }.take(2)))
                         },
                         label = { Text("시") },
                         modifier = Modifier.weight(1f),
@@ -90,10 +74,9 @@ fun TimePickerSection(
                     )
 
                     OutlinedTextField(
-                        value = minute,
+                        value = startTime.minute,
                         onValueChange = {
-                            minute = it.filter { c -> c.isDigit() }.take(2)
-                            updateCalendarTime(hour, minute)?.let(onTimeSelect)
+                            onTimeSelect(startTime.copy(minute = it.filter { c -> c.isDigit() }.take(2)))
                         },
                         label = { Text("분") },
                         modifier = Modifier.weight(1f),
@@ -122,10 +105,9 @@ fun TimePickerSection(
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
-                        value = endHour,
+                        value = endTime.hour,
                         onValueChange = {
-                            endHour = it.filter { c -> c.isDigit() }.take(2)
-                            updateCalendarTime(endHour, endMinute)?.let(onEndTimeSelect)
+                            onEndTimeSelect(endTime.copy(hour = it.filter { c -> c.isDigit() }.take(2)))
                         },
                         label = { Text("시") },
                         modifier = Modifier.weight(1f),
@@ -135,10 +117,9 @@ fun TimePickerSection(
                     )
 
                     OutlinedTextField(
-                        value = endMinute,
+                        value = endTime.minute,
                         onValueChange = {
-                            endMinute = it.filter { c -> c.isDigit() }.take(2)
-                            updateCalendarTime(endHour, endMinute)?.let(onEndTimeSelect)
+                            onEndTimeSelect(endTime.copy(minute = it.filter { c -> c.isDigit() }.take(2)))
                         },
                         label = { Text("분") },
                         modifier = Modifier.weight(1f),
@@ -151,23 +132,3 @@ fun TimePickerSection(
         }
     }
 }
-
-fun updateCalendarTime(
-    hour: String,
-    minute: String,
-): Calendar? =
-    try {
-        val h = hour.toInt()
-        val m = minute.toInt()
-        if (h in 0..23 && m in 0..59) {
-            Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, h)
-                set(Calendar.MINUTE, m)
-                set(Calendar.SECOND, 0)
-            }
-        } else {
-            null
-        }
-    } catch (e: NumberFormatException) {
-        null
-    }

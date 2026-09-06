@@ -24,6 +24,11 @@ sealed interface AddScheduleIntent : MviIntent {
         val time: Calendar?,
     ) : AddScheduleIntent
 
+    data class UpdateTimeInput(
+        val value: ScheduleTimeInput,
+        val isEnd: Boolean = false,
+    ) : AddScheduleIntent
+
     data class UpdateRecurring(
         val recurring: Boolean,
     ) : AddScheduleIntent
@@ -54,6 +59,8 @@ data class AddScheduleUiState(
     val description: String = "",
     val selectedTime: Calendar = Calendar.getInstance(),
     val endTime: Calendar? = null,
+    val startTimeInput: ScheduleTimeInput = ScheduleTimeInput.from(selectedTime),
+    val endTimeInput: ScheduleTimeInput = ScheduleTimeInput.from(endTime),
     val recurring: Boolean = false,
     val recurringType: String = "daily",
     val isLoading: Boolean = false,
@@ -62,8 +69,15 @@ data class AddScheduleUiState(
     val canRetry: Boolean = false,
     val isEditMode: Boolean = false,
     val editingSchedule: Schedule? = null,
+    val editScheduleId: String? = null,
 ) : UiState {
-    val canSave: Boolean get() = title.isNotBlank() && !isLoading
+    val hasValidTimeInput: Boolean get() = startTimeInput.isValid && (endTimeInput.isEmpty || endTimeInput.isValid)
+    val canSave: Boolean get() =
+        title.isNotBlank() && !isLoading && !isSaved && hasValidTimeInput &&
+            (!isEditMode || editingSchedule != null)
+
+    fun canApplyRecommendedTitle(scheduleId: String?): Boolean =
+        !isLoading && !isSaved && (scheduleId.isNullOrBlank() || editingSchedule?.id == scheduleId)
 }
 
 sealed interface AddScheduleReducerEvent : ReducerEvent {
@@ -91,7 +105,14 @@ sealed interface AddScheduleReducerEvent : ReducerEvent {
         val type: String,
     ) : AddScheduleReducerEvent
 
-    data object EditLoading : AddScheduleReducerEvent
+    data class TimeInputChanged(
+        val value: ScheduleTimeInput,
+        val isEnd: Boolean,
+    ) : AddScheduleReducerEvent
+
+    data class EditLoading(
+        val scheduleId: String,
+    ) : AddScheduleReducerEvent
 
     data class EditLoaded(
         val schedule: Schedule,
@@ -111,4 +132,35 @@ sealed interface AddScheduleReducerEvent : ReducerEvent {
     data object ErrorConsumed : AddScheduleReducerEvent
 
     data object SavedConsumed : AddScheduleReducerEvent
+}
+
+/** 입력 중인 빈칸도 보존한다. 저장 가능 여부는 화면과 저장 동작이 같은 값으로 판단한다. */
+data class ScheduleTimeInput(
+    val hour: String = "",
+    val minute: String = "",
+) {
+    val isEmpty: Boolean get() = hour.isEmpty() && minute.isEmpty()
+    val isValid: Boolean get() = hour.toIntOrNull() in 0..23 && minute.toIntOrNull() in 0..59
+
+    fun onDate(date: Calendar): Calendar? =
+        if (isValid) {
+            (date.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, hour.toInt())
+                set(Calendar.MINUTE, minute.toInt())
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+        } else {
+            null
+        }
+
+    companion object {
+        fun from(time: Calendar?): ScheduleTimeInput {
+            if (time == null) return ScheduleTimeInput()
+            return ScheduleTimeInput(
+                hour = time.get(Calendar.HOUR_OF_DAY).toString(),
+                minute = time.get(Calendar.MINUTE).toString(),
+            )
+        }
+    }
 }
