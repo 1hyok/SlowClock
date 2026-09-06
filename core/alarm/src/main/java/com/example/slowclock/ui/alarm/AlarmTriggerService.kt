@@ -12,6 +12,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -118,7 +119,10 @@ class AlarmTriggerService : Service() {
                 .putExtra(EXTRA_REQUEST_CODE, requestCode)
                 .putExtra(EXTRA_SNOOZE_COUNT, snoozeCount)
 
-        /** 울리는 알람을 끈다. */
+        /**
+         * 울리는 알람을 끈다. token은 data에도 넣어 PendingIntent 신원을 회차마다 가른다.
+         * extras만 바꾸면 FLAG_UPDATE_CURRENT가 옛 버튼까지 다음 회차로 바꿔 버린다.
+         */
         fun dismissIntent(
             context: Context,
             requestCode: Int,
@@ -127,6 +131,7 @@ class AlarmTriggerService : Service() {
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
                 .setAction(ACTION_DISMISS)
+                .setData(token?.let { Uri.parse("slowclock://alarm-command/$it") })
                 .putExtra(EXTRA_REQUEST_CODE, requestCode)
                 .putExtra(AlarmNotifications.EXTRA_TOKEN, token)
 
@@ -146,6 +151,7 @@ class AlarmTriggerService : Service() {
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
                 .setAction(ACTION_SNOOZE)
+                .setData(token?.let { Uri.parse("slowclock://alarm-command/$it") })
                 .putExtra(EXTRA_REQUEST_CODE, requestCode)
                 .putExtra(AlarmNotifications.EXTRA_TOKEN, token)
     }
@@ -214,7 +220,10 @@ class AlarmTriggerService : Service() {
 
         // 이미 울리는 알람이 있으면 그 알림을 별도 자리로 옮겨 남긴다. 알림 자리가 하나뿐이라
         // 그냥 두면 뒤에 온 알람이 앞의 것을 화면에서 지우고, 끄기 한 번에 둘 다 꺼진다(#131).
-        ringing?.let { previous -> keepAsSeparateNotification(previous) }
+        ringing?.let { previous ->
+            runCatching { keepAsSeparateNotification(previous) }
+                .onFailure { Log.e(TAG, "겹친 알람 알림을 남기지 못했다", it) }
+        }
 
         val current =
             Ringing(
@@ -300,6 +309,7 @@ class AlarmTriggerService : Service() {
         Intent(this, AlarmTriggerService::class.java)
             .setClass(this, AlarmTriggerService::class.java)
             .setAction(ACTION_SNOOZE_MISSED)
+            .setData(Uri.parse("slowclock://alarm-command/${missed.token}"))
             .putExtra(EXTRA_TITLE, missed.title)
             .putExtra(EXTRA_DESC, missed.desc)
             .putExtra(EXTRA_FULL_SCREEN, missed.isFullScreen)
@@ -374,6 +384,7 @@ class AlarmTriggerService : Service() {
             val fullScreenIntent =
                 Intent(this, AlarmFullScreenActivity::class.java)
                     .setClass(this, AlarmFullScreenActivity::class.java)
+                    .setData(Uri.parse("slowclock://alarm-command/${current.token}"))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     .putExtra(EXTRA_TITLE, title)
                     .putExtra(EXTRA_DESC, desc)
