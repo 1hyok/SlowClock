@@ -10,9 +10,14 @@ import android.media.RingtoneManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.core.alarm.R
 import com.example.slowclock.core.alarm.ScheduleAlarmHelper
 import com.example.slowclock.ui.alarm.AlarmTriggerService
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 
 /**
  * 예약된 시각에 시스템이 부르는 자리. 실제로 울리는 일은 [AlarmTriggerService] 가 한다.
@@ -21,6 +26,16 @@ import com.example.slowclock.ui.alarm.AlarmTriggerService
  * 깨운 직후에는 백그라운드에서도 포그라운드 서비스를 시작할 수 있다.
  */
 class AlarmReceiver : BroadcastReceiver() {
+    /**
+     * 다음 회차를 걸려면 스케줄러가 필요하다. `@AndroidEntryPoint` 는 Kotlin 에서
+     * `super.onReceive` 를 부를 수 없어 쓰지 않는다([AlarmRestoreReceiver] 와 같은 이유).
+     */
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface AlarmSchedulerEntryPoint {
+        fun alarmScheduler(): AlarmScheduler
+    }
+
     private companion object {
         const val TAG = "AlarmReceiver"
 
@@ -46,6 +61,17 @@ class AlarmReceiver : BroadcastReceiver() {
         val snoozeCount = intent.getIntExtra(ScheduleAlarmHelper.EXTRA_SNOOZE_COUNT, 0)
 
         Log.d(TAG, "알람 수신: $title")
+
+        // 되풀이하는 일정이면 다음 회차를 여기서 이어 건다. 한 번에 하나만 걸어 두므로
+        // 이 자리에서 걸지 않으면 반복이 한 번으로 끝난다(#130).
+        if (scheduleId.isNotBlank()) {
+            runCatching {
+                EntryPointAccessors
+                    .fromApplication(context.applicationContext, AlarmSchedulerEntryPoint::class.java)
+                    .alarmScheduler()
+                    .scheduleNextOccurrence(scheduleId)
+            }.onFailure { Log.e(TAG, "다음 회차 예약 실패", it) }
+        }
 
         try {
             ContextCompat.startForegroundService(

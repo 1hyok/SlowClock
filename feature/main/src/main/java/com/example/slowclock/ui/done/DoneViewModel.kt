@@ -88,7 +88,12 @@ class DoneViewModel
             val schedule = currentState.schedules.find { it.id == scheduleId } ?: return
             dispatch(DoneReducerEvent.Toggled(scheduleId))
             viewModelScope.launch {
-                val result = scheduleRepository.markScheduleAsCompleted(scheduleId, !schedule.completed)
+                val result =
+                    scheduleRepository.markScheduleAsCompleted(
+                        scheduleId = scheduleId,
+                        completed = !schedule.completed,
+                        occurrenceDate = schedule.occurrenceDate,
+                    )
                 if (result is ScheduleRepository.ScheduleResult.Error) {
                     Log.e(TAG, "완료 상태 변경 실패: ${result.error.message}")
                     dispatch(DoneReducerEvent.Failed(result.error))

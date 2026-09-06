@@ -306,7 +306,12 @@ class MainViewModel
             val schedule = currentState.todaySchedules.find { it.id == scheduleId } ?: return
             dispatch(MainReducerEvent.CompletionToggled(scheduleId, System.currentTimeMillis()))
             viewModelScope.launch {
-                val result = scheduleRepository.markScheduleAsCompleted(scheduleId, !schedule.completed)
+                val result =
+                    scheduleRepository.markScheduleAsCompleted(
+                        scheduleId = scheduleId,
+                        completed = !schedule.completed,
+                        occurrenceDate = schedule.occurrenceDate,
+                    )
                 if (result is ScheduleRepository.ScheduleResult.Error) {
                     Log.e(TAG, "완료 상태 변경 실패: ${result.error.message}")
                     dispatch(MainReducerEvent.LoadFailed(result.error, canRetry = false))
@@ -338,7 +343,13 @@ class MainViewModel
             viewModelScope.launch {
                 // 공유 일정이 바뀌면 Firestore 트리거(sendFcmToShareCodeWatchers)가 감시자에게 알린다.
                 // 클라이언트가 남의 FCM 토큰을 읽어 직접 보내던 경로는 지웠다(#93).
-                when (val result = scheduleRepository.markScheduleAsCompleted(scheduleId, !reminder.completed)) {
+                val result =
+                    scheduleRepository.markScheduleAsCompleted(
+                        scheduleId = scheduleId,
+                        completed = !reminder.completed,
+                        occurrenceDate = reminder.occurrenceDate,
+                    )
+                when (result) {
                     is ScheduleRepository.ScheduleResult.Success -> {
                         Unit
                     }
