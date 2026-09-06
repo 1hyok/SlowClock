@@ -256,4 +256,61 @@ class MainViewModelTest {
             assertFalse(viewModel.uiState.value.showExactAlarmNotice)
             verify { settingsRepository.markExactAlarmNoticeSeen() }
         }
+
+    @Test
+    fun `로그아웃하면 앞 사용자의 일정과 집계를 비운다`() =
+        runTest {
+            // 비우지 않으면 다른 계정으로 로그인한 직후, Firestore 첫 응답이 오기 전까지
+            // 앞 사람 일정이 그대로 보인다(#137).
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            todaySchedules.value = listOf(done, soon)
+            val viewModel = createViewModel()
+            assertEquals(2, viewModel.uiState.value.todaySchedules.size)
+
+            uid.value = null
+
+            val state = viewModel.uiState.value
+            assertTrue(state.todaySchedules.isEmpty())
+            assertTrue(state.sharedReminders.isEmpty())
+            assertNull(state.currentSchedule)
+            assertEquals(0, state.completedCount)
+            assertEquals(0, state.totalCount)
+            assertEquals("", state.currentUserId)
+        }
+
+    @Test
+    fun `로그아웃했다 다시 로그인하면 공유 일정 구독이 다시 붙는다`() =
+        runTest {
+            // 공유 코드만 키로 삼으면, 안쪽 흐름이 한 번 끝난 뒤 코드 값이 실제로 바뀌기
+            // 전까지 새 구독을 걸지 않는다(#134).
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            shareCode.value = "ABC123"
+            val shared = Schedule(id = "shared-1", title = "어머니 약", startTime = Timestamp(Date()), userId = "uid-2")
+            every { scheduleRepository.observeSchedulesBySharedCode("ABC123") } returns flowOf(listOf(shared))
+            val viewModel = createViewModel()
+
+            uid.value = null
+            assertTrue(
+                viewModel.uiState.value.sharedReminders
+                    .isEmpty(),
+            )
+            uid.value = "uid-1"
+
+            assertEquals(listOf(shared), viewModel.uiState.value.sharedReminders)
+        }
+
+    @Test
+    fun `로그인하지 않았으면 공유 코드가 있어도 구독하지 않는다`() =
+        runTest {
+            // 보안 규칙이 로그인 전 읽기를 막으므로, 걸어 봐야 리스너가 그 자리에서 닫힌다(#134).
+            val uid = MutableStateFlow<String?>(null)
+            every { authRepository.observeCurrentUid() } returns uid
+            shareCode.value = "ABC123"
+
+            createViewModel()
+
+            verify(exactly = 0) { scheduleRepository.observeSchedulesBySharedCode(any()) }
+        }
 }

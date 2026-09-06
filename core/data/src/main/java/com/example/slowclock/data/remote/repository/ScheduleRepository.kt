@@ -406,9 +406,16 @@ class ScheduleRepository
             }
         }
 
-        // 공유 코드로 일정(리마인더) 목록 실시간 가져오기
-        fun observeSchedulesBySharedCode(sharedCode: String): Flow<List<Schedule>> =
-            callbackFlow {
+        /**
+         * 공유 코드로 일정(리마인더) 목록을 실시간 구독한다.
+         *
+         * 로그인 전이면 빈 목록을 한 번 내고 끝난다. 보안 규칙의 schedules 읽기가 전부
+         * `isSignedIn()` 을 요구하므로, 가드가 없으면 로그인 전에 건 리스너가
+         * PERMISSION_DENIED 로 닫히고 그 흐름은 다시 붙지 않는다(#134).
+         */
+        fun observeSchedulesBySharedCode(sharedCode: String): Flow<List<Schedule>> {
+            auth.currentUser?.uid ?: return flowOf(emptyList())
+            return callbackFlow {
                 val listener =
                     schedulesCollection
                         .whereEqualTo("sharedCode", sharedCode)
@@ -425,6 +432,7 @@ class ScheduleRepository
                         }
                 awaitClose { listener.remove() }
             }
+        }
 
         // 계정 삭제용: 사용자가 만든 일정 전부 삭제
         suspend fun deleteAllSchedulesOf(userId: String): Boolean =
