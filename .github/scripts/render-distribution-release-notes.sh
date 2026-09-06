@@ -20,8 +20,11 @@ extract_section() {
     local ascii_marker="$2"
     local body_file="$3"
 
+    # 제목은 「# 뒤에 공백」 이 있는 줄뿐이다(마크다운 ATX). 이 구분이 없으면 「#130 에서 …」 처럼
+    # 이슈 번호로 시작하는 본문 줄이 제목으로 읽혀 섹션이 거기서 끊긴다. 그러면 Work Description
+    # 이 비어 배포가 「변경 내용이 하나 이상 필요합니다」 로 막힌다(#159).
     awk -v marker="$marker" -v ascii_marker="$ascii_marker" '
-        /^#[#]*[[:space:]]*/ {
+        /^#+[[:space:]]/ {
             heading = $0
             if (capturing) {
                 exit
@@ -102,7 +105,11 @@ normalized_notes="$(
 
             {
                 point = $0
-                sub(/^[[:space:]]*[-*][[:space:]]*/, "", point)
+                # 목록 표시는 「- 」 나 「* 」 처럼 뒤에 공백이 온다. 공백을 요구하지 않으면
+                # 「**굵게** 로 시작하는 문단」 의 별표 하나를 목록 표시로 보고 잘라 낸다(#159).
+                sub(/^[[:space:]]*[-*][[:space:]]+/, "", point)
+                # 내용 없이 표시만 있는 줄. 이 줄은 비운 것으로 봐야 아래 검사가 걸러 낸다.
+                sub(/^[[:space:]]*[-*][[:space:]]*$/, "", point)
                 sub(/^[[:space:]]*[0-9]+\.[[:space:]]*/, "", point)
                 sub(/^[[:space:]]+/, "", point)
                 sub(/[[:space:]]+$/, "", point)
