@@ -68,4 +68,28 @@ class ScheduleAlarmHelperTest {
 
         assertEquals(codes.size, codes.toSet().size)
     }
+
+    @Test
+    fun `다시 알림 action 은 비어 있지 않다`() {
+        // 다시 알림은 requestCode 가 아니라 action 으로 자리를 가른다. 일정 알람 번호가 짝수
+        // 전체와 홀수 전체를 덮어 「비어 있는 번호 대역」 이 없기 때문이다. action 이 빈 문자열이면
+        // filterEquals 가 일정 알람과 같다고 보아 원래 알람을 덮어쓴다(#129).
+        assertTrue(ScheduleAlarmHelper.ACTION_SNOOZE_ALARM.isNotBlank())
+    }
+
+    @Test
+    fun `자리 번호는 일정 id 와 종류로만 정해진다`() {
+        // 다시 알림이 원래 알람과 같은 번호를 쓰므로, 그 번호를 내는 규칙이 흔들리면
+        // 미뤄 둔 알람을 취소할 때 엉뚱한 자리를 지운다.
+        val id = "schedule-1"
+
+        assertEquals(
+            ScheduleAlarmHelper.generateStartRequestCode(id),
+            ScheduleAlarmHelper.requestCodeOf(id, AlarmKind.START),
+        )
+        assertEquals(
+            ScheduleAlarmHelper.generateEndRequestCode(id),
+            ScheduleAlarmHelper.requestCodeOf(id, AlarmKind.END),
+        )
+    }
 }

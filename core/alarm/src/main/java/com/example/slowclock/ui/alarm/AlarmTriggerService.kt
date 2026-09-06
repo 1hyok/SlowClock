@@ -24,6 +24,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.example.slowclock.core.alarm.R
+import com.example.slowclock.core.alarm.ScheduleAlarmHelper
+import com.example.slowclock.core.alarm.SnoozePolicy
 
 /**
  * 알람을 실제로 울리는 서비스.
@@ -44,9 +46,15 @@ class AlarmTriggerService : Service() {
         /** 울리는 알람을 끈다. 알림의 끄기 버튼과 전체 화면의 닫기 버튼이 보낸다. */
         const val ACTION_DISMISS = "com.example.slowclock.action.DISMISS_ALARM"
 
+        /** 울리는 알람을 지금 멈추고 몇 분 뒤에 다시 울리게 한다(#129). */
+        const val ACTION_SNOOZE = "com.example.slowclock.action.SNOOZE_RINGING"
+
         const val EXTRA_TITLE = "title"
         const val EXTRA_DESC = "desc"
         const val EXTRA_FULL_SCREEN = "isFullScreen"
+        const val EXTRA_SCHEDULE_ID = "scheduleId"
+        const val EXTRA_REQUEST_CODE = "requestCode"
+        const val EXTRA_SNOOZE_COUNT = "snoozeCount"
 
         private const val TAG = "AlarmTriggerService"
         private const val NOTIFICATION_ID = 123
@@ -65,12 +73,20 @@ class AlarmTriggerService : Service() {
         /** 끊었다 이었다 하는 진동. 0 은 시작까지의 대기다. */
         private val VIBRATION_PATTERN = longArrayOf(0, 800, 600)
 
-        /** 이 서비스에 알람을 울리라고 시킨다. */
+        /**
+         * 이 서비스에 알람을 울리라고 시킨다.
+         *
+         * 다시 알림을 걸려면 어느 자리의 알람인지 알아야 한다. 그래서 제목·설명뿐 아니라
+         * 일정 id·자리 번호·지금까지 미룬 횟수도 함께 넘긴다(#129).
+         */
         fun ringIntent(
             context: Context,
             title: String,
             desc: String,
             isFullScreen: Boolean,
+            scheduleId: String,
+            requestCode: Int,
+            snoozeCount: Int,
         ): Intent =
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
@@ -78,14 +94,39 @@ class AlarmTriggerService : Service() {
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_DESC, desc)
                 .putExtra(EXTRA_FULL_SCREEN, isFullScreen)
+                .putExtra(EXTRA_SCHEDULE_ID, scheduleId)
+                .putExtra(EXTRA_REQUEST_CODE, requestCode)
+                .putExtra(EXTRA_SNOOZE_COUNT, snoozeCount)
 
         /** 울리는 알람을 끈다. */
         fun dismissIntent(context: Context): Intent =
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
                 .setAction(ACTION_DISMISS)
+
+        /** 울리는 알람을 미룬다. 다시 걸 시각과 횟수 상한은 [SnoozePolicy] 가 정한다. */
+        fun snoozeIntent(context: Context): Intent =
+            Intent(context, AlarmTriggerService::class.java)
+                .setClass(context, AlarmTriggerService::class.java)
+                .setAction(ACTION_SNOOZE)
     }
 
+    /**
+     * 지금 울리고 있는 알람. 다시 알림을 걸려면 이 값이 필요하다.
+     *
+     * 알림의 다시 알림 버튼은 서비스로 action 만 보낸다. 무엇을 미룰지는 서비스가 이미 알고
+     * 있으므로 PendingIntent 에 일정 정보를 싣지 않는다.
+     */
+    private data class Ringing(
+        val title: String,
+        val desc: String,
+        val isFullScreen: Boolean,
+        val scheduleId: String,
+        val requestCode: Int,
+        val snoozeCount: Int,
+    )
+
+    private var ringing: Ringing? = null
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -107,14 +148,26 @@ class AlarmTriggerService : Service() {
             return START_NOT_STICKY
         }
 
-        val title = intent?.getStringExtra(EXTRA_TITLE) ?: "알람"
-        val desc = intent?.getStringExtra(EXTRA_DESC).orEmpty()
-        val wantsFullScreen = intent?.getBooleanExtra(EXTRA_FULL_SCREEN, true) ?: true
+        if (intent?.action == ACTION_SNOOZE) {
+            snoozeRinging()
+            return START_NOT_STICKY
+        }
 
-        Log.d(TAG, "알람 울림 시작: $title")
+        val current =
+            Ringing(
+                title = intent?.getStringExtra(EXTRA_TITLE) ?: "알람",
+                desc = intent?.getStringExtra(EXTRA_DESC).orEmpty(),
+                isFullScreen = intent?.getBooleanExtra(EXTRA_FULL_SCREEN, true) ?: true,
+                scheduleId = intent?.getStringExtra(EXTRA_SCHEDULE_ID).orEmpty(),
+                requestCode = intent?.getIntExtra(EXTRA_REQUEST_CODE, 0) ?: 0,
+                snoozeCount = intent?.getIntExtra(EXTRA_SNOOZE_COUNT, 0) ?: 0,
+            )
+        ringing = current
+
+        Log.d(TAG, "알람 울림 시작: ${current.title} (미룬 횟수 ${current.snoozeCount})")
 
         // 포그라운드로 먼저 올린다. 알림을 띄우기 전에 소리를 내면 시스템이 서비스를 죽일 수 있다.
-        startForegroundCompat(buildNotification(title, desc, wantsFullScreen))
+        startForegroundCompat(buildNotification(current))
 
         acquireWakeLock()
         startSound()
@@ -138,11 +191,9 @@ class AlarmTriggerService : Service() {
         ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
     }
 
-    private fun buildNotification(
-        title: String,
-        desc: String,
-        wantsFullScreen: Boolean,
-    ): Notification {
+    private fun buildNotification(current: Ringing): Notification {
+        val title = current.title
+        val desc = current.desc
         val dismissPendingIntent =
             PendingIntent.getService(
                 this,
@@ -165,18 +216,38 @@ class AlarmTriggerService : Service() {
                 // 포그라운드 서비스 알림은 기본적으로 표시가 최대 10초 미뤄진다. 알람에서는
                 // 그 사이에 아무것도 안 보이므로 즉시 띄우게 한다(#122).
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-                .addAction(R.drawable.baseline_close_24, "알람 끄기", dismissPendingIntent)
-                .setDeleteIntent(dismissPendingIntent)
+                .addAction(
+                    R.drawable.baseline_close_24,
+                    getString(R.string.alarm_dismiss_action),
+                    dismissPendingIntent,
+                ).setDeleteIntent(dismissPendingIntent)
+
+        // 다시 알림은 알림에도 둔다. 전체 화면 권한이 없거나 화면이 켜져 잠금이 풀려 있으면
+        // 액티비티가 아예 뜨지 않고 이 알림만 남는다. 그때 다시 알림이 사라지면 안 된다(#122 · #129).
+        if (SnoozePolicy.canSnooze(current.snoozeCount)) {
+            builder.addAction(
+                R.drawable.baseline_access_alarm_24,
+                getString(R.string.alarm_snooze_action, SnoozePolicy.MINUTES),
+                // 자리 2. 끄기는 0, 전체 화면은 1 을 쓴다. action 도 달라 서로 덮지 않는다.
+                PendingIntent.getService(
+                    this,
+                    2,
+                    snoozeIntent(this),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+        }
 
         // 전체 화면은 권한이 있을 때만 붙인다. 없으면 시스템이 헤드업으로 내리는데, 그 경우에도
         // 소리와 진동은 이 서비스가 내므로 알람 구실은 한다.
-        if (wantsFullScreen && canUseFullScreen()) {
+        if (current.isFullScreen && canUseFullScreen()) {
             val fullScreenIntent =
                 Intent(this, AlarmFullScreenActivity::class.java)
                     .setClass(this, AlarmFullScreenActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     .putExtra(EXTRA_TITLE, title)
                     .putExtra(EXTRA_DESC, desc)
+                    .putExtra(EXTRA_SNOOZE_COUNT, current.snoozeCount)
             builder.setFullScreenIntent(
                 PendingIntent.getActivity(
                     this,
@@ -258,8 +329,35 @@ class AlarmTriggerService : Service() {
                 .apply { acquire(MAX_RINGING_MILLIS) }
     }
 
+    /**
+     * 울리는 알람을 미룬다. 다시 걸고 나서 지금 울리는 것을 멈춘다.
+     *
+     * 미룰 수 없는 상태(횟수를 다 썼거나 울리는 알람 정보가 없다)면 미루지 않고 끄기만 한다.
+     * 화면과 알림이 이미 남은 횟수를 보고 버튼을 감추므로 여기까지 오는 일은 드물지만,
+     * 서비스가 스스로 멈춘 뒤 늦게 도착한 요청이 조용히 알람을 되살리지 않게 막는다.
+     */
+    private fun snoozeRinging() {
+        val current = ringing
+        if (current == null || !SnoozePolicy.canSnooze(current.snoozeCount)) {
+            Log.w(TAG, "다시 알림을 걸 상태가 아니다: $current")
+            stopRinging("다시 알림을 걸 수 없다")
+            return
+        }
+        ScheduleAlarmHelper.scheduleSnooze(
+            context = this,
+            baseRequestCode = current.requestCode,
+            scheduleId = current.scheduleId,
+            title = current.title,
+            desc = current.desc,
+            isFullScreen = current.isFullScreen,
+            snoozeCount = current.snoozeCount + 1,
+        )
+        stopRinging("다시 알림")
+    }
+
     private fun stopRinging(reason: String) {
         Log.d(TAG, "알람 울림 종료: $reason")
+        ringing = null
         stopHandler.removeCallbacks(stopRunnable)
         stopSound()
         vibrator?.cancel()

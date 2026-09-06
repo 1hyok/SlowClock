@@ -14,6 +14,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -118,6 +119,24 @@ class MainViewModel
                     state.copy(currentUserId = event.userId, isSignedInKnown = true)
                 }
 
+                MainReducerEvent.SignedOut -> {
+                    // 앞 사용자의 목록·집계·다이얼로그를 전부 비운다. 남겨 두면 다른 계정으로
+                    // 로그인한 직후 그 목록이 그대로 먼저 보인다(#137).
+                    state.copy(
+                        todaySchedules = emptyList(),
+                        sharedReminders = emptyList(),
+                        sharedReminderOwners = emptyMap(),
+                        currentSchedule = null,
+                        completedCount = 0,
+                        totalCount = 0,
+                        isLoading = false,
+                        error = null,
+                        canRetry = false,
+                        selectedScheduleForDetail = null,
+                        scheduleToDelete = null,
+                    )
+                }
+
                 MainReducerEvent.Loading -> {
                     state.copy(isLoading = true, error = null, canRetry = false)
                 }
@@ -212,12 +231,24 @@ class MainViewModel
                 totalCount = schedules.size,
             )
 
-        /** 로그인·로그아웃이 화면에 바로 반영되도록 흐름으로 받는다. */
+        /**
+         * 로그인·로그아웃이 화면에 바로 반영되도록 흐름으로 받는다.
+         *
+         * 로그아웃하면 구독을 끊고 앞 사용자의 목록을 비운다. 끊지 않으면 앞 uid 로 건
+         * Firestore 리스너가 계속 살아 있고, 다른 계정으로 로그인해도 첫 응답이 오기 전까지
+         * 앞 사람 일정이 그대로 보인다(#137).
+         */
         private fun observeSignedInUser() {
             viewModelScope.launch {
                 authRepository.observeCurrentUid().collect { uid ->
                     dispatch(MainReducerEvent.UserResolved(uid.orEmpty()))
-                    if (uid != null) observeTodaySchedules()
+                    if (uid != null) {
+                        observeTodaySchedules()
+                    } else {
+                        scheduleJob?.cancel()
+                        scheduleJob = null
+                        dispatch(MainReducerEvent.SignedOut)
+                    }
                 }
             }
         }
@@ -238,12 +269,22 @@ class MainViewModel
                 }
         }
 
+        /**
+         * 가족이 공유한 오늘 일정.
+         *
+         * 로그인 상태와 공유 코드를 함께 키로 삼는다. 공유 코드만 보면 로그아웃했다 다시
+         * 로그인해도 구독이 다시 붙지 않는다 — 안쪽 흐름이 한 번 끝나면 flatMapLatest 는
+         * 공유 코드 값이 실제로 바뀌기 전까지 새 구독을 걸지 않기 때문이다. 그리고 로그인
+         * 전에는 보안 규칙이 읽기를 막으므로 리스너가 그 자리에서 닫힌다(#134 · #137).
+         */
         private fun observeSharedReminders() {
             viewModelScope.launch {
-                settingsRepository
-                    .observeShareCode()
-                    .flatMapLatest { shareCode ->
-                        if (shareCode.isNullOrBlank()) {
+                authRepository
+                    .observeCurrentUid()
+                    .combine(settingsRepository.observeShareCode()) { uid, shareCode ->
+                        uid to shareCode
+                    }.flatMapLatest { (uid, shareCode) ->
+                        if (uid == null || shareCode.isNullOrBlank()) {
                             flowOf(emptyList())
                         } else {
                             scheduleRepository.observeSchedulesBySharedCode(shareCode).catch { e ->
