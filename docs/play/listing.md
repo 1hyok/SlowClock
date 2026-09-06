@@ -59,11 +59,18 @@
 | 3 | `docs/play/screenshots/02-done.png` | 완료한 일 |
 | 4 | `docs/play/screenshots/04-dark.png` | 어두운 모드 |
 
-네 장은 앱의 화면 코드를 그대로 그려 만들었다. 만드는 자리는 `feature/main/src/screenshotTest/.../StoreScreenshotTest.kt` 이고, 고칠 일이 있으면 그 파일의 미리보기를 렌더한 뒤 위 경로에 덮어쓴다.
+네 장은 앱의 화면 코드를 그대로 그려 만들었다. 만드는 자리는 `feature/main/src/screenshotTest/.../StoreScreenshotTest.kt` 이고, 렌더 결과는 그 모듈의 baseline 으로 먼저 들어간다. 여기 있는 넉 장은 그 baseline 을 옮겨 온 사본이다.
 
-```bash
-./gradlew :feature:main:updateDebugScreenshotTest
-```
+baseline 이 바뀌면 이 사본도 함께 옮겨야 한다. 화면을 고쳤는데 옮기지 않으면 스토어 그림만 옛 화면으로 남는다(#155). 옮기는 자리는 이 넷이다.
+
+| baseline | 여기 |
+|---|---|
+| `StoreMainScreenshot_스토어 메인_768e228a_0.png` | `01-main.png` |
+| `StoreDoneScreenshot_스토어 완료_9c836483_0.png` | `02-done.png` |
+| `StoreTimelineScreenshot_스토어 시간표_1683b525_0.png` | `03-timeline.png` |
+| `StoreDarkScreenshot_스토어 어두운 모드_dde69d6e_0.png` | `04-dark.png` |
+
+baseline 은 macOS 렌더와 CI(Linux) 렌더가 달라 로컬에서 만들지 않는다. PR 에 `screenshot-baseline` 라벨을 붙여 CI 컨테이너가 갱신하게 한 뒤, 그 결과를 받아 위 표대로 옮긴다.
 
 알람이 울리는 전체 화면과 공유 코드 화면은 남았다. 실제 동작과 계정이 있어야 자연스러워서 기기에서 찍는다. 에뮬레이터 `Pixel_7_Claude_QA`(1080×2400) 에 Google 계정으로 로그인한 뒤 `adb exec-out screencap -p > 파일.png` 로 찍는다. Play 는 두 장부터 받으므로 이 두 장이 없어도 등록은 막히지 않는다.
 
