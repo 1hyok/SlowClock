@@ -31,6 +31,18 @@ fun resolveSlowClockVersionCode(raw: String?): Int {
     return code
 }
 
+// 사용자에게 보이는 판 이름. 테스터 배포(App Distribution)는 여기에 배포 번호와 커밋을 붙여
+// 어느 빌드를 받았는지 앱 정보에서 바로 읽게 한다. 값이 없으면 Play 와 로컬은 "1.0" 그대로다.
+// 붙이지 않으면 모든 배포본이 「1.0 (1)」 이라 Crashlytics 에서 빌드를 가릴 수 없다(#139).
+val slowClockVersionNameSuffixEnv = "SLOWCLOCK_VERSION_NAME_SUFFIX"
+
+fun resolveSlowClockVersionName(suffix: String?): String {
+    val base = "1.0"
+    val trimmed = suffix?.trim().orEmpty()
+    require(trimmed.length <= 40) { "$slowClockVersionNameSuffixEnv 는 40자 이하여야 한다: '$suffix'" }
+    return if (trimmed.isEmpty()) base else "$base-$trimmed"
+}
+
 android {
     // namespace(R 클래스·소스 패키지)는 그대로 두고 applicationId 만 Play 등록용으로 바꾼다.
     // Play 는 com.example.* 패키지를 거부하며, Firebase Android 앱은 이 applicationId 로 등록돼 있다.
@@ -42,7 +54,7 @@ android {
     defaultConfig {
         applicationId = "com.ilhyok.slowclock"
         versionCode = resolveSlowClockVersionCode(System.getenv(slowClockVersionCodeEnv))
-        versionName = "1.0"
+        versionName = resolveSlowClockVersionName(System.getenv(slowClockVersionNameSuffixEnv))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
