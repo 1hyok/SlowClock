@@ -86,7 +86,7 @@ JAVA_HOME=~/Library/Java/JavaVirtualMachines/temurin-21.0.11/Contents/Home \
   --no-daemon
 ```
 
-> 로컬·Firebase 빌드는 `versionCode` 1 을 유지한다. Firebase App Distribution 은 versionCode 로 빌드를 구분하지 않는다. Play 용 값은 `SLOWCLOCK_VERSION_CODE` 환경변수로만 주입되며 [`release-play-internal.yml`](../../.github/workflows/release-play-internal.yml) 이 run 마다 단조 증가하는 값을 만든다.
+> 자동 Firebase 배포는 `SLOWCLOCK_VERSION_CODE=github.run_number`, `SLOWCLOCK_VERSION_NAME=1.0-dist.<run>.<sha7>`을 주입한다. 위 로컬 fallback과 WIF canary는 별도 버전 주입이 없으면 기본값 `versionCode=1`, `versionName=1.0`을 쓴다. Play용 번호는 별도 [`release-play-internal.yml`](../../.github/workflows/release-play-internal.yml)이 생성한다.
 
 ## Play 내부 테스트 트랙과의 경계
 
@@ -95,7 +95,7 @@ JAVA_HOME=~/Library/Java/JavaVirtualMachines/temurin-21.0.11/Contents/Home \
 | 목적 | 출시 전 내부 확인 | Play 설치 경로 검증 → production 승격 |
 | 산출물 | release APK | release AAB |
 | 트리거 | `main` push 자동 | `main` 에서 수동 실행 + environment 승인 |
-| versionCode | `1` 고정 | run 마다 단조 증가 |
+| versionCode | 자동 배포 workflow의 `github.run_number` | run 마다 단조 증가 |
 | 자격 | `release-distribution` environment | `play-internal` environment (별도 서비스 계정) |
 | 롤백 | 이전 빌드를 다시 배포 | 릴리스 중단 후 더 큰 versionCode 로 재배포 |
 
