@@ -185,6 +185,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node .github/scripts/validate-pr-issue-link.mjs "${{ steps.changed-files.outputs.pull_request_json }}"
 
+      # main 배포와 같은 렌더러로 확인한다. 본문을 고치면 edited 이벤트로 다시 검증한다.
+      - name: Validate distribution release notes
+        if: inputs.pull_request_number > 0
+        env:
+          EVENT_NAME: pull_request
+          PR_JSON_FILE: ${{ steps.changed-files.outputs.pull_request_json }}
+        run: |
+          set -euo pipefail
+
+          export RELEASE_PR_BODY_FILE="$RUNNER_TEMP/distribution-pr-body.md"
+          jq -er '.body | select(type == "string" and length > 0)' "$PR_JSON_FILE" \
+            > "$RELEASE_PR_BODY_FILE"
+          bash .github/scripts/render-distribution-release-notes.sh \
+            "$RUNNER_TEMP/distribution-release-notes.txt"
+
       - name: Install actionlint
         env:
           ACTIONLINT_VERSION: 1.7.12
