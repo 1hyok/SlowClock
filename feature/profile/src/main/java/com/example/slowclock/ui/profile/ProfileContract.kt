@@ -20,6 +20,8 @@ sealed interface ProfileIntent : MviIntent {
 
     /** 공유 코드를 못 만든 상태에서 다시 시도한다. */
     data object RetryShareCode : ProfileIntent
+
+    data object RetryProfile : ProfileIntent
 }
 
 /** 화면을 떠나야 하는 이유. 로그아웃과 계정 삭제 모두 같은 경로(뒤로 가기)로 나간다. */
@@ -52,6 +54,8 @@ data class ProfileUiState(
 
 /** 내 정보 화면의 상태가 겪은 것. 화면은 만들지 않고 ViewModel 만 dispatch 한다. */
 sealed interface ProfileReducerEvent : ReducerEvent {
+    data object Loading : ProfileReducerEvent
+
     /** 로그인하지 않았다. 오류가 아니라 로그인 안내를 띄우는 상태다. */
     data object SignedOut : ProfileReducerEvent
 

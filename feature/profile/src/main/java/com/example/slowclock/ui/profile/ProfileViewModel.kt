@@ -10,6 +10,10 @@ import com.example.slowclock.domain.profile.DeleteAccountUseCase
 import com.example.slowclock.domain.profile.SignOutUseCase
 import com.example.slowclock.ui.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,8 +27,16 @@ class ProfileViewModel
         private val deleteAccount: DeleteAccountUseCase,
         private val signOutUseCase: SignOutUseCase,
     ) : MviViewModel<ProfileIntent, ProfileUiState, ProfileReducerEvent>(ProfileUiState()) {
+        private var profileJob: Job? = null
+        private var shareCodeJob: Job? = null
+        private var profileGeneration = 0L
+
         init {
-            loadProfile()
+            viewModelScope.launch {
+                authRepository.observeCurrentUid().distinctUntilChanged().collect { uid ->
+                    observeProfile(uid)
+                }
+            }
         }
 
         override fun onIntent(intent: ProfileIntent) {
@@ -36,6 +48,7 @@ class ProfileViewModel
                 ProfileIntent.ConsumeUserMessage -> dispatch(ProfileReducerEvent.UserMessageConsumed)
                 ProfileIntent.ConsumeLeave -> dispatch(ProfileReducerEvent.LeaveConsumed)
                 ProfileIntent.RetryShareCode -> retryShareCode()
+                ProfileIntent.RetryProfile -> observeProfile(authRepository.currentUid)
             }
         }
 
@@ -44,9 +57,14 @@ class ProfileViewModel
             event: ProfileReducerEvent,
         ): ProfileUiState =
             when (event) {
+                ProfileReducerEvent.Loading -> {
+                    ProfileUiState(leave = state.leave)
+                }
+
                 is ProfileReducerEvent.Loaded -> {
                     state.copy(
                         isLoading = false,
+                        isSignedOut = false,
                         name = event.name,
                         email = event.email,
                         shareCode = event.shareCode,
@@ -59,7 +77,7 @@ class ProfileViewModel
                 }
 
                 ProfileReducerEvent.SignedOut -> {
-                    state.copy(isLoading = false, isSignedOut = true, loadError = null)
+                    ProfileUiState(isLoading = false, isSignedOut = true, leave = state.leave)
                 }
 
                 ProfileReducerEvent.DeleteConfirmShown -> {
@@ -109,47 +127,73 @@ class ProfileViewModel
         private fun retryShareCode() {
             if (currentState.isRetryingShareCode) return
             val profile = authRepository.currentProfile ?: return
+            val generation = profileGeneration
             dispatch(ProfileReducerEvent.ShareCodeRetryStarted)
-            viewModelScope.launch {
-                val created =
-                    userRepository.ensureShareCode(
-                        uid = profile.uid,
-                        name = profile.displayName,
-                        email = profile.email,
-                    )
-                if (created) {
-                    // 코드만 만들면 그 전에 저장한 일정은 sharedCode 가 빈 채라 가족이 영영
-                    // 못 읽는다. 다시 시도 버튼이 「고쳤다」 는 잘못된 안심을 주면 안 된다(#178).
-                    scheduleRepository.fillMissingSharedCode(profile.uid)
-                    dispatch(ProfileReducerEvent.ShareCodeRetryFinished())
-                    loadProfile()
-                } else {
-                    dispatch(
-                        ProfileReducerEvent.ShareCodeRetryFinished(
-                            "공유 코드를 만들지 못했습니다. 인터넷 연결을 확인한 뒤 다시 눌러 주세요.",
-                        ),
-                    )
+            shareCodeJob =
+                viewModelScope.launch {
+                    try {
+                        val created =
+                            userRepository.ensureShareCode(
+                                uid = profile.uid,
+                                name = profile.displayName,
+                                email = profile.email,
+                            )
+                        if (!isCurrentProfile(profile.uid, generation)) return@launch
+                        if (created) {
+                            // 코드 생성 전의 일정도 맞춘다. 프로필은 문서 구독으로 갱신된다(#178).
+                            scheduleRepository.fillMissingSharedCode(profile.uid)
+                            if (isCurrentProfile(profile.uid, generation)) {
+                                dispatch(ProfileReducerEvent.ShareCodeRetryFinished())
+                            }
+                        } else {
+                            dispatch(ProfileReducerEvent.ShareCodeRetryFinished(SHARE_CODE_RETRY_ERROR))
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        if (!isCurrentProfile(profile.uid, generation)) return@launch
+                        dispatch(
+                            ProfileReducerEvent.ShareCodeRetryFinished(SHARE_CODE_RETRY_ERROR),
+                        )
+                    }
                 }
-            }
         }
 
-        private fun loadProfile() {
-            viewModelScope.launch {
-                val authProfile = authRepository.currentProfile
-                if (authProfile == null) {
-                    dispatch(ProfileReducerEvent.SignedOut)
-                    return@launch
-                }
-                val user = userRepository.getCurrentUser()
-                dispatch(
-                    ProfileReducerEvent.Loaded(
-                        name = user?.name?.takeIf { it.isNotBlank() } ?: authProfile.displayName,
-                        email = user?.email?.takeIf { it.isNotBlank() } ?: authProfile.email,
-                        shareCode = user?.shareCode.orEmpty(),
-                    ),
-                )
+        private fun observeProfile(uid: String?) {
+            profileJob?.cancel()
+            shareCodeJob?.cancel()
+            val generation = ++profileGeneration
+            if (uid == null) {
+                dispatch(ProfileReducerEvent.SignedOut)
+                return
             }
+            dispatch(ProfileReducerEvent.Loading)
+            profileJob =
+                viewModelScope.launch {
+                    userRepository
+                        .observeUser(uid)
+                        .catch {
+                            if (isCurrentProfile(uid, generation)) {
+                                dispatch(ProfileReducerEvent.LoadFailed("내 정보를 읽지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요."))
+                            }
+                        }.collect { user ->
+                            if (!isCurrentProfile(uid, generation)) return@collect
+                            val authProfile = authRepository.currentProfile?.takeIf { it.uid == uid } ?: return@collect
+                            dispatch(
+                                ProfileReducerEvent.Loaded(
+                                    name = user?.name?.takeIf { it.isNotBlank() } ?: authProfile.displayName,
+                                    email = user?.email?.takeIf { it.isNotBlank() } ?: authProfile.email,
+                                    shareCode = user?.shareCode.orEmpty(),
+                                ),
+                            )
+                        }
+                }
         }
+
+        private fun isCurrentProfile(
+            uid: String,
+            generation: Long,
+        ): Boolean = authRepository.currentUid == uid && profileGeneration == generation
 
         private fun signOut() {
             // 세션만 끊으면 이 기기에 걸린 알람과 등록해 둔 공유 코드가 남는다(#165).
@@ -192,4 +236,8 @@ class ProfileViewModel
                 DeleteAccountStep.USER_DOCUMENT -> "사용자 정보를 지우지 못했습니다. 잠시 후 다시 시도해 주세요."
                 DeleteAccountStep.AUTH_USER -> "계정 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요."
             }
+
+        private companion object {
+            const val SHARE_CODE_RETRY_ERROR = "공유 코드를 만들지 못했습니다. 인터넷 연결을 확인한 뒤 다시 눌러 주세요."
+        }
     }

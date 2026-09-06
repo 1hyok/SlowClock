@@ -108,6 +108,7 @@ jobs:
             const roots = [
               'app/src/screenshotTestDebug/reference/',
               'feature/main/src/screenshotTestDebug/reference/',
+              'feature/profile/src/screenshotTestDebug/reference/',
             ];
             const artifact = path.resolve(process.env.ARTIFACT_DIR);
             const filesPath = path.join(artifact, 'files.json');
