@@ -70,10 +70,12 @@ data class AddScheduleUiState(
     val isEditMode: Boolean = false,
     val editingSchedule: Schedule? = null,
     val editScheduleId: String? = null,
+    /** 서버 저장은 완료됐다. 재시도는 이 ID의 로컬 알람만 예약한다. */
+    val pendingAlarmSchedule: Schedule? = null,
 ) : UiState {
     val hasValidTimeInput: Boolean get() = startTimeInput.isValid && (endTimeInput.isEmpty || endTimeInput.isValid)
     val canSave: Boolean get() =
-        title.isNotBlank() && !isLoading && !isSaved && hasValidTimeInput &&
+        title.isNotBlank() && !isLoading && !isSaved && pendingAlarmSchedule == null && hasValidTimeInput &&
             (!isEditMode || editingSchedule != null)
 
     fun canApplyRecommendedTitle(scheduleId: String?): Boolean =
@@ -123,6 +125,10 @@ sealed interface AddScheduleReducerEvent : ReducerEvent {
     data object Saving : AddScheduleReducerEvent
 
     data object Saved : AddScheduleReducerEvent
+
+    data class AlarmFailed(
+        val schedule: Schedule,
+    ) : AddScheduleReducerEvent
 
     data class Failed(
         val error: AppError,

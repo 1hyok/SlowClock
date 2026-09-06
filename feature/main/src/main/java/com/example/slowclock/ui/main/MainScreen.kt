@@ -3,8 +3,11 @@ package com.example.slowclock.ui.main
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,12 +16,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -28,11 +33,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.feature.main.R
 import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.SignInPrompt
 import com.example.slowclock.ui.common.components.rememberDayText
@@ -67,6 +74,31 @@ fun MainScreen(
         onIntent = viewModel::onIntent,
     ) {
         context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+    }
+    ObserveSignal(
+        signal = state.openNotificationSettings,
+        consumed = MainIntent.ConsumeNotificationSettingsRequest,
+        onIntent = viewModel::onIntent,
+    ) {
+        val opened =
+            runCatching {
+                context.startActivity(
+                    Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName),
+                )
+            }.isSuccess
+        if (!opened) {
+            runCatching {
+                context.startActivity(
+                    Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        .setData(android.net.Uri.parse("package:${context.packageName}")),
+                )
+            }.onFailure {
+                android.widget.Toast
+                    .makeText(context, R.string.notification_settings_unavailable, android.widget.Toast.LENGTH_LONG)
+                    .show()
+            }
+        }
     }
     MainContent(
         state = state,
@@ -211,6 +243,32 @@ internal fun MainContent(
             if (isSignedOut) {
                 item { SignInPrompt(onSignIn = onSignIn) }
                 return@LazyColumn
+            }
+
+            if (!state.alarmControlsAvailable) {
+                item {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.alarm_notifications_disabled),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                            Button(
+                                onClick = { onIntent(MainIntent.OpenNotificationSettings) },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                            ) {
+                                Text(stringResource(R.string.open_notification_settings))
+                            }
+                        }
+                    }
+                }
             }
 
             state.currentSchedule?.let { schedule ->

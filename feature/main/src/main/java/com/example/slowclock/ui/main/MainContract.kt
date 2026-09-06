@@ -44,6 +44,10 @@ sealed interface MainIntent : MviIntent {
     data object DismissExactAlarmNotice : MainIntent
 
     data object ConsumeExactAlarmSettingsRequest : MainIntent
+
+    data object OpenNotificationSettings : MainIntent
+
+    data object ConsumeNotificationSettingsRequest : MainIntent
 }
 
 /** 메인 화면의 단일 UI 상태. 오늘 일정과 공유 일정, 다이얼로그 상태를 담는다. */
@@ -67,6 +71,8 @@ data class MainUiState(
     val showExactAlarmNotice: Boolean = false,
     /** null 이 아니면 화면이 시스템 설정을 한 번 연다. */
     val openExactAlarmSettings: Unit? = null,
+    val alarmControlsAvailable: Boolean = true,
+    val openNotificationSettings: Unit? = null,
 ) : UiState
 
 /** 메인 화면의 상태가 겪은 것. 화면은 만들지 않고 ViewModel 만 dispatch 한다. */
@@ -141,4 +147,12 @@ sealed interface MainReducerEvent : ReducerEvent {
     data object ExactAlarmSettingsRequested : MainReducerEvent
 
     data object ExactAlarmSettingsRequestConsumed : MainReducerEvent
+
+    data class AlarmControlsChecked(
+        val available: Boolean,
+    ) : MainReducerEvent
+
+    data object NotificationSettingsRequested : MainReducerEvent
+
+    data object NotificationSettingsRequestConsumed : MainReducerEvent
 }

@@ -13,6 +13,7 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -23,11 +24,13 @@ import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.example.slowclock.core.alarm.AlarmNotifications
 import com.example.slowclock.core.alarm.AlarmSchedulerEntryPoint
 import com.example.slowclock.core.alarm.R
 import com.example.slowclock.core.alarm.ScheduleAlarmHelper
 import com.example.slowclock.core.alarm.SnoozePolicy
 import com.example.slowclock.core.alarm.canUseFullScreenAlarm
+import java.util.UUID
 
 /**
  * 알람을 실제로 울리는 서비스.
@@ -62,12 +65,12 @@ class AlarmTriggerService : Service() {
         const val EXTRA_SNOOZE_COUNT = "snoozeCount"
 
         private const val TAG = "AlarmTriggerService"
-        private const val NOTIFICATION_ID = 123
+        private const val NOTIFICATION_ID = AlarmNotifications.RINGING_ID
 
         // 채널은 한 번 만들면 앱이 소리·중요도를 다시 못 바꾼다. 종전 채널은 오디오 속성이 없어
         // 알람이 아니라 알림 소리로 취급됐고, 그 채널이 남은 기기에서는 코드를 고쳐도 그대로다.
         // 그래서 새 id 를 쓴다(#122).
-        private const val CHANNEL_ID = "alarm_ringing_v2"
+        private const val CHANNEL_ID = AlarmNotifications.CHANNEL_ID
 
         /** 겹친 알람을 옮겨 두는 채널. 울리지 않고 「이 일정이 지나갔다」 만 보여 준다(#131). */
         private const val MISSED_CHANNEL_ID = "alarm_overlapped_v1"
@@ -119,11 +122,13 @@ class AlarmTriggerService : Service() {
         fun dismissIntent(
             context: Context,
             requestCode: Int,
+            token: String? = null,
         ): Intent =
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
                 .setAction(ACTION_DISMISS)
                 .putExtra(EXTRA_REQUEST_CODE, requestCode)
+                .putExtra(AlarmNotifications.EXTRA_TOKEN, token)
 
         /**
          * 서비스가 알람 울리기를 끝냈다. 전체 화면이 떠 있으면 이 방송을 받아 함께 닫는다.
@@ -136,11 +141,13 @@ class AlarmTriggerService : Service() {
         fun snoozeIntent(
             context: Context,
             requestCode: Int,
+            token: String? = null,
         ): Intent =
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
                 .setAction(ACTION_SNOOZE)
                 .putExtra(EXTRA_REQUEST_CODE, requestCode)
+                .putExtra(AlarmNotifications.EXTRA_TOKEN, token)
     }
 
     /**
@@ -149,13 +156,14 @@ class AlarmTriggerService : Service() {
      * 알림의 다시 알림 버튼은 서비스로 action 만 보낸다. 무엇을 미룰지는 서비스가 이미 알고
      * 있으므로 PendingIntent 에 일정 정보를 싣지 않는다.
      */
-    private data class Ringing(
+    internal data class Ringing(
         val title: String,
         val desc: String,
         val isFullScreen: Boolean,
         val scheduleId: String,
         val requestCode: Int,
         val snoozeCount: Int,
+        val token: String = UUID.randomUUID().toString(),
     )
 
     private var ringing: Ringing? = null
@@ -177,16 +185,30 @@ class AlarmTriggerService : Service() {
     ): Int {
         if (intent?.action == ACTION_DISMISS) {
             if (isForCurrentRinging(intent)) stopRinging("사용자가 껐다")
+            if (ringing == null) stopSelf(startId)
             return START_NOT_STICKY
         }
 
         if (intent?.action == ACTION_SNOOZE) {
             if (isForCurrentRinging(intent)) snoozeRinging()
+            if (ringing == null) stopSelf(startId)
             return START_NOT_STICKY
         }
 
         if (intent?.action == ACTION_SNOOZE_MISSED) {
             snoozeMissed(intent)
+            if (ringing == null) stopSelf(startId)
+            return START_NOT_STICKY
+        }
+
+        if (intent?.action != ACTION_RING) {
+            if (ringing == null) stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        // 알림을 거부하면 FGS 승격은 가능하지만 끄기 버튼은 보이지 않는다.
+        // 사용자가 제어할 수 없는 소리·진동은 시작하지 않는다.
+        if (!AlarmNotifications.canShowControls(this)) {
+            stopRinging("알림 조작을 표시할 수 없다")
             return START_NOT_STICKY
         }
 
@@ -196,23 +218,28 @@ class AlarmTriggerService : Service() {
 
         val current =
             Ringing(
-                title = intent?.getStringExtra(EXTRA_TITLE) ?: "알람",
-                desc = intent?.getStringExtra(EXTRA_DESC).orEmpty(),
-                isFullScreen = intent?.getBooleanExtra(EXTRA_FULL_SCREEN, true) ?: true,
-                scheduleId = intent?.getStringExtra(EXTRA_SCHEDULE_ID).orEmpty(),
-                requestCode = intent?.getIntExtra(EXTRA_REQUEST_CODE, 0) ?: 0,
-                snoozeCount = intent?.getIntExtra(EXTRA_SNOOZE_COUNT, 0) ?: 0,
+                title = intent.getStringExtra(EXTRA_TITLE) ?: "알람",
+                desc = intent.getStringExtra(EXTRA_DESC).orEmpty(),
+                isFullScreen = intent.getBooleanExtra(EXTRA_FULL_SCREEN, true),
+                scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID).orEmpty(),
+                requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0),
+                snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0),
             )
         ringing = current
 
         Log.d(TAG, "알람 울림 시작: ${current.title} (미룬 횟수 ${current.snoozeCount})")
 
         // 포그라운드로 먼저 올린다. 알림을 띄우기 전에 소리를 내면 시스템이 서비스를 죽일 수 있다.
-        startForegroundCompat(buildNotification(current))
-
-        acquireWakeLock()
-        startSound()
-        startVibration()
+        try {
+            startForegroundCompat(buildNotification(current))
+            acquireWakeLock()
+            startSound()
+            startVibration()
+        } catch (error: Exception) {
+            Log.e(TAG, "알람을 시작하지 못했다", error)
+            stopRinging("알람 시작 실패")
+            return START_NOT_STICKY
+        }
 
         stopHandler.removeCallbacks(stopRunnable)
         stopHandler.postDelayed(stopRunnable, MAX_RINGING_MILLIS)
@@ -239,6 +266,8 @@ class AlarmTriggerService : Service() {
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
+                .addExtras(commandExtras(previous))
+                .setContentIntent(openAppIntent())
 
         // 밀려난 알람에도 다시 알림을 남긴다. 없으면 그 일정만 다시 울릴 기회가 아예 없어,
         // 겹친 순간에 뒤에 온 알람이 앞의 것을 통째로 삼킨 셈이 된다(#167).
@@ -277,6 +306,7 @@ class AlarmTriggerService : Service() {
             .putExtra(EXTRA_SCHEDULE_ID, missed.scheduleId)
             .putExtra(EXTRA_REQUEST_CODE, missed.requestCode)
             .putExtra(EXTRA_SNOOZE_COUNT, missed.snoozeCount)
+            .putExtra(AlarmNotifications.EXTRA_TOKEN, missed.token)
 
     private fun startForegroundCompat(notification: Notification) {
         // 알람이 울리는 동안 소리를 재생하므로 미디어 재생 타입이다. 종전의 shortService 는
@@ -297,7 +327,7 @@ class AlarmTriggerService : Service() {
             PendingIntent.getService(
                 this,
                 0,
-                dismissIntent(this, current.requestCode),
+                dismissIntent(this, current.requestCode, current.token),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
@@ -310,6 +340,7 @@ class AlarmTriggerService : Service() {
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .addExtras(commandExtras(current))
                 .setOngoing(true)
                 .setAutoCancel(false)
                 // 포그라운드 서비스 알림은 기본적으로 표시가 최대 10초 미뤄진다. 알람에서는
@@ -331,7 +362,7 @@ class AlarmTriggerService : Service() {
                 PendingIntent.getService(
                     this,
                     2,
-                    snoozeIntent(this, current.requestCode),
+                    snoozeIntent(this, current.requestCode, current.token),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 ),
             )
@@ -349,6 +380,7 @@ class AlarmTriggerService : Service() {
                     .putExtra(EXTRA_SNOOZE_COUNT, current.snoozeCount)
                     // 화면이 되돌려 줄 신원. 겹친 알람에서 조작 대상이 어긋나지 않게 한다(#167).
                     .putExtra(EXTRA_REQUEST_CODE, current.requestCode)
+                    .putExtra(AlarmNotifications.EXTRA_TOKEN, current.token)
             builder.setFullScreenIntent(
                 PendingIntent.getActivity(
                     this,
@@ -379,23 +411,32 @@ class AlarmTriggerService : Service() {
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 ?: return
         try {
-            mediaPlayer =
-                MediaPlayer().apply {
-                    // 알람 스트림으로 재생한다. 이것을 지정하지 않으면 미디어 볼륨을 타서
-                    // 미디어 소리를 줄여 둔 기기에서는 울려도 들리지 않는다(#122).
-                    setAudioAttributes(
-                        AudioAttributes
-                            .Builder()
-                            .setUsage(AudioAttributes.USAGE_ALARM)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build(),
-                    )
-                    setDataSource(this@AlarmTriggerService, uri)
-                    isLooping = true
-                    prepare()
-                    start()
+            val player = MediaPlayer()
+            mediaPlayer = player
+            player.apply {
+                // 알람 스트림으로 재생한다. 이것을 지정하지 않으면 미디어 볼륨을 타서
+                // 미디어 소리를 줄여 둔 기기에서는 울려도 들리지 않는다(#122).
+                setAudioAttributes(
+                    AudioAttributes
+                        .Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                setDataSource(this@AlarmTriggerService, uri)
+                isLooping = true
+                setOnPreparedListener { ready ->
+                    if (mediaPlayer === ready && ringing != null) ready.start() else ready.release()
                 }
+                setOnErrorListener { failed, _, _ ->
+                    if (mediaPlayer === failed) mediaPlayer = null
+                    failed.release()
+                    true
+                }
+                prepareAsync()
+            }
         } catch (e: Exception) {
+            stopSound()
             Log.e(TAG, "알람 소리 재생 실패: ${e.message}")
         }
     }
@@ -447,13 +488,16 @@ class AlarmTriggerService : Service() {
      * 없는 요청을 그대로 받으면, 사용자가 화면에서 본 일정이 아니라 마지막에 도착한 알람이
      * 미뤄지거나 꺼진다(#167).
      *
-     * 자리 번호가 없는 옛 알림에서 온 요청은 지금 울리는 것에 대한 것으로 본다. 그러지 않으면
-     * 그 버튼이 아무 일도 하지 않는 버튼이 된다.
+     * 회차 토큰이 없는 옛 요청은 현재 알람을 조작하지 못한다.
      */
     private fun isForCurrentRinging(intent: Intent): Boolean {
         val current = ringing ?: return false
         val requested = intent.getIntExtra(EXTRA_REQUEST_CODE, UNKNOWN_REQUEST_CODE)
-        if (requested == UNKNOWN_REQUEST_CODE || requested == current.requestCode) return true
+        val token = intent.getStringExtra(AlarmNotifications.EXTRA_TOKEN)
+        if (requested == current.requestCode && token == current.token && AlarmNotifications.isUsableToken(token)) {
+            // 스와이프의 deleteIntent는 OS가 알림을 지운 뒤 도착한다. 끄기는 토큰만 확인한다.
+            if (intent.action == ACTION_DISMISS || AlarmNotifications.isCurrent(this, NOTIFICATION_ID, token)) return true
+        }
         Log.w(TAG, "지금 울리는 알람이 아니라 무시한다: 요청=$requested 현재=${current.requestCode}")
         return false
     }
@@ -468,16 +512,29 @@ class AlarmTriggerService : Service() {
         val snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
         if (!SnoozePolicy.canSnooze(snoozeCount)) return
         val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0)
-        snoozeThrough(
-            baseRequestCode = requestCode,
-            scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID).orEmpty(),
-            title = intent.getStringExtra(EXTRA_TITLE) ?: "알람",
-            desc = intent.getStringExtra(EXTRA_DESC).orEmpty(),
-            isFullScreen = intent.getBooleanExtra(EXTRA_FULL_SCREEN, true),
-            snoozeCount = snoozeCount + 1,
-        )
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        runCatching { manager.cancel(MISSED_NOTIFICATION_ID_BASE + requestCode) }
+        if (!AlarmNotifications.isCurrent(
+                this,
+                MISSED_NOTIFICATION_ID_BASE + requestCode,
+                intent.getStringExtra(AlarmNotifications.EXTRA_TOKEN),
+            )
+        ) {
+            return
+        }
+        val scheduled =
+            snoozeThrough(
+                baseRequestCode = requestCode,
+                scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID).orEmpty(),
+                title = intent.getStringExtra(EXTRA_TITLE) ?: "알람",
+                desc = intent.getStringExtra(EXTRA_DESC).orEmpty(),
+                isFullScreen = intent.getBooleanExtra(EXTRA_FULL_SCREEN, true),
+                snoozeCount = snoozeCount + 1,
+                notificationId = MISSED_NOTIFICATION_ID_BASE + requestCode,
+                token = intent.getStringExtra(AlarmNotifications.EXTRA_TOKEN).orEmpty(),
+            )
+        if (scheduled) {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.cancel(MISSED_NOTIFICATION_ID_BASE + requestCode)
+        }
     }
 
     /**
@@ -494,15 +551,18 @@ class AlarmTriggerService : Service() {
             stopRinging("다시 알림을 걸 수 없다")
             return
         }
-        snoozeThrough(
-            baseRequestCode = current.requestCode,
-            scheduleId = current.scheduleId,
-            title = current.title,
-            desc = current.desc,
-            isFullScreen = current.isFullScreen,
-            snoozeCount = current.snoozeCount + 1,
-        )
-        stopRinging("다시 알림")
+        val scheduled =
+            snoozeThrough(
+                baseRequestCode = current.requestCode,
+                scheduleId = current.scheduleId,
+                title = current.title,
+                desc = current.desc,
+                isFullScreen = current.isFullScreen,
+                snoozeCount = current.snoozeCount + 1,
+                notificationId = NOTIFICATION_ID,
+                token = current.token,
+            )
+        if (scheduled) stopRinging("다시 알림")
     }
 
     /**
@@ -511,8 +571,7 @@ class AlarmTriggerService : Service() {
      * 여기서 [ScheduleAlarmHelper] 를 바로 부르면 예약만 되고 기기 안 장부에는 아무것도 남지
      * 않는다. 그러면 재부팅이나 앱 교체로 미뤄 둔 알람이 조용히 사라진다(#177).
      *
-     * 스케줄러를 못 꺼내는 상황이라도 미루기 자체는 되어야 한다. 장부 없이라도 거는 것이
-     * 아무 일도 일어나지 않는 버튼보다 낫다.
+     * 예약 실패 때 현재 울림을 유지한다. 성공을 확인하기 전에는 조작 알림도 지우지 않는다.
      */
     private fun snoozeThrough(
         baseRequestCode: Int,
@@ -521,33 +580,42 @@ class AlarmTriggerService : Service() {
         desc: String,
         isFullScreen: Boolean,
         snoozeCount: Int,
-    ) {
-        runCatching {
-            AlarmSchedulerEntryPoint.from(this).snooze(
+        notificationId: Int,
+        token: String,
+    ): Boolean =
+        try {
+            AlarmSchedulerEntryPoint.from(this).snoozeFromNotification(
                 baseRequestCode = baseRequestCode,
                 scheduleId = scheduleId,
                 title = title,
                 desc = desc,
                 isFullScreen = isFullScreen,
                 snoozeCount = snoozeCount,
+                notificationId = notificationId,
+                token = token,
             )
-        }.onFailure { failure ->
-            Log.e(TAG, "다시 알림을 장부에 남기지 못했다. 예약만 건다", failure)
-            ScheduleAlarmHelper.scheduleSnooze(
-                context = this,
-                baseRequestCode = baseRequestCode,
-                scheduleId = scheduleId,
-                title = title,
-                desc = desc,
-                isFullScreen = isFullScreen,
-                snoozeCount = snoozeCount,
-                triggerTime = SnoozePolicy.nextTriggerAt(System.currentTimeMillis()),
-            )
+        } catch (failure: Exception) {
+            Log.e(TAG, "다시 알림 예약 실패, 현재 알람을 유지한다", failure)
+            android.widget.Toast
+                .makeText(this, R.string.alarm_snooze_failed, android.widget.Toast.LENGTH_LONG)
+                .show()
+            false
         }
-    }
+
+    private fun commandExtras(current: Ringing) =
+        Bundle().apply {
+            putString(AlarmNotifications.EXTRA_TOKEN, current.token)
+            putString(AlarmNotifications.EXTRA_SCHEDULE, current.scheduleId)
+        }
+
+    private fun openAppIntent(): PendingIntent? =
+        packageManager.getLaunchIntentForPackage(packageName)?.let {
+            PendingIntent.getActivity(this, 3, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
 
     private fun stopRinging(reason: String) {
         Log.d(TAG, "알람 울림 종료: $reason")
+        ringing?.token?.let(AlarmNotifications::revoke)
         ringing = null
         stopHandler.removeCallbacks(stopRunnable)
         stopSound()
@@ -562,11 +630,9 @@ class AlarmTriggerService : Service() {
     }
 
     private fun stopSound() {
-        mediaPlayer?.runCatching {
-            if (isPlaying) stop()
-            release()
-        }
+        val player = mediaPlayer
         mediaPlayer = null
+        player?.runCatching { release() }
     }
 
     private fun createChannel() {
@@ -606,6 +672,8 @@ class AlarmTriggerService : Service() {
         stopSound()
         vibrator?.cancel()
         releaseWakeLock()
+        ringing = null
+        sendBroadcast(Intent(ACTION_RINGING_FINISHED).setPackage(packageName))
         Log.d(TAG, "알람 서비스 종료")
     }
 

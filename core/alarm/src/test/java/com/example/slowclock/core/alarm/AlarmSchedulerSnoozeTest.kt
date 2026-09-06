@@ -66,7 +66,10 @@ class AlarmSchedulerSnoozeTest {
             snoozed.remove(firstArg<Int>())
             Unit
         }
-        mockkObject(ScheduleAlarmHelper)
+        mockkObject(ScheduleAlarmHelper, AlarmNotifications)
+        every { AlarmNotifications.invalidate(any(), any()) } returns Unit
+        every { AlarmNotifications.clear(any()) } returns Unit
+        every { AlarmNotifications.retainSchedules(any(), any()) } returns Unit
         every { ScheduleAlarmHelper.scheduleAlarm(context, any(), any()) } returns Unit
         every { ScheduleAlarmHelper.cancelAlarm(context, any()) } returns Unit
         every { ScheduleAlarmHelper.cancelSnooze(context, any()) } returns Unit
@@ -75,7 +78,7 @@ class AlarmSchedulerSnoozeTest {
 
     @After
     fun tearDown() {
-        unmockkObject(ScheduleAlarmHelper)
+        unmockkObject(ScheduleAlarmHelper, AlarmNotifications)
     }
 
     @Test
@@ -147,6 +150,68 @@ class AlarmSchedulerSnoozeTest {
 
         assertTrue(snoozed.isEmpty())
         verify(exactly = 1) { ScheduleAlarmHelper.cancelSnooze(context, snooze.baseRequestCode) }
+    }
+
+    @Test
+    fun `OS 예약 실패는 성공 장부로 남지 않고 다음 앱 복원이 같은 회차를 재시도한다`() {
+        val future = record.copy(startMillis = now + 3_600_000, bookedStartMillis = null)
+        scheduled.clear()
+        every { ScheduleAlarmHelper.scheduleAlarm(context, any(), any()) } throws IllegalStateException("quota")
+
+        org.junit.Assert.assertThrows(IllegalStateException::class.java) { scheduler.schedule(scheduleOf(future)) }
+        assertEquals(future, scheduled[future.id])
+
+        every { ScheduleAlarmHelper.scheduleAlarm(context, any(), any()) } returns Unit
+        scheduler.restoreOnAppStart()
+        assertEquals(future.startMillis, scheduled[future.id]?.bookedStartMillis)
+    }
+
+    @Test
+    fun `최초 앱 복원은 booked 장부도 다시 걸고 두 번째 진입에서는 미룸을 보존한다`() {
+        val future = record.copy(startMillis = now + 3_600_000, bookedStartMillis = now + 3_600_000)
+        scheduled[future.id] = future
+
+        scheduler.restoreOnAppStart()
+        scheduler.restoreOnAppStart()
+
+        verify(exactly = 1) { ScheduleAlarmHelper.scheduleAlarm(context, any(), any()) }
+        assertEquals(snooze, snoozed[snooze.baseRequestCode])
+    }
+
+    @Test
+    fun `한 일정 복원이 실패해도 나머지 일정과 미룸 복원은 진행한다`() {
+        val second = record.copy(id = "s2")
+        scheduled[second.id] = second
+        every { ScheduleAlarmHelper.scheduleAlarm(context, match { it.id == record.id }, any()) } throws IllegalStateException("quota")
+
+        org.junit.Assert.assertThrows(IllegalStateException::class.java) { scheduler.restoreAll() }
+
+        assertEquals(null, scheduled[record.id]?.bookedStartMillis)
+        assertTrue(scheduled[second.id]?.bookedStartMillis != null)
+        verify(exactly = 1) { ScheduleAlarmHelper.scheduleSnooze(context, any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `미룸 예약 실패는 성공 기록을 남기지 않는다`() {
+        snoozed.clear()
+        every { ScheduleAlarmHelper.scheduleSnooze(context, any(), any(), any(), any(), any(), any(), any()) } throws
+            IllegalStateException("quota")
+
+        org.junit.Assert.assertThrows(IllegalStateException::class.java) {
+            scheduler.snooze(snooze.baseRequestCode, record.id, "약", "", true, 1)
+        }
+
+        assertTrue(snoozed.isEmpty())
+    }
+
+    @Test
+    fun `삭제된 알림의 늦은 미룸은 예약과 장부를 만들지 않는다`() {
+        every { AlarmNotifications.isCurrent(context, any(), any()) } returns false
+
+        val accepted = scheduler.snoozeFromNotification(42, "deleted", "약", "", true, 1, 1042, "old")
+
+        org.junit.Assert.assertFalse(accepted)
+        verify(exactly = 0) { ScheduleAlarmHelper.scheduleSnooze(context, any(), any(), any(), any(), any(), any(), any()) }
     }
 
     private fun scheduleOf(record: ScheduledAlarm) =

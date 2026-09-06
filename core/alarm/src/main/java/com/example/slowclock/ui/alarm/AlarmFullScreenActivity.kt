@@ -16,6 +16,7 @@ import android.widget.TextView
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import androidx.core.content.ContextCompat
+import com.example.slowclock.core.alarm.AlarmNotifications
 import com.example.slowclock.core.alarm.R
 import com.example.slowclock.core.alarm.SnoozePolicy
 import java.text.SimpleDateFormat
@@ -126,8 +127,9 @@ class AlarmFullScreenActivity : Activity() {
             snoozeButton.text = getString(R.string.alarm_snooze_action, SnoozePolicy.MINUTES)
             snoozeButton.visibility = View.VISIBLE
             snoozeButton.setOnClickListener {
-                startService(AlarmTriggerService.snoozeIntent(this, ringingRequestCode()))
-                finish()
+                startService(
+                    AlarmTriggerService.snoozeIntent(this, ringingRequestCode(), intent.getStringExtra(AlarmNotifications.EXTRA_TOKEN)),
+                )
             }
         } else {
             // 다 쓴 뒤 눌리지 않는 버튼을 남기면 #129 가 그대로 되풀이된다. 아예 감춘다.
@@ -145,7 +147,7 @@ class AlarmFullScreenActivity : Activity() {
 
     /** 소리와 진동은 서비스가 낸다. 여기서는 끄라고만 알린다(#122). */
     private fun dismissAlarm() {
-        startService(AlarmTriggerService.dismissIntent(this, ringingRequestCode()))
+        startService(AlarmTriggerService.dismissIntent(this, ringingRequestCode(), intent.getStringExtra(AlarmNotifications.EXTRA_TOKEN)))
     }
 
     /** 화면이 안 보이면 시계를 멈춘다. 보이지 않는 화면을 1초마다 다시 그릴 이유가 없다(#131). */

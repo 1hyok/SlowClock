@@ -7,6 +7,7 @@ import com.example.slowclock.util.AppError
 import com.google.firebase.Timestamp
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.slot
@@ -42,6 +43,51 @@ class AddScheduleViewModelTest {
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun `서버 저장 후 알람 실패 재시도는 같은 ID를 예약하고 서버 저장을 반복하지 않는다`() =
+        runTest {
+            coEvery { scheduleRepository.addSchedule(any()) } returns ScheduleRepository.ScheduleResult.Success("saved-id")
+            every { alarmScheduler.schedule(any()) } throws IllegalStateException("quota")
+            val viewModel = createViewModel()
+            viewModel.onIntent(AddScheduleIntent.UpdateTitle("약"))
+            viewModel.onIntent(AddScheduleIntent.Save)
+            assertEquals(
+                "saved-id",
+                viewModel.uiState.value.pendingAlarmSchedule
+                    ?.id,
+            )
+            assertFalse(viewModel.uiState.value.isSaved)
+            assertFalse(viewModel.uiState.value.canSave)
+            assertTrue(
+                viewModel.uiState.value.error!!
+                    .message
+                    .contains("일정은 저장됐지만"),
+            )
+
+            viewModel.onIntent(AddScheduleIntent.Save)
+            viewModel.onIntent(AddScheduleIntent.UpdateTitle("변경되지 않아야 함"))
+            justRun { alarmScheduler.schedule(any()) }
+            viewModel.onIntent(AddScheduleIntent.Retry)
+
+            assertTrue(viewModel.uiState.value.isSaved)
+            assertNull(viewModel.uiState.value.pendingAlarmSchedule)
+            coVerify(exactly = 1) { scheduleRepository.addSchedule(any()) }
+            verify(exactly = 2) { alarmScheduler.schedule(match { it.id == "saved-id" && it.title == "약" }) }
+        }
+
+    @Test
+    fun `알람 실패 안내를 닫으면 저장된 일정으로 돌아가고 재저장하지 않는다`() =
+        runTest {
+            coEvery { scheduleRepository.addSchedule(any()) } returns ScheduleRepository.ScheduleResult.Success("saved-id")
+            every { alarmScheduler.schedule(any()) } throws IllegalStateException("quota")
+            val viewModel = createViewModel()
+            viewModel.onIntent(AddScheduleIntent.UpdateTitle("약"))
+            viewModel.onIntent(AddScheduleIntent.Save)
+            viewModel.onIntent(AddScheduleIntent.ConsumeError)
+            assertTrue(viewModel.uiState.value.isSaved)
+            coVerify(exactly = 1) { scheduleRepository.addSchedule(any()) }
+        }
 
     private fun createViewModel() = AddScheduleViewModel(scheduleRepository, alarmScheduler)
 
