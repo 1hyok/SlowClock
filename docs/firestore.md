@@ -12,6 +12,7 @@
 | `schedules/{id}` | 일정 제목·설명·시각·완료 여부·소유자 uid·공유 코드 | 소유자, 그리고 그 `sharedCode` 의 감시자로 등록한 사람 | 소유자. 공유 일정은 감시자가 `completed`·`completedDates`·`updatedAt` 만 |
 | `notifications/{id}` | 알림 기록(소유자 uid) | 소유자 | 소유자 |
 | `shareCodeWatchers/{code}/tokens/{uid}` | 그 공유 코드를 보는 기기의 FCM 토큰 | 본인 문서만 | 본인 문서만 |
+| `familyGroups/{id}` | 과거 그룹의 소유자 uid·구성원 uid 목록·이름 등. 현재 앱은 생성하지 않고 탈퇴 때 정리 | 소유자 또는 구성원 | 기존 문서는 소유자 또는 구성원. 신규 생성은 허용하지 않음 |
 | `scheduleRecommendations/{id}` | 유형별 추천 일정 | 로그인한 사용자 전체 | 아무도 못 함(콘솔로만) |
 
 ## 새 필드는 어디에 두는가
