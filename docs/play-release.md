@@ -35,30 +35,27 @@ Firebase App Distribution 과 Google Play 의 목적을 분리하고, 첫 Play �
 
 기본 브랜치에 Dependabot 경보가 수십 건 떠 있고 push 할 때마다 그 숫자가 찍힌다. 출시 직전에 보면 멈추게 되는 숫자라, 판정 방법을 여기 적어 둔다.
 
-**판정 기준은 숫자가 아니라 「앱의 릴리스 런타임 클래스패스에 있나」 다.** 경보의 대부분은 Gradle 빌드 그래프(`settings.gradle.kts`)와 Node 쪽(`functions/`·`firestore-tests/`)에서 온다. 셋 다 사용자가 받는 APK·AAB 에 들어가지 않는다.
-
-```bash
-JAVA_HOME=~/Library/Java/JavaVirtualMachines/temurin-21.0.11/Contents/Home \
-  ./gradlew -q :app:dependencies --configuration releaseRuntimeClasspath > /tmp/app-deps.txt
-
-# 경보에 뜬 패키지 이름을 여기서 찾는다. 안 나오면 앱에 안 들어간다.
-grep -E "netty|logback|jose4j|jdom2" /tmp/app-deps.txt
-```
-
-들어가는 것이 있으면 그때 해결 버전을 본다. 경보의 `vulnerable_version_range` 와 실제로 해석된 버전을 대조한다 — 선언 버전이 아니라 해석된 버전이다.
+경보가 보고한 **실제 해결 버전과 실행 경로**를 함께 본다. 앱 `releaseRuntimeClasspath`에 없더라도 Cloud Functions 서버 런타임, 배포 플러그인, 빌드·테스트 도구에 취약 버전이 남을 수 있다. 앱에 포함되지 않는다는 근거로 전체 경보를 기각하지 않는다.
 
 ```bash
 gh api repos/1hyok/SlowClock/dependabot/alerts --paginate \
   -q '.[] | select(.state=="open") | "\(.security_advisory.severity)\t\(.dependency.package.name)\t\(.security_vulnerability.vulnerable_version_range)"'
+
+JAVA_HOME=~/Library/Java/JavaVirtualMachines/temurin-21.0.11/Contents/Home \
+  ./gradlew :app:buildEnvironment :app:dependencies --console=plain > /tmp/slowclock-app-dependencies.txt
+# app:dependencies의 compile/runtime/UTP 구성별 해결 버전과 경보 범위를 대조한다.
+# functions와 firestore-tests에서는 각각 npm ci 후 npm audit --json을 확인한다.
 ```
 
-**2026-09-06 (main @ c7db4eb) 실측**: 열린 경보 54건(high 19 · moderate 29 · low 6). 릴리스 런타임 클래스패스에서 netty·logback·jose4j·jdom2·httpclient·commons-lang3 는 0건이다. 앱에 들어가는 경보 패키지는 guava 하나인데 두 권고 모두 `< 32.0.0-android` 가 대상이고 앱이 푸는 값은 `32.1.3-android` 라 이미 패치된 판이다. 곧 알려진 취약 코드가 산출물에 들어가지 않는다.
+2026-09-06 확인(의존성 파일 기준 `3eea3ec`): 열린 54건(high 19 · moderate 29 · low 6)의 해당 취약 버전은 Android release runtime에서 확인되지 않았다. 다만 high 19건은 Netty·jose4j·JDOM의 빌드/테스트 경로에 남고, Cloud Functions의 `qs`·`uuid`는 서버 런타임에 남는다. Guava도 runtime `32.1.3-android`와 달리 compile 구성은 `31.1-android`이므로 경로별로 판정해야 한다. 이는 해당 경보 집합에 대한 확인이며 전체 산출물의 안전성을 보증하지 않는다.
 
-`dependency-review` 워크플로는 PR 이 바꾸는 의존성만 본다. 기본 브랜치에 이미 쌓인 경보는 그 검사의 대상이 아니라, 초록인 채로 숫자가 남는다.
+수정은 상위 라이브러리의 지원 버전을 우선 확인한다. 전이 의존성을 강제로 바꿀 때는 해당 구성의 실제 실행 검증이 필요하다. 최신 상위 버전에도 남는 경보는 상위 수정 추적 대상으로 기록하며 무조건 dismiss하지 않는다.
+
+`dependency-review`는 PR이 바꾸는 의존성만 본다. 기존 경보나 런타임 도달성은 이 검사만으로 판정할 수 없다. 주간 감사의 루트 build/debug runtime 보고만으로 앱 build classpath·compile·UTP·ktlint 구성 전체를 확인했다고 판단하지 않는다.
 
 ## 스토어 등록 정보와 앱 콘텐츠 선언 (#47)
 
-스토어 등록 정보 문안과 이미지는 [`docs/play/listing.md`](play/listing.md), [`docs/play/ic_launcher_512.png`](play/ic_launcher_512.png), [`docs/play/feature_graphic_1024x500.png`](play/feature_graphic_1024x500.png) 에 있다. 스크린샷은 로그인된 기기가 필요해 촬영 절차만 적어 두었다.
+스토어 등록 정보 문안과 이미지는 [`docs/play/listing.md`](play/listing.md), [`docs/play/ic_launcher_512.png`](play/ic_launcher_512.png), [`docs/play/feature_graphic_1024x500.png`](play/feature_graphic_1024x500.png) 에 있다. 주요 화면 네 장은 Compose 렌더로 준비돼 있다. 실제 알람·공유 화면의 추가 촬영에는 로그인된 기기가 필요하다.
 
 콘솔 「정책 및 프로그램 → 앱 콘텐츠」 의 답안. 앱이 실제로 하는 일과 [`docs/privacy.html`](privacy.html) 에 맞춰 적었고, 코드가 바뀌면 이 표부터 고친다.
 
@@ -73,18 +70,22 @@ gh api repos/1hyok/SlowClock/dependabot/alerts --paginate \
 | 정부 앱 | 아니오 | |
 | 금융 기능 | 없음 | |
 | 건강 | 해당 없음. 의료 기기·건강 데이터·건강 기록 기능이 없고, 건강 관련 콘텐츠도 앱 안에 없다 | 외부 사이트로 나가는 링크뿐(#51 에서 스크래핑 제거) |
-| 데이터 보안: 수집 | 개인 정보(이름, 이메일 주소, 사용자 ID), 앱 활동(앱 상호작용, 기타 사용자 생성 콘텐츠: 일정·메모·그룹 이름), 기기 또는 기타 ID(FCM 토큰, Firebase 설치 ID), 앱 정보 및 성능(비정상 종료 로그, 진단) | Firebase Auth·Firestore·FCM·Analytics·Crashlytics |
+| 데이터 보안: 수집 | 개인 정보(이름, 이메일 주소, 사용자 ID), 앱 활동(앱 상호작용, 기타 사용자 생성 콘텐츠: 일정·메모), 기기 또는 기타 ID(FCM 토큰, Firebase 설치 ID, Analytics 앱 인스턴스 ID, Crashlytics 설치 식별자), 위치(대략적인 위치: IP 기반), 앱 정보 및 성능(비정상 종료 로그, 진단) | Firebase Auth·Firestore·FCM·Analytics·Crashlytics |
 | 데이터 보안: 공유 | 제3자 공유 없음. Firebase 는 서비스 제공업체. 공유 코드를 통한 열람은 사용자가 시작한 행동 | privacy.html 4절, [firestore.md](firestore.md) 의 컬렉션 표 |
 | 데이터 보안: 처리 | 전송 중 암호화 「예」. 계정 삭제 요청 방법 「예」: 앱 안 내 정보 화면과 `https://1hyok.me/SlowClock/delete-account.html`(#46) | HTTPS, #46 |
-| 데이터 보안: 목적 | 개인 정보·앱 활동·기기 ID 모두 「앱 기능」. 앱 상호작용은 「분석」 추가. 비정상 종료 로그와 진단은 「앱 기능」과 「분석」 | Analytics 는 광고 ID 없이 사용. Crashlytics 는 릴리스 빌드에서만 켠다 |
+| 데이터 보안: 목적 | 계정·일정·FCM 식별자는 「앱 기능」. 앱 상호작용·Analytics 식별자·IP 기반 대략적 위치는 「분석」. 비정상 종료 로그와 진단은 「앱 기능」과 「분석」 | Analytics 는 광고 ID 없이 사용. Crashlytics 는 릴리스 빌드에서만 켠다 |
 | 광고 ID | 아니오 | manifest `tools:node="remove"` |
 | 권한 선언 | `USE_EXACT_ALARM`·`SCHEDULE_EXACT_ALARM`(API 32 전용): 핵심 기능이 알람인 앱(정해진 시각에 일정 알람). `USE_FULL_SCREEN_INTENT`: 알람 전체 화면. `RECEIVE_BOOT_COMPLETED`: 재부팅 뒤 알람 복원 | manifest |
 | 포그라운드 서비스 | `mediaPlayback` 1종(`FOREGROUND_SERVICE_MEDIA_PLAYBACK`). 용도: 「정해 둔 시각에 알람이 울리는 동안 알람 소리를 재생한다. 사용자가 끄거나 5분이 지나면 멈춘다.」 시연 영상에는 알람이 울리고 알림의 「알람 끄기」 로 멈추는 흐름을 담는다 | `app/src/main/AndroidManifest.xml` 의 `android:foregroundServiceType="mediaPlayback"`, `AlarmTriggerService` |
 | 사진·동영상 권한 | 해당 없음 | 미디어 권한 없음 |
 
+Analytics는 광고 ID 권한을 제거해도 앱 인스턴스 ID와 IP 기반 대략적 위치를 자동 수집한다. 선언 근거는 [Analytics 공식 안내](https://support.google.com/analytics/answer/11582702?hl=en)와 [Firebase SDK별 안내](https://firebase.google.com/docs/android/play-data-disclosure)다. 현재 앱에는 새 그룹 생성 기능이 없고 과거 그룹 기록은 계정 삭제 때 정리한다.
+
+제출 전에 Analytics Console의 보유 기간·Google Signals·광고 계정 연결·데이터 공유 설정을 실제로 확인해 선언과 맞춘다. 저장소만으로 이 설정의 현재 값을 확인한 것으로 취급하지 않는다. 계정 삭제와 별도 설치 식별자의 보유 범위는 개인정보처리방침 및 계정 삭제 안내에 함께 설명한다.
+
 ### 스크린샷 촬영 절차
 
-휴대전화 스크린샷은 2장 이상 8장 이하, 9:16 비율, 1080×2400 PNG 로 낸다. 로그인된 기기가 필요하다.
+휴대전화 스크린샷은 2장 이상 8장 이하, 1080×2400(9:20) PNG 로 낸다. 로그인된 기기가 필요하다.
 
 1. 에뮬레이터 `Pixel_7_Claude_QA`(1080×2400, Play Store 이미지)에 Google 계정으로 로그인한다.
 2. `./gradlew :app:installDebug` 로 설치하고 앱을 열어 Google 로그인을 마친다.
