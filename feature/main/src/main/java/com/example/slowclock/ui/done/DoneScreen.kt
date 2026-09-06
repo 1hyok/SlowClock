@@ -46,10 +46,12 @@ internal fun DoneContent(
     state: DoneUiState,
     onIntent: (DoneIntent) -> Unit,
     modifier: Modifier = Modifier,
+    // 날짜 머리글의 기준이 되는 날. 미리보기와 스크린샷 테스트는 고정된 날을 넣는다(#143).
+    today: Date = Date(),
 ) {
     val completed = state.completed
     val remaining = state.remaining
-    val dateText = rememberDayText(Date())
+    val dateText = rememberDayText(today)
 
     Column(
         modifier =
