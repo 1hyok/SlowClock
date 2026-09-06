@@ -14,8 +14,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -23,6 +25,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -57,6 +60,7 @@ class MainViewModelTest {
         every { settingsRepository.observeShareCode() } returns shareCode
         every { scheduleRepository.observeSchedulesBySharedCode(any()) } returns flowOf(emptyList())
         coEvery { userRepository.getUserNames(any()) } returns emptyMap()
+        coEvery { scheduleRepository.getSchedulesOf(any()) } returns emptyList()
         coEvery { userRepository.registerShareCodeWatcher(any()) } returns true
         // 기본값은 정시 알람이 허용된 기기다. 안내 다이얼로그를 다루는 테스트만 이 값을 뒤집는다.
         every { alarmScheduler.canScheduleExactAlarms() } returns true
@@ -70,6 +74,98 @@ class MainViewModelTest {
     }
 
     private fun createViewModel() = MainViewModel(scheduleRepository, userRepository, authRepository, settingsRepository, alarmScheduler)
+
+    @Test
+    fun `로그인하면 서버 일정으로 이 기기의 알람을 맞춘다`() =
+        runTest {
+            // 알람 장부는 기기 안에만 있어 새 기기·재설치에서는 비어 있다. 맞추지 않으면 화면에
+            // 일정은 다 보이는데 알람은 하나도 걸리지 않는다(#176).
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } returns listOf(soon, done)
+
+            createViewModel()
+
+            verify(exactly = 1) { alarmScheduler.syncWith(listOf(soon, done)) }
+        }
+
+    @Test
+    fun `일정 목록을 못 읽으면 알람을 건드리지 않는다`() =
+        runTest {
+            // 빈 목록으로 맞추면 걸려 있던 알람을 전부 지운다. 신호가 약한 것과 일정이 없는 것은
+            // 다른 사실이다(#176).
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } returns null
+
+            createViewModel()
+
+            verify(exactly = 0) { alarmScheduler.syncWith(any()) }
+        }
+
+    @Test
+    fun `로그아웃 뒤 돌아온 일정 목록은 알람을 되살리지 않는다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            every { authRepository.currentUid } answers { uid.value }
+            val pending = CompletableDeferred<List<Schedule>?>()
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } coAnswers {
+                withContext(NonCancellable) { pending.await() }
+            }
+            createViewModel()
+
+            uid.value = null
+            pending.complete(listOf(soon))
+
+            verify(exactly = 0) { alarmScheduler.syncWith(any()) }
+        }
+
+    @Test
+    fun `계정을 바꾼 뒤 앞 계정의 응답이 새 계정 알람을 덮지 않는다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            every { authRepository.currentUid } answers { uid.value }
+            val pending = CompletableDeferred<List<Schedule>?>()
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } coAnswers {
+                withContext(NonCancellable) { pending.await() }
+            }
+            val other = soon.copy(id = "other-schedule", userId = "uid-2")
+            coEvery { scheduleRepository.getSchedulesOf("uid-2") } returns listOf(other)
+            createViewModel()
+
+            uid.value = "uid-2"
+            pending.complete(listOf(soon))
+
+            verify(exactly = 1) { alarmScheduler.syncWith(listOf(other)) }
+            verify(exactly = 0) { alarmScheduler.syncWith(listOf(soon)) }
+        }
+
+    @Test
+    fun `같은 계정으로 다시 로그인해도 비운 알람을 다시 맞춘다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            every { authRepository.currentUid } answers { uid.value }
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } returns listOf(soon)
+            createViewModel()
+
+            uid.value = null
+            uid.value = "uid-1"
+
+            verify(exactly = 2) { alarmScheduler.syncWith(listOf(soon)) }
+        }
+
+    @Test
+    fun `서버를 못 읽었다가 화면으로 돌아오면 알람 맞추기를 다시 시도한다`() =
+        runTest {
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } returnsMany listOf(null, listOf(soon))
+            val viewModel = createViewModel()
+            verify(exactly = 0) { alarmScheduler.syncWith(any()) }
+
+            viewModel.onIntent(MainIntent.ScreenResumed)
+            viewModel.onIntent(MainIntent.ScreenResumed)
+
+            verify(exactly = 1) { alarmScheduler.syncWith(listOf(soon)) }
+            coVerify(exactly = 2) { scheduleRepository.getSchedulesOf("uid-1") }
+        }
 
     @Test
     fun `리스너가 낸 오늘 일정으로 상태를 채우고 지금 할 일을 고른다`() =

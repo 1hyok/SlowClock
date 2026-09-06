@@ -2,6 +2,7 @@ package com.example.slowclock.core.alarm
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -70,26 +71,48 @@ class ScheduleAlarmHelperTest {
     }
 
     @Test
-    fun `다시 알림 action 은 비어 있지 않다`() {
-        // 다시 알림은 requestCode 가 아니라 action 으로 자리를 가른다. 일정 알람 번호가 짝수
-        // 전체와 홀수 전체를 덮어 「비어 있는 번호 대역」 이 없기 때문이다. action 이 빈 문자열이면
-        // filterEquals 가 일정 알람과 같다고 보아 원래 알람을 덮어쓴다(#129).
-        assertTrue(ScheduleAlarmHelper.ACTION_SNOOZE_ALARM.isNotBlank())
+    fun `다시 알림 자리는 어떤 일정의 알람 자리와도 겹치지 않는다`() {
+        // PendingIntent 가 같은 자리인지는 requestCode 와 filterEquals(action·component)로 정해진다.
+        // 일정 알람 번호는 짝수 전체와 홀수 전체, 곧 32비트 정수 전체를 덮어 「비어 있는 번호
+        // 대역」 이 없으므로 번호로는 가를 수 없다. action 이 그 일을 한다(#129 · #179).
+        val slots = (1..300).flatMap { AlarmKind.entries.map { kind -> ScheduleAlarmHelper.slotOf("doc-id-$it", kind) } }
+
+        for (slot in slots) {
+            for (other in slots) {
+                assertNotEquals(
+                    "일정 알람 자리 $slot 이 다시 알림 자리와 같다",
+                    slot,
+                    ScheduleAlarmHelper.snoozeSlotOf(other.requestCode),
+                )
+            }
+        }
     }
 
     @Test
-    fun `자리 번호는 일정 id 와 종류로만 정해진다`() {
-        // 다시 알림이 원래 알람과 같은 번호를 쓰므로, 그 번호를 내는 규칙이 흔들리면
-        // 미뤄 둔 알람을 취소할 때 엉뚱한 자리를 지운다.
-        val id = "schedule-1"
+    fun `다시 알림은 번호가 같고 action 으로만 갈린다`() {
+        // 번호가 달라지면 원래 알람을 취소할 때 미뤄 둔 알람이 함께 지워지지 않아, 일정을 지운
+        // 뒤에도 몇 분 뒤 울린다(#129).
+        val alarm = ScheduleAlarmHelper.slotOf("schedule-1", AlarmKind.START)
+        val snooze = ScheduleAlarmHelper.snoozeSlotOf(alarm.requestCode)
 
-        assertEquals(
-            ScheduleAlarmHelper.generateStartRequestCode(id),
-            ScheduleAlarmHelper.requestCodeOf(id, AlarmKind.START),
-        )
-        assertEquals(
-            ScheduleAlarmHelper.generateEndRequestCode(id),
-            ScheduleAlarmHelper.requestCodeOf(id, AlarmKind.END),
+        assertEquals(alarm.requestCode, snooze.requestCode)
+        assertNotEquals(alarm.action, snooze.action)
+        assertNull("일정 알람에 action 을 붙이면 이미 걸린 알람과 filterEquals 가 어긋난다", alarm.action)
+        assertTrue(snooze.action!!.isNotBlank())
+    }
+
+    @Test
+    fun `같은 일정의 같은 종류는 언제나 같은 자리다`() {
+        // 예약과 취소가 이 값에서 각각 Intent 를 만든다. 값이 흔들리면 취소가 빗나가고
+        // 화면에는 아무 표시도 나지 않는다.
+        val id = "stable-id"
+
+        AlarmKind.entries.forEach { kind ->
+            assertEquals(ScheduleAlarmHelper.slotOf(id, kind), ScheduleAlarmHelper.slotOf(id, kind))
+        }
+        assertNotEquals(
+            ScheduleAlarmHelper.slotOf(id, AlarmKind.START),
+            ScheduleAlarmHelper.slotOf(id, AlarmKind.END),
         )
     }
 }
