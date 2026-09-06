@@ -32,6 +32,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -53,15 +54,21 @@ fun AddScheduleScreen(
     modifier: Modifier = Modifier,
     scheduleId: String? = null,
     initialTitle: String? = null,
+    onInitialTitleConsume: () -> Unit = {},
     viewModel: AddScheduleViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val consumeInitialTitle by rememberUpdatedState(onInitialTitleConsume)
 
     LaunchedEffect(scheduleId) {
         if (!scheduleId.isNullOrBlank()) viewModel.onIntent(AddScheduleIntent.LoadForEdit(scheduleId))
     }
-    LaunchedEffect(initialTitle) {
-        if (!initialTitle.isNullOrBlank()) viewModel.onIntent(AddScheduleIntent.UpdateTitle(initialTitle))
+    LaunchedEffect(initialTitle, state.isLoading, state.editingSchedule?.id, state.isSaved) {
+        if (!initialTitle.isNullOrBlank() && viewModel.uiState.value.canApplyRecommendedTitle(scheduleId)) {
+            viewModel.onIntent(AddScheduleIntent.UpdateTitle(initialTitle))
+            // 조회가 끝나 입력에 반영한 뒤에만 소비한다. 회전하거나 다시 돌아와도 덮어쓰지 않는다.
+            consumeInitialTitle()
+        }
     }
     ObserveSignal(
         signal = state.isSaved.takeIf { it },
@@ -73,7 +80,7 @@ fun AddScheduleScreen(
         state = state,
         onIntent = viewModel::onIntent,
         onNavigateBack = onNavigateBack,
-        onNavigateToRecommendation = onNavigateToRecommendation,
+        onNavigateToRecommendation = { if (!state.isLoading && !state.isSaved) onNavigateToRecommendation() },
         modifier = modifier,
     )
 }
@@ -160,10 +167,10 @@ internal fun AddScheduleContent(
             )
 
             TimePickerSection(
-                selectedTime = state.selectedTime,
-                endTime = state.endTime,
-                onTimeSelect = { onIntent(AddScheduleIntent.UpdateTime(it)) },
-                onEndTimeSelect = { onIntent(AddScheduleIntent.UpdateEndTime(it)) },
+                startTime = state.startTimeInput,
+                endTime = state.endTimeInput,
+                onTimeSelect = { onIntent(AddScheduleIntent.UpdateTimeInput(it)) },
+                onEndTimeSelect = { onIntent(AddScheduleIntent.UpdateTimeInput(it, isEnd = true)) },
             )
 
             RecurringSection(

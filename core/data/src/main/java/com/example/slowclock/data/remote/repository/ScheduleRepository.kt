@@ -303,18 +303,23 @@ class ScheduleRepository
                 return ScheduleResult.Error(AppError.InvalidDataError)
             }
 
-            // Always preserve sharedCode and all fields from the original schedule
-            val updatedSchedule =
-                schedule.copy(
-                    userId = uid, // 현재 사용자 ID로 강제 설정
-                    updatedAt = Timestamp.now(),
-                    sharedCode = schedule.sharedCode, // ensure sharedCode is preserved
+            // 편집 화면이 바꾼 필드만 쓴다. 읽은 뒤 바뀐 완료 기록·공유 코드·소유자를 되돌리거나,
+            // 이미 삭제된 문서를 set 으로 다시 만들지 않는다.
+            val changes =
+                mapOf(
+                    "title" to schedule.title,
+                    "description" to schedule.description,
+                    "startTime" to schedule.startTime,
+                    "endTime" to schedule.endTime,
+                    "recurring" to schedule.recurring,
+                    "recurringType" to schedule.recurringType,
+                    "updatedAt" to Timestamp.now(),
                 )
 
             return try {
                 schedulesCollection
                     .document(schedule.id)
-                    .set(updatedSchedule)
+                    .update(changes)
                     .await()
 
                 Log.d("ScheduleRepo", "일정 수정 성공: ${schedule.id}")
