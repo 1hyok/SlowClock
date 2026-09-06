@@ -1,0 +1,48 @@
+name: Cloud Functions Validation
+
+on:
+  pull_request:
+    paths:
+      - 'functions/**'
+      - '.github/scripts/functions-notification.test.mjs'
+      - '.github/workflows/functions-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - '.github/scripts/functions-notification.test.mjs'
+      - '.github/workflows/functions-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: functions-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  functions:
+    name: Validate Functions runtime and notifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Install and lint Functions
+        working-directory: functions
+        run: |
+          npm ci --ignore-scripts
+          npm run lint
+          npm test
+      - name: Load the trigger without contacting production
+        run: node -e 'require("./functions/index.js")'
+      - name: Verify notification handling at the Firestore and FCM boundaries
+        run: node --test .github/scripts/functions-notification.test.mjs

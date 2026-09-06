@@ -5,7 +5,7 @@ import process from 'node:process';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-// app 의 merged manifest(processDebugMainManifest) 기준 허용 목록. 라이브러리가 병합하는 권한도 여기
+// app 의 debug/release merged manifest 기준 허용 목록. 라이브러리가 병합하는 권한도 여기
 // 없으면 실패한다 — Firebase Analytics 의 광고 ID(AD_ID·ACCESS_ADSERVICES_*)는 app manifest 가
 // tools:node="remove" 로 빼므로 목록에 없다. 새 권한은 Play 데이터 보안·권한 선언 양식과 함께 검토한다.
 export const ALLOWED_PERMISSIONS = new Set([

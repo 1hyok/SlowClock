@@ -22,14 +22,19 @@ sealed interface ShareCodeIntent : MviIntent {
  */
 data class ShareCodeUiState(
     val input: String = "",
+    val hasRegisteredCode: Boolean = false,
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
     val saveError: String? = null,
 ) : UiState {
-    val canSave: Boolean get() = input.isNotBlank() && !isSaving
+    val canSave: Boolean get() = (input.isNotBlank() || hasRegisteredCode) && !isSaving
 }
 
 sealed interface ShareCodeReducerEvent : ReducerEvent {
+    data class Initialized(
+        val value: String,
+    ) : ShareCodeReducerEvent
+
     data class InputChanged(
         val value: String,
     ) : ShareCodeReducerEvent
@@ -40,5 +45,7 @@ sealed interface ShareCodeReducerEvent : ReducerEvent {
 
     data object SavedConsumed : ShareCodeReducerEvent
 
-    data object SaveFailed : ShareCodeReducerEvent
+    data class SaveFailed(
+        val message: String = "코드를 등록하지 못했습니다. 인터넷에 연결한 뒤 다시 눌러 주세요.",
+    ) : ShareCodeReducerEvent
 }

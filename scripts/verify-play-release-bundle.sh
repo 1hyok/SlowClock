@@ -28,10 +28,10 @@ if [[ ! -s "${bundle_path}" ]]; then
     exit 1
 fi
 
-# v1 은 release 에서 minify 를 끄고 있어 R8 mapping 이 없다. 켜면 mapping 이 생기고 아래가 그 존재를 보고한다.
-mapping_status="없음 (isMinifyEnabled=false)"
-if [[ -s "${mapping_path}" ]]; then
-    mapping_status="${mapping_path}"
+# release 는 R8 을 사용한다. 이전 빌드의 mapping 을 현재 AAB 의 것으로 보고하지 않는다.
+if [[ ! -s "${mapping_path}" ]]; then
+    echo "R8 mapping을 찾을 수 없거나 비어 있습니다: ${mapping_path}" >&2
+    exit 1
 fi
 
 bundle_entries="$(unzip -Z1 "${bundle_path}")"
@@ -40,6 +40,7 @@ required_entries=(
     "base/manifest/AndroidManifest.xml"
     "base/resources.pb"
     "base/dex/classes.dex"
+    "BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map"
 )
 
 for required_entry in "${required_entries[@]}"; do
@@ -48,6 +49,15 @@ for required_entry in "${required_entries[@]}"; do
         exit 1
     fi
 done
+
+private_dir="$(mktemp -d "${TMPDIR:-/tmp}/slowclock-bundle-mapping.XXXXXX")"
+trap 'rm -rf "${private_dir}"' EXIT
+unzip -p "${bundle_path}" \
+    'BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map' > "${private_dir}/proguard.map"
+if ! cmp -s "${mapping_path}" "${private_dir}/proguard.map"; then
+    echo "외부 R8 mapping이 AAB에 포함된 mapping과 일치하지 않습니다." >&2
+    exit 1
+fi
 
 export LC_ALL=C
 # jarsigner는 unsigned entry가 섞여 있어도 "jar verified."와 exit 0을 내므로 -strict로 경고를 exit code에 승격시킨다.
@@ -81,4 +91,4 @@ printf 'AAB: %s\n' "${bundle_path}"
 printf '크기(bytes): %s\n' "${bundle_size}"
 printf 'AAB SHA-256: %s\n' "${bundle_sha256}"
 printf '서명 인증서 SHA-256: %s\n' "${signer_sha256}"
-printf 'R8 mapping: %s\n' "${mapping_status}"
+printf 'R8 mapping (AAB 내 파일과 일치): %s\n' "${mapping_path}"

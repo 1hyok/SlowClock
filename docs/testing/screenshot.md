@@ -6,7 +6,7 @@
 - [Generate Screenshot Baselines](../../.github/workflows/screenshot-baseline-generate.yml): `screenshot-baseline` 라벨이 붙은 PR 의 정확한 head 에서 baseline 생성·재검증 후 artifact 발행
 - [Apply Screenshot Baselines](../../.github/workflows/screenshot-baseline-apply.yml): artifact 와 head 를 다시 검증한 뒤 허용된 PNG 만 PR 브랜치에 커밋
 
-현재 screenshot 테스트가 있는 모듈은 `:app`, `:feature:main`이다. `:feature:profile`의 추가 회귀 테스트(#188)를 위해 baseline 적용 경로도 준비했다. baseline은 각 모듈의 `src/screenshotTestDebug/reference/`에 커밋된다. 다른 모듈에 `src/screenshotTest/`를 추가하면 [영향 계산기](../../.github/scripts/resolve-pr-impact.mjs)가 자동으로 잡는다. [적용 워크플로의 허용 경로](../../.github/workflows/screenshot-baseline-apply.yml)를 **main에 먼저 반영**하고 `screenshot-baseline-policy.test.mjs`로 확인한다. 적용 워크플로는 기본 브랜치에서 실행되므로 이 순서가 필요하다.
+현재 screenshot 테스트가 있는 모듈은 `:app`, `:feature:main`, `:feature:profile`이다. baseline은 각 모듈의 `src/screenshotTestDebug/reference/`에 커밋된다. 다른 모듈에 `src/screenshotTest/`를 추가하면 [영향 계산기](../../.github/scripts/resolve-pr-impact.mjs)가 자동으로 잡는다. [적용 워크플로의 허용 경로](../../.github/workflows/screenshot-baseline-apply.yml)를 **main에 먼저 반영**하고 `screenshot-baseline-policy.test.mjs`로 확인한다. 적용 워크플로는 기본 브랜치에서 실행되므로 이 순서가 필요하다.
 
 ## Actions 에서 baseline 갱신 (기본 경로)
 
@@ -25,7 +25,7 @@ Docker 호환 runtime(Colima/Docker Desktop) 이 필요하다.
 ```bash
 docker build --platform linux/amd64 -t slowclock-screenshot:latest -f Dockerfile.screenshot .
 docker run --rm --platform linux/amd64 -v "$PWD":/workspace -w /workspace slowclock-screenshot:latest \
-  ./gradlew :app:updateScreenshotTest :feature:main:updateScreenshotTest --rerun
+  ./gradlew :app:updateScreenshotTest :feature:main:updateScreenshotTest :feature:profile:updateScreenshotTest --rerun
 ```
 
 → 변경된 PNG가 각 모듈의 `src/screenshotTestDebug/reference/...`에 갱신된다. `git add` 후 commit.
@@ -34,7 +34,7 @@ docker run --rm --platform linux/amd64 -v "$PWD":/workspace -w /workspace slowcl
 
 ```bash
 docker run --rm --platform linux/amd64 -v "$PWD":/workspace -w /workspace slowclock-screenshot:latest \
-  ./gradlew :app:validateScreenshotTest :feature:main:validateScreenshotTest
+  ./gradlew :app:validateScreenshotTest :feature:main:validateScreenshotTest :feature:profile:validateScreenshotTest
 ```
 
 → baseline 과 docker 환경에서 새로 그린 PNG 를 비교한다. 실패 시 각 모듈의 `build/outputs/screenshotTest-results/preview/debug/diffs/` 에서 diff PNG 를 확인한다.

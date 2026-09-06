@@ -120,14 +120,20 @@ test("release workflow is secretless, non-deploying, and uploads reports only", 
         join(repositoryRoot, ".github/scripts/run-release-aab-preflight.sh"),
         "utf8",
     );
+    assert.match(preflight, /python3 .*verify-dex-reflection\.py/);
+    assert.doesNotMatch(preflight, /grep -a/);
+    assert.match(preflight, /node .*verify-android-manifest\.mjs/);
+    assert.match(preflight, /merged_manifest\/release\/processReleaseMainManifest\/AndroidManifest\.xml/);
+    assert.match(preflight, /:app:lintRelease :app:bundleRelease/);
+    const dexVerifier = await readFile(join(scriptsDirectory, "verify-dex-reflection.py"), "utf8");
     for (const symbol of [
-        "Lcom/example/slowclock/data/model/Schedule;",
-        "Lcom/example/slowclock/data/model/User;",
+        "com.example.slowclock.data.model.Schedule",
+        "com.example.slowclock.data.model.User",
         "getTitle",
         "getStartTime",
     ]) {
         assert.ok(
-            preflight.includes(symbol),
+            dexVerifier.includes(symbol),
             `배포 전 검사가 ${symbol} 를 확인하지 않는다`,
         );
     }
@@ -137,13 +143,24 @@ test("reports an absent R8 mapping honestly instead of fabricating a digest", ()
     const report = buildReport(currentMetrics({ mappingSha256: NO_MAPPING }), null, "2026-09-05T00:00:00.000Z");
 
     assert.equal(report.validation.mappingPresent, false);
-    assert.equal(report.validation.r8Minification, false);
+    assert.equal(report.validation.r8Minification, null);
     assert.equal(report.artifacts.mapping.present, false);
     assert.equal(report.artifacts.mapping.sha256, null);
-    assert.match(renderMarkdown(report), /R8 mapping: absent \(isMinifyEnabled=false\)/);
+    assert.match(renderMarkdown(report), /R8 mapping: absent \(R8 minification unverified\)/);
 
     const withMapping = buildReport(currentMetrics(), null, "2026-09-05T00:00:00.000Z");
     assert.equal(withMapping.artifacts.mapping.present, true);
     assert.match(renderMarkdown(withMapping), /R8 mapping: present/);
 });
 
+test("mapping presence never stands in for resource shrinking evidence", () => {
+    for (const mappingSha256 of [NO_MAPPING, "a".repeat(64)]) {
+        const report = buildReport(currentMetrics({ mappingSha256 }));
+        assert.equal(report.validation.resourceShrinking, null);
+        assert.match(report.validation.resourceShrinkingEvidence, /Not verified/);
+        assert.match(renderMarkdown(report), /Resource shrinking: unverified/);
+    }
+    for (const mappingSha256 of [undefined, "", "not-a-digest"]) {
+        assert.throws(() => buildReport(currentMetrics({ mappingSha256 })), /mapping-sha256/);
+    }
+});
