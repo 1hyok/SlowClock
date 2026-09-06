@@ -165,6 +165,7 @@ fun AppNavigation(
                     }
                     entry<RecommendationKey> {
                         RecommendationScreen(
+                            onNavigateBack = { backStack.popBack() },
                             onSelectRecommendation = { title ->
                                 recommendation = ScheduleRecommendation.selected(backStack, title)
                                 backStack.popBack()

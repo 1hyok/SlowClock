@@ -221,7 +221,7 @@ internal fun MainContent(
                     IconButton(onClick = onNavigateToSettings, modifier = Modifier.size(56.dp)) {
                         Icon(
                             Icons.Outlined.Settings,
-                            contentDescription = "설정",
+                            contentDescription = stringResource(R.string.share_code_settings_description),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(30.dp),
                         )

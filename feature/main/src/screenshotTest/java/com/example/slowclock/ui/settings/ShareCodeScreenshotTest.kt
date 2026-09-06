@@ -10,7 +10,7 @@ import com.example.slowclock.ui.theme.SlowClockTheme
 @Composable
 internal fun ShareCodeClearScreenshot() {
     SlowClockTheme(darkTheme = false) {
-        ShareCodeContent(state = ShareCodeUiState(hasRegisteredCode = true), onIntent = {})
+        ShareCodeContent(state = ShareCodeUiState(hasRegisteredCode = true), onIntent = {}, onReturn = {})
     }
 }
 
@@ -26,6 +26,7 @@ internal fun ShareCodeClearFailedScreenshot() {
                     saveError = "공유 설정을 해제하지 못했습니다. 기존 코드는 유지됩니다. 인터넷에 연결한 뒤 다시 눌러 주세요.",
                 ),
             onIntent = {},
+            onReturn = {},
         )
     }
 }

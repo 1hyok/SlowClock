@@ -1,0 +1,4 @@
+<resources>
+    <string name="share_code_settings_description">공유 코드 설정</string>
+    <string name="share_code_back_without_saving">저장하지 않고 돌아가기</string>
+</resources>
