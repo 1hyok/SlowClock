@@ -41,7 +41,7 @@ Firestore 에는 필드 단위 읽기 제한이 없다. 문서 하나를 읽게 
 
 `SavedStateHandle`은 시스템이 같은 task를 복원하는 범위다. 강제 종료·최근 앱 목록에서 제거·재부팅으로 task가 사라진 경우의 입력 복원까지 보장하지 않는다. 백그라운드 상태에서 저장되지 않은 최신 값에도 한계가 있다. 이 범위를 넘어서는 내구성 있는 작성 중 보관함은 별도다.
 
-공유 등록부 복구와 일정 쓰기는 같은 transaction에서 수행하고 규칙은 `getAfter`로 최종 소유 관계를 확인한다. 첫 제출의 고정 ID가 비어 있는지 확인할 수 있도록 로그인한 요청의 미존재 일정 `get`만 허용한다. 기존 타인 일정과 목록 및 등록부 읽기는 계속 제한한다. 완료 실패는 화면의 임시 표시를 되돌리며, 그 사이 도착한 새 서버 목록은 덮지 않는다.
+공유 등록부 복구와 일정 쓰기는 같은 transaction에서 수행하고 규칙은 `getAfter`로 최종 소유 관계를 확인한다. 첫 제출의 고정 ID가 비어 있는지 확인할 수 있도록 로그인한 요청의 미존재 일정 `get`만 허용한다. 기존 타인 일정과 목록 및 등록부 읽기는 계속 제한한다. 완료 실패는 화면의 임시 표시를 되돌리며, 그 사이 도착한 새 서버 목록은 덮지 않는다. 완료·시간표 화면은 로그아웃 시 이전 목록을 비우고 로그인 필요 안내를 표시한다. 재로그인하면 선택한 날짜의 구독을 다시 시작하며, 이전 로그인 세대의 완료 응답은 새 화면을 변경하지 않는다.
 
 근거: [Firestore transactions](https://firebase.google.com/docs/firestore/manage-data/transactions), [SavedStateHandle 복원 범위](https://developer.android.com/topic/libraries/architecture/viewmodel/viewmodel-savedstate), [Task.await 취소](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-play-services/kotlinx.coroutines.tasks/await.html).
 

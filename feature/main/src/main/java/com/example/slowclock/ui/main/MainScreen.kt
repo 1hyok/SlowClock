@@ -1,6 +1,7 @@
 package com.example.slowclock.ui.main
 
 import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +20,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -26,17 +29,21 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.ui.common.ScheduleLoadingIndicator
 import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.SignInPrompt
 import com.example.slowclock.ui.common.components.rememberDayText
 import com.example.slowclock.ui.common.dialog.DeleteConfirmDialog
+import com.example.slowclock.ui.common.launchExternalActivity
 import com.example.slowclock.ui.main.components.DayHeader
 import com.example.slowclock.ui.main.components.EmptyStateCard
 import com.example.slowclock.ui.main.components.NowCard
@@ -44,6 +51,7 @@ import com.example.slowclock.ui.main.components.ScheduleDetailDialog
 import com.example.slowclock.ui.main.components.SharedRemindersSection
 import com.example.slowclock.ui.main.components.TodayScheduleSection
 import com.example.slowclock.ui.mvi.ObserveSignal
+import kotlinx.coroutines.launch
 import java.util.Date
 
 /** 메인 화면(stateful). 네비게이션 콜백만 받고 나머지는 [MainIntent] 로 보낸다. */
@@ -59,6 +67,13 @@ fun MainScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    ObserveSignal(
+        signal = state.userMessage,
+        consumed = MainIntent.ConsumeUserMessage,
+        onIntent = viewModel::onIntent,
+    ) { message -> scope.launch { snackbarHostState.showSnackbar(message) } }
     // 앱을 켜 둔 채 자정을 넘기면 구독이 어제 회차를 보고 있다(#171).
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onIntent(MainIntent.ScreenResumed) }
     ObserveSignal(
@@ -66,7 +81,16 @@ fun MainScreen(
         consumed = MainIntent.ConsumeExactAlarmSettingsRequest,
         onIntent = viewModel::onIntent,
     ) {
-        context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+        val opened =
+            launchExternalActivity(
+                open = {
+                    context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, "package:${context.packageName}".toUri()))
+                },
+                fallback = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
+                },
+            )
+        if (!opened) viewModel.onIntent(MainIntent.ExactAlarmSettingsUnavailable)
     }
     MainContent(
         state = state,
@@ -76,6 +100,7 @@ fun MainScreen(
         onNavigateToProfile = onNavigateToProfile,
         onNavigateToSettings = onNavigateToSettings,
         onSignIn = onSignIn,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = modifier,
     )
 }
@@ -100,6 +125,7 @@ internal fun MainContent(
     // 날짜 머리글의 기준이 되는 날. 미리보기와 스크린샷 테스트는 고정된 날을 넣어, 그린 날에
     // 따라 그림이 달라지지 않게 한다. 시계를 읽으면 baseline 이 하루 만에 어긋난다(#143).
     today: Date = Date(),
+    snackbarHost: @Composable () -> Unit = {},
 ) {
     val isSignedOut = state.isSignedInKnown && state.currentUserId.isBlank()
     val dateText = rememberDayText(today)
@@ -142,6 +168,7 @@ internal fun MainContent(
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = snackbarHost,
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
@@ -244,7 +271,15 @@ internal fun MainContent(
                 }
             }
 
-            if (state.todaySchedules.isEmpty() && !state.isLoading) {
+            if (!state.isSignedInKnown || state.isLoading) {
+                item { ScheduleLoadingIndicator() }
+            }
+            if (state.pendingDelete != null) {
+                item { ScheduleLoadingIndicator(message = "일정을 삭제하고 있습니다") }
+            }
+            if (state.isSignedInKnown && state.todaySchedules.isEmpty() && !state.isLoading && state.error == null &&
+                state.pendingDelete == null
+            ) {
                 item { EmptyStateCard() }
             }
 

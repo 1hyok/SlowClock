@@ -44,7 +44,18 @@ sealed interface MainIntent : MviIntent {
     data object DismissExactAlarmNotice : MainIntent
 
     data object ConsumeExactAlarmSettingsRequest : MainIntent
+
+    data object ExactAlarmSettingsUnavailable : MainIntent
+
+    data object ConsumeUserMessage : MainIntent
 }
+
+/** 동일한 일정을 다시 삭제하더라도 늦은 이전 응답과 구분한다. */
+data class DeleteOperation(
+    val schedule: Schedule,
+    val userId: String,
+    val requestId: String,
+)
 
 /** 메인 화면의 단일 UI 상태. 오늘 일정과 공유 일정, 다이얼로그 상태를 담는다. */
 data class MainUiState(
@@ -60,6 +71,9 @@ data class MainUiState(
     val selectedScheduleForDetail: Schedule? = null,
     /** null 이 아니면 삭제 확인 다이얼로그가 떠 있다. */
     val scheduleToDelete: Schedule? = null,
+    val pendingDelete: DeleteOperation? = null,
+    /** 목록 스냅샷이 와도 사용자가 재시도하거나 닫을 때까지 실패 작업을 보존한다. */
+    val failedDelete: DeleteOperation? = null,
     val currentUserId: String = "",
     /** 로그인 여부를 아직 모르는 동안에는 로그인 안내를 띄우지 않는다. */
     val isSignedInKnown: Boolean = false,
@@ -67,6 +81,7 @@ data class MainUiState(
     val showExactAlarmNotice: Boolean = false,
     /** null 이 아니면 화면이 시스템 설정을 한 번 연다. */
     val openExactAlarmSettings: Unit? = null,
+    val userMessage: String? = null,
 ) : UiState
 
 /** 메인 화면의 상태가 겪은 것. 화면은 만들지 않고 ViewModel 만 dispatch 한다. */
@@ -119,10 +134,17 @@ sealed interface MainReducerEvent : ReducerEvent {
 
     data object DeleteDismissed : MainReducerEvent
 
-    data object Deleting : MainReducerEvent
+    data class Deleting(
+        val operation: DeleteOperation,
+    ) : MainReducerEvent
+
+    data class DeleteFailed(
+        val operation: DeleteOperation,
+        val error: AppError,
+    ) : MainReducerEvent
 
     data class Deleted(
-        val scheduleId: String,
+        val operation: DeleteOperation,
         val nowMillis: Long,
     ) : MainReducerEvent
 
@@ -147,4 +169,8 @@ sealed interface MainReducerEvent : ReducerEvent {
     data object ExactAlarmSettingsRequested : MainReducerEvent
 
     data object ExactAlarmSettingsRequestConsumed : MainReducerEvent
+
+    data object ExactAlarmSettingsFailed : MainReducerEvent
+
+    data object UserMessageConsumed : MainReducerEvent
 }

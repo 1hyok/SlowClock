@@ -45,5 +45,5 @@ fun Throwable.toAppError(): AppError =
         message?.contains("not found", ignoreCase = true) == true -> AppError.NotFoundError
         message?.contains("authentication", ignoreCase = true) == true -> AppError.AuthError
         message?.contains("storage", ignoreCase = true) == true -> AppError.StorageFullError
-        else -> AppError.GeneralError(message)
+        else -> AppError.GeneralError()
     }

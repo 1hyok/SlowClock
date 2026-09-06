@@ -2,13 +2,16 @@ package com.example.slowclock.ui.done
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.ui.mvi.MviViewModel
+import com.example.slowclock.util.AppError
 import com.example.slowclock.util.toAppError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
@@ -19,16 +22,26 @@ class DoneViewModel
     @Inject
     constructor(
         private val scheduleRepository: ScheduleRepository,
+        private val authRepository: AuthRepository,
     ) : MviViewModel<DoneIntent, DoneUiState, DoneReducerEvent>(DoneUiState()) {
         private var scheduleJob: Job? = null
         private var scheduleRevision = 0L
+        private var userGeneration = 0L
         private val pendingCompletions = mutableSetOf<String>()
 
         /** 지금 구독이 보고 있는 날. 날이 바뀌면 다시 건다(#171). */
         private var subscribedDay: String = ""
 
         init {
-            observeTodaySchedules()
+            viewModelScope.launch {
+                authRepository.observeCurrentUid().distinctUntilChanged().collect {
+                    userGeneration++
+                    scheduleRevision++
+                    scheduleJob?.cancel()
+                    dispatch(DoneReducerEvent.Loaded(emptyList()))
+                    observeTodaySchedules()
+                }
+            }
         }
 
         override fun onIntent(intent: DoneIntent) {
@@ -96,6 +109,13 @@ class DoneViewModel
         private fun observeTodaySchedules() {
             scheduleJob?.cancel()
             scheduleRevision++
+            val uid = authRepository.currentUid
+            if (uid == null) {
+                dispatch(DoneReducerEvent.Loaded(emptyList()))
+                dispatch(DoneReducerEvent.Failed(AppError.AuthError))
+                return
+            }
+            val generation = userGeneration
             subscribedDay = todayKey()
             scheduleJob =
                 viewModelScope.launch {
@@ -104,10 +124,14 @@ class DoneViewModel
                         .observeSchedulesForDate(Calendar.getInstance(), today = true)
                         .catch { e ->
                             Log.e(TAG, "일정 구독 실패", e)
-                            dispatch(DoneReducerEvent.Failed(e.toAppError()))
+                            if (authRepository.currentUid == uid && generation == userGeneration) {
+                                dispatch(DoneReducerEvent.Failed(e.toAppError()))
+                            }
                         }.collect {
-                            scheduleRevision++
-                            dispatch(DoneReducerEvent.Loaded(it))
+                            if (authRepository.currentUid == uid && generation == userGeneration) {
+                                scheduleRevision++
+                                dispatch(DoneReducerEvent.Loaded(it))
+                            }
                         }
                 }
         }
@@ -130,18 +154,25 @@ class DoneViewModel
             }
 
         private fun toggleComplete(scheduleId: String) {
+            val uid = authRepository.currentUid ?: return
+            val generation = userGeneration
             val schedule = currentState.schedules.find { it.id == scheduleId } ?: return
-            if (!pendingCompletions.add(scheduleId)) return
+            val key = "$uid:$generation:$scheduleId"
+            if (!pendingCompletions.add(key)) return
             val revision = scheduleRevision
             dispatch(DoneReducerEvent.Toggled(scheduleId))
 
             fun restoreIfCurrent() {
-                if (revision == scheduleRevision) dispatch(DoneReducerEvent.Restored(schedule))
+                if (authRepository.currentUid == uid && generation == userGeneration && revision == scheduleRevision) {
+                    dispatch(DoneReducerEvent.Restored(schedule))
+                }
             }
             viewModelScope.launch {
                 try {
                     val result = scheduleRepository.markScheduleAsCompleted(scheduleId, !schedule.completed, schedule.occurrenceDate)
-                    if (result is ScheduleRepository.ScheduleResult.Error) {
+                    if (result is ScheduleRepository.ScheduleResult.Error && authRepository.currentUid == uid &&
+                        generation == userGeneration
+                    ) {
                         restoreIfCurrent()
                         dispatch(DoneReducerEvent.Failed(result.error))
                     }
@@ -149,7 +180,7 @@ class DoneViewModel
                     restoreIfCurrent()
                     throw e
                 } finally {
-                    pendingCompletions.remove(scheduleId)
+                    pendingCompletions.remove(key)
                 }
             }
         }

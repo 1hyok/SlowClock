@@ -187,6 +187,8 @@ class ScheduleRepository
             if (userShareCode.isBlank()) {
                 Log.w("ScheduleRepo", "공유 코드가 비어 있어 이 일정은 가족에게 보이지 않는다")
             }
+            // 앱 시작의 비동기 복구보다 저장이 먼저 실행돼도 등록부를 확인한 뒤 쓴다.
+            firestore.ensureShareCodeOwner(uid, userShareCode)
             return userShareCode
         }
 

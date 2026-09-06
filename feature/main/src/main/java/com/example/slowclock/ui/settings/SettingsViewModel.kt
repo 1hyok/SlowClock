@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.ui.mvi.MviViewModel
+import com.example.slowclock.util.AppError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,6 +46,22 @@ class SettingsViewModel
                 SettingsIntent.ConsumeFullScreenAlarmSettingsRequest -> {
                     dispatch(SettingsReducerEvent.FullScreenAlarmSettingsRequestConsumed)
                 }
+
+                SettingsIntent.OpenMedicalNews -> {
+                    dispatch(SettingsReducerEvent.MedicalNewsRequested)
+                }
+
+                SettingsIntent.ConsumeMedicalNewsRequest -> {
+                    dispatch(SettingsReducerEvent.MedicalNewsRequestConsumed)
+                }
+
+                SettingsIntent.MedicalNewsUnavailable -> {
+                    dispatch(SettingsReducerEvent.MedicalNewsFailed)
+                }
+
+                SettingsIntent.ConsumeError -> {
+                    dispatch(SettingsReducerEvent.ErrorConsumed)
+                }
             }
         }
 
@@ -77,6 +94,24 @@ class SettingsViewModel
 
                 SettingsReducerEvent.FullScreenAlarmSettingsRequestConsumed -> {
                     state.copy(openFullScreenAlarmSettings = null)
+                }
+
+                SettingsReducerEvent.MedicalNewsRequested -> {
+                    state.copy(openMedicalNews = Unit, error = null)
+                }
+
+                SettingsReducerEvent.MedicalNewsRequestConsumed -> {
+                    state.copy(openMedicalNews = null)
+                }
+
+                SettingsReducerEvent.MedicalNewsFailed -> {
+                    state.copy(
+                        error = AppError.GeneralError("브라우저를 열 수 없습니다. 기기에 브라우저가 설치되어 있고 사용 가능한지 확인해주세요"),
+                    )
+                }
+
+                SettingsReducerEvent.ErrorConsumed -> {
+                    state.copy(error = null)
                 }
             }
     }

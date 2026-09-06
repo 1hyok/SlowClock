@@ -30,13 +30,13 @@ fun RecommendationPlaceholder(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .heightIn(min = 140.dp)
                     .padding(24.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "🔮 일정 추천해드릴까요?",
+                    text = "일정 추천해드릴까요?",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )

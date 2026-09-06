@@ -122,6 +122,11 @@ class ScheduleRepositoryAddScheduleTest {
         every { firestore.collection("schedules") } returns schedulesCollection
         every { firestore.collection("users") } returns usersCollection
         every { firestore.batch() } returns batch
+        val registry = mockk<CollectionReference>()
+        val codeRef = mockk<DocumentReference>()
+        every { firestore.collection("shareCodes") } returns registry
+        every { registry.document(shareCode) } returns codeRef
+        every { codeRef.set(mapOf("userId" to uid)) } returns Tasks.forResult(null)
 
         return ScheduleRepository(auth, firestore) to batch
     }
