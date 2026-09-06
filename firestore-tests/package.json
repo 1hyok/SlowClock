@@ -5,7 +5,7 @@
   "description": "Firestore 보안 규칙 회귀 테스트. 에뮬레이터에 규칙을 올리고 앱이 실제로 하는 접근만 통과하는지 본다.",
   "type": "module",
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project slowclock-rules-test \"node --test rules.test.mjs\""
+    "test": "firebase emulators:exec --only firestore --project slowclock-rules-test \"node --test *.test.mjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.2",

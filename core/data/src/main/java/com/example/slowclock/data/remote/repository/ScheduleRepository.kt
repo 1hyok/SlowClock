@@ -13,8 +13,12 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Source
+import com.google.firebase.firestore.Transaction
+import com.google.firebase.firestore.toObject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOf
@@ -159,6 +163,8 @@ class ScheduleRepository
                         .sortedBy { it.startTime }
 
                 ScheduleResult.Success(selectedDateSchedules)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ScheduleResult.Error(e.toAppError())
             }
@@ -184,193 +190,159 @@ class ScheduleRepository
             return userShareCode
         }
 
-        // 일정 추가
-        suspend fun addSchedule(schedule: Schedule): ScheduleResult<String> {
-            val uid = auth.currentUser?.uid
-            if (uid == null) {
-                Log.e("ScheduleRepo", "사용자 로그인 안됨")
-                return ScheduleResult.Error(AppError.AuthError)
-            }
-
-            // 데이터 검증
-            if (schedule.title.isBlank()) {
-                return ScheduleResult.Error(AppError.InvalidDataError)
-            }
-
-            return try {
-                // 공유 코드 읽기도 저장과 같은 try 안에 둔다. 이 읽기는 오프라인이거나 토큰이
-                // 무효해지면 그대로 던지는데, 호출자인 ViewModel 은 viewModelScope 에서 부르고
-                // 잡지 않는다. try 밖에 두면 저장 실패는 안내가 되고 이 읽기 실패만 앱을
-                // 강제 종료시킨다(#133).
-                val userShareCode = fetchShareCode(uid)
-                val newSchedule =
-                    schedule.copy(
-                        userId = uid,
-                        sharedCode = userShareCode,
-                        createdAt = Timestamp.now(),
-                        updatedAt = Timestamp.now(),
-                    )
-
-                val docRef = schedulesCollection.document()
-                val scheduleWithId = newSchedule.copy(id = docRef.id)
-                Log.d("ScheduleRepo", "일정 저장 시도: ${scheduleWithId.title}")
-
-                docRef.set(scheduleWithId).await()
-                Log.d("ScheduleRepo", "일정 저장 성공: ${docRef.id}")
-                ScheduleResult.Success(docRef.id)
-            } catch (e: FirebaseFirestoreException) {
-                Log.e("ScheduleRepo", "Firestore 저장 에러: ${e.code}", e)
-                val error =
-                    when (e.code) {
-                        FirebaseFirestoreException.Code.UNAVAILABLE -> AppError.NetworkError
-                        FirebaseFirestoreException.Code.DEADLINE_EXCEEDED -> AppError.TimeoutError
-                        FirebaseFirestoreException.Code.PERMISSION_DENIED -> AppError.PermissionError
-                        FirebaseFirestoreException.Code.RESOURCE_EXHAUSTED -> AppError.StorageFullError
-                        else -> AppError.SaveError
-                    }
-                ScheduleResult.Error(error)
-            } catch (e: Exception) {
-                Log.e("ScheduleRepo", "일정 저장 실패", e)
-                ScheduleResult.Error(AppError.SaveError)
+        /** 같은 제출 ID로만 만들고, 이미 확인된 요청은 서버 문서를 보존해 반환한다. */
+        suspend fun addSchedule(schedule: Schedule): ScheduleResult<Schedule> {
+            val uid = auth.currentUser?.uid ?: return ScheduleResult.Error(AppError.AuthError)
+            if (schedule.id.isBlank() || schedule.title.isBlank()) return ScheduleResult.Error(AppError.InvalidDataError)
+            val ref = schedulesCollection.document(schedule.id)
+            return onlineWrite {
+                val existing = get(ref)
+                if (existing.exists()) {
+                    val saved = requireNotNull(existing.toObject<Schedule>()).copy(id = schedule.id)
+                    requireOwner(saved.userId, uid)
+                    if (!saved.hasSameCreateInput(schedule)) throw ExistingScheduleConflictException()
+                    saved
+                } else {
+                    val code = get(usersCollection.document(uid)).getString("shareCode").orEmpty()
+                    val saved = schedule.copy(userId = uid, sharedCode = code, createdAt = Timestamp.now(), updatedAt = Timestamp.now())
+                    registerShareCode(uid, code)
+                    set(ref, saved)
+                    saved
+                }
             }
         }
 
-        /**
-         * 일정 완료 상태 변경.
-         *
-         * 반복 일정은 회차마다 따로 남긴다([occurrenceDate] 가 그 회차의 날짜다). `completed`
-         * 는 문서에 하나뿐이라 반복 일정에 쓰면 한 번 완료한 뒤 영영 완료로 남는다(#130).
-         */
+        /** 반복 일정은 completedDates의 해당 회차만 바꾼다. 감시자 권한은 규칙이 확인한다. */
         suspend fun markScheduleAsCompleted(
             scheduleId: String,
             completed: Boolean = true,
             occurrenceDate: String = "",
         ): ScheduleResult<Unit> {
-            if (scheduleId.isBlank()) {
-                return ScheduleResult.Error(AppError.InvalidDataError)
-            }
-
-            return try {
-                Log.d("ScheduleRepo", "완료 상태 변경 시도: $scheduleId -> $completed ($occurrenceDate)")
-
+            val uid = auth.currentUser?.uid ?: return ScheduleResult.Error(AppError.AuthError)
+            if (scheduleId.isBlank()) return ScheduleResult.Error(AppError.InvalidDataError)
+            val ref = schedulesCollection.document(scheduleId)
+            return onlineWrite {
+                val current = get(ref)
+                if (!current.exists()) throw missingSchedule()
+                // 보호자는 등록부를 변경하지 않는다. 본인 일정의 이전 코드만 같은 transaction에서 복구한다.
+                if (current.getString("userId") == uid) registerShareCode(uid, current.getString("sharedCode").orEmpty())
                 val change =
                     if (occurrenceDate.isBlank()) {
                         mapOf<String, Any>("completed" to completed)
                     } else {
-                        // 회차 하나만 더하거나 뺀다. 다른 기기가 같은 문서의 다른 회차를 건드려도
-                        // 서로 덮어쓰지 않는다.
-                        val op =
-                            if (completed) {
-                                FieldValue.arrayUnion(occurrenceDate)
-                            } else {
-                                FieldValue.arrayRemove(occurrenceDate)
-                            }
-                        mapOf("completedDates" to op)
+                        mapOf(
+                            "completedDates" to
+                                if (completed) FieldValue.arrayUnion(occurrenceDate) else FieldValue.arrayRemove(occurrenceDate),
+                        )
                     }
-
-                schedulesCollection
-                    .document(scheduleId)
-                    .update(change + ("updatedAt" to Timestamp.now()))
-                    .await()
-
-                Log.d("ScheduleRepo", "완료 상태 변경 성공: $scheduleId -> $completed")
-                ScheduleResult.Success(Unit)
-            } catch (e: FirebaseFirestoreException) {
-                Log.e("ScheduleRepo", "완료 상태 변경 실패: ${e.code}", e)
-                val error =
-                    when (e.code) {
-                        FirebaseFirestoreException.Code.NOT_FOUND -> AppError.NotFoundError
-                        FirebaseFirestoreException.Code.PERMISSION_DENIED -> AppError.PermissionError
-                        FirebaseFirestoreException.Code.UNAVAILABLE -> AppError.NetworkError
-                        else -> AppError.GeneralError("상태 변경에 실패했습니다")
-                    }
-                ScheduleResult.Error(error)
-            } catch (e: Exception) {
-                Log.e("ScheduleRepo", "완료 상태 변경 중 예상치 못한 에러", e)
-                ScheduleResult.Error(e.toAppError())
+                update(ref, change + ("updatedAt" to Timestamp.now()))
+                Unit
             }
         }
 
         suspend fun updateSchedule(schedule: Schedule): ScheduleResult<Unit> {
-            val uid = auth.currentUser?.uid
-            if (uid == null) {
-                return ScheduleResult.Error(AppError.AuthError)
-            }
-
-            if (schedule.id.isBlank()) {
-                return ScheduleResult.Error(AppError.InvalidDataError)
-            }
-
-            if (schedule.title.isBlank()) {
-                return ScheduleResult.Error(AppError.InvalidDataError)
-            }
-
-            // 편집 화면이 바꾼 필드만 쓴다. 읽은 뒤 바뀐 완료 기록·공유 코드·소유자를 되돌리거나,
-            // 이미 삭제된 문서를 set 으로 다시 만들지 않는다.
-            val changes =
-                mapOf(
-                    "title" to schedule.title,
-                    "description" to schedule.description,
-                    "startTime" to schedule.startTime,
-                    "endTime" to schedule.endTime,
-                    "recurring" to schedule.recurring,
-                    "recurringType" to schedule.recurringType,
-                    "updatedAt" to Timestamp.now(),
+            val uid = auth.currentUser?.uid ?: return ScheduleResult.Error(AppError.AuthError)
+            if (schedule.id.isBlank() || schedule.title.isBlank()) return ScheduleResult.Error(AppError.InvalidDataError)
+            val ref = schedulesCollection.document(schedule.id)
+            return onlineWrite {
+                val current = get(ref)
+                if (!current.exists()) throw missingSchedule()
+                requireOwner(current.getString("userId"), uid)
+                registerShareCode(uid, current.getString("sharedCode").orEmpty())
+                // 편집 필드만 쓰므로 최신 완료 기록·공유 코드·소유자·생성 시각은 그대로다.
+                update(
+                    ref,
+                    mapOf(
+                        "title" to schedule.title,
+                        "description" to schedule.description,
+                        "startTime" to schedule.startTime,
+                        "endTime" to schedule.endTime,
+                        "recurring" to schedule.recurring,
+                        "recurringType" to schedule.recurringType,
+                        "updatedAt" to Timestamp.now(),
+                    ),
                 )
+                Unit
+            }
+        }
 
-            return try {
-                schedulesCollection
-                    .document(schedule.id)
-                    .update(changes)
-                    .await()
+        suspend fun deleteSchedule(scheduleId: String): ScheduleResult<Unit> {
+            val uid = auth.currentUser?.uid ?: return ScheduleResult.Error(AppError.AuthError)
+            if (scheduleId.isBlank()) return ScheduleResult.Error(AppError.InvalidDataError)
+            val ref = schedulesCollection.document(scheduleId)
+            return onlineWrite {
+                val current = get(ref)
+                // 서버가 부재를 확인했으면 앞선 삭제의 재시도다. 알람 취소를 계속 진행할 수 있다.
+                if (current.exists()) {
+                    requireOwner(current.getString("userId"), uid)
+                    delete(ref)
+                }
+                Unit
+            }
+        }
 
-                Log.d("ScheduleRepo", "일정 수정 성공: ${schedule.id}")
-                ScheduleResult.Success(Unit)
+        private suspend fun <T> onlineWrite(block: Transaction.() -> T): ScheduleResult<T> =
+            try {
+                val context = currentCoroutineContext()
+                context.ensureActive()
+                val result =
+                    firestore
+                        .runTransaction { transaction ->
+                            // 재실행된 callback이 취소된 호출의 새 쓰기를 시작하지 않게 한다.
+                            // 이미 서버에 전송된 commit을 await 취소로 철회할 수는 없다.
+                            context.ensureActive()
+                            transaction.block().also { context.ensureActive() }
+                        }.await()
+                ScheduleResult.Success(result)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ExistingScheduleConflictException) {
+                ScheduleResult.Error(AppError.ScheduleConflictError)
             } catch (e: FirebaseFirestoreException) {
-                Log.e("ScheduleRepo", "일정 수정 실패: ${e.code}", e)
                 val error =
                     when (e.code) {
+                        FirebaseFirestoreException.Code.UNAVAILABLE,
+                        FirebaseFirestoreException.Code.DEADLINE_EXCEEDED,
+                        -> AppError.OnlineWriteError
+
                         FirebaseFirestoreException.Code.NOT_FOUND -> AppError.NotFoundError
+
                         FirebaseFirestoreException.Code.PERMISSION_DENIED -> AppError.PermissionError
-                        FirebaseFirestoreException.Code.UNAVAILABLE -> AppError.NetworkError
+
+                        FirebaseFirestoreException.Code.RESOURCE_EXHAUSTED -> AppError.StorageFullError
+
                         else -> AppError.SaveError
                     }
                 ScheduleResult.Error(error)
             } catch (e: Exception) {
-                Log.e("ScheduleRepo", "일정 수정 중 예상치 못한 에러", e)
+                Log.e("ScheduleRepo", "온라인 일정 변경 실패", e)
                 ScheduleResult.Error(AppError.SaveError)
             }
-        }
 
-        // 일정 삭제
-        suspend fun deleteSchedule(scheduleId: String): ScheduleResult<Unit> {
-            if (scheduleId.isBlank()) {
-                return ScheduleResult.Error(AppError.InvalidDataError)
-            }
-
-            return try {
-                schedulesCollection
-                    .document(scheduleId)
-                    .delete()
-                    .await()
-
-                Log.d("ScheduleRepo", "일정 삭제 성공: $scheduleId")
-                ScheduleResult.Success(Unit)
-            } catch (e: FirebaseFirestoreException) {
-                Log.e("ScheduleRepo", "일정 삭제 실패: ${e.code}", e)
-                val error =
-                    when (e.code) {
-                        FirebaseFirestoreException.Code.NOT_FOUND -> AppError.NotFoundError
-                        FirebaseFirestoreException.Code.PERMISSION_DENIED -> AppError.PermissionError
-                        FirebaseFirestoreException.Code.UNAVAILABLE -> AppError.NetworkError
-                        else -> AppError.GeneralError("삭제에 실패했습니다")
-                    }
-                ScheduleResult.Error(error)
-            } catch (e: Exception) {
-                Log.e("ScheduleRepo", "일정 삭제 중 예상치 못한 에러", e)
-                ScheduleResult.Error(e.toAppError())
+        private fun Transaction.registerShareCode(
+            uid: String,
+            code: String,
+        ) {
+            if (code.isNotBlank()) {
+                set(firestore.collection(FirestoreCollections.SHARE_CODES).document(code), mapOf("userId" to uid))
             }
         }
+
+        private fun requireOwner(
+            owner: String?,
+            uid: String,
+        ) {
+            if (owner != uid) throw FirebaseFirestoreException("Schedule owner differs", FirebaseFirestoreException.Code.PERMISSION_DENIED)
+        }
+
+        private fun missingSchedule() = FirebaseFirestoreException("Schedule does not exist", FirebaseFirestoreException.Code.NOT_FOUND)
+
+        private fun Schedule.hasSameCreateInput(other: Schedule): Boolean =
+            title == other.title && description == other.description && startTime == other.startTime &&
+                endTime == other.endTime && recurring == other.recurring && recurringType == other.recurringType &&
+                familyGroupId == other.familyGroupId
+
+        private class ExistingScheduleConflictException : Exception()
 
         // ID로 일정 가져오기 (편집용)
         suspend fun getScheduleById(scheduleId: String): ScheduleResult<Schedule> {
@@ -400,6 +372,8 @@ class ScheduleRepository
                         else -> AppError.NotFoundError
                     }
                 ScheduleResult.Error(error)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("ScheduleRepo", "일정 조회 중 예상치 못한 에러", e)
                 ScheduleResult.Error(e.toAppError())
@@ -541,6 +515,8 @@ class ScheduleRepository
                     if (stale.isNotEmpty()) Log.d("ScheduleRepo", "공유 코드를 채운 일정: ${stale.size}건")
                     stale.size
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("ScheduleRepo", "빠진 공유 코드 채우기 실패", e)
                 0
@@ -560,6 +536,8 @@ class ScheduleRepository
                     batch.commit().await()
                 }
                 true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("ScheduleRepo", "사용자 일정 일괄 삭제 실패", e)
                 false

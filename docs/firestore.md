@@ -8,7 +8,7 @@
 |---|---|---|---|
 | `users/{uid}` | 이름, 이메일, 공유 코드, FCM 토큰, 생성·수정 시각 | 본인만 | 본인만 |
 | `publicProfiles/{uid}` | id, 이름 | 로그인한 사용자가 문서 하나씩(`get`). 목록 조회(`list`)는 아무도 못 함 | 본인만, 이 두 필드만 |
-| `shareCodes/{code}` | 그 코드의 임자 uid | 아무도 못 함 | 만들기는 본인 이름으로 한 번만(이미 있으면 거절), 지우기는 임자만 |
+| `shareCodes/{code}` | 그 코드의 임자 uid | 아무도 못 함 | 본인 소유로 만들기·동일값 확인, 임자의 삭제 및 없는 등록부 삭제 재시도 |
 | `schedules/{id}` | 일정 제목·설명·시각·완료 여부·소유자 uid·공유 코드 | 소유자, 그리고 그 `sharedCode` 의 감시자로 등록한 사람 | 소유자. 공유 일정은 감시자가 `completed`·`completedDates`·`updatedAt` 만 |
 | `notifications/{id}` | 알림 기록(소유자 uid) | 소유자 | 소유자 |
 | `shareCodeWatchers/{code}/tokens/{uid}` | 그 공유 코드를 보는 기기의 FCM 토큰 | 본인 문서만 | 본인 문서만 |
@@ -32,6 +32,18 @@ Firestore 에는 필드 단위 읽기 제한이 없다. 문서 하나를 읽게 
 1. 사람을 찾는 열쇠(공유 코드)는 훑을 수 있는 자리에 두지 않는다. `shareCodes` 는 코드가 문서 이름이고 읽기를 아무에게도 열지 않는다. 중복 확인은 만들기 한 번으로 끝나므로, 확인과 저장 사이에 같은 코드를 두 사람이 가져가는 틈도 없다.
 2. 공유 일정은 「공유로 표시됐는가」 가 아니라 「그 코드의 감시자로 등록한 사람인가」 로 연다. 등록 문서(`shareCodeWatchers/{code}/tokens/{uid}`)가 그 관계의 증거다. 이 문서는 읽기 권한의 근거이기도 해서, FCM 토큰을 못 받아도 등록 자체는 한다.
 3. 읽기보다 쓰기를 더 좁게 본다. 남이 완료 표시를 뒤집을 수 있으면 어르신이 약을 이미 먹은 줄로 안다. 이 앱에서는 그쪽이 더 아픈 피해다.
+
+## 일정 쓰기와 재시도
+
+일정 생성·편집·삭제·완료는 온라인 transaction으로 처리한다. 서버가 결과를 확인한 뒤에 저장 성공을 표시하고 알람 후처리를 한다. 연결이 끊기면 연결 필요 안내와 재시도를 제공하며, 입력은 그대로 유지한다. 조회용 오프라인 캐시는 유지하지만 이 네 가지 쓰기를 오프라인 대기열에 넣지는 않는다. transaction callback에는 UI나 알람 처리를 넣지 않는다.
+
+새 일정 ID는 제출 전에 만들어 `SavedStateHandle`에 입력과 함께 보존한다. 같은 ID의 문서가 이미 있으면 소유자와 편집 필드를 비교하며, 같은 요청만 서버의 최신 문서를 반환한다. 다른 내용은 덮어쓰거나 성공으로 처리하지 않고 목록에서 확인하도록 안내한다. 코루틴 취소가 이미 전송한 commit을 철회하지는 않으므로, 재시도에서도 같은 ID를 쓰는 것이 필요하다.
+
+`SavedStateHandle`은 시스템이 같은 task를 복원하는 범위다. 강제 종료·최근 앱 목록에서 제거·재부팅으로 task가 사라진 경우의 입력 복원까지 보장하지 않는다. 백그라운드 상태에서 저장되지 않은 최신 값에도 한계가 있다. 이 범위를 넘어서는 내구성 있는 작성 중 보관함은 별도다.
+
+공유 등록부 복구와 일정 쓰기는 같은 transaction에서 수행하고 규칙은 `getAfter`로 최종 소유 관계를 확인한다. 첫 제출의 고정 ID가 비어 있는지 확인할 수 있도록 로그인한 요청의 미존재 일정 `get`만 허용한다. 기존 타인 일정과 목록 및 등록부 읽기는 계속 제한한다. 완료 실패는 화면의 임시 표시를 되돌리며, 그 사이 도착한 새 서버 목록은 덮지 않는다.
+
+근거: [Firestore transactions](https://firebase.google.com/docs/firestore/manage-data/transactions), [SavedStateHandle 복원 범위](https://developer.android.com/topic/libraries/architecture/viewmodel/viewmodel-savedstate), [Task.await 취소](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-play-services/kotlinx.coroutines.tasks/await.html).
 
 ## 서버가 관리자 권한으로 읽는 곳
 

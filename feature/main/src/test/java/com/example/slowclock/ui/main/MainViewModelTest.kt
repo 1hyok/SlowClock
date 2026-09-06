@@ -210,6 +210,11 @@ class MainViewModelTest {
             viewModel.onIntent(MainIntent.ToggleComplete("s1"))
             assertEquals(AppError.NetworkError, viewModel.uiState.value.error)
             assertFalse(viewModel.uiState.value.canRetry)
+            assertFalse(
+                viewModel.uiState.value.todaySchedules
+                    .single()
+                    .completed,
+            )
 
             viewModel.onIntent(MainIntent.ConsumeError)
             assertNull(viewModel.uiState.value.error)
@@ -431,5 +436,51 @@ class MainViewModelTest {
             viewModel.onIntent(MainIntent.ScreenResumed)
 
             verify(exactly = 0) { scheduleRepository.observeSchedulesForDate(any(), any()) }
+        }
+
+    @Test
+    fun `완료 확인 중 중복 토글을 막고 실패하면 원래 상태로 돌아간다`() =
+        runTest {
+            todaySchedules.value = listOf(soon)
+            val pending = CompletableDeferred<ScheduleRepository.ScheduleResult<Unit>>()
+            coEvery { scheduleRepository.markScheduleAsCompleted("s1", true) } coAnswers { pending.await() }
+            val vm = createViewModel()
+            vm.onIntent(MainIntent.ToggleComplete("s1"))
+            vm.onIntent(MainIntent.ToggleComplete("s1"))
+            assertTrue(
+                vm.uiState.value.todaySchedules
+                    .single()
+                    .completed,
+            )
+            coVerify(exactly = 1) { scheduleRepository.markScheduleAsCompleted("s1", true) }
+            pending.complete(ScheduleRepository.ScheduleResult.Error(AppError.OnlineWriteError))
+            assertFalse(
+                vm.uiState.value.todaySchedules
+                    .single()
+                    .completed,
+            )
+        }
+
+    @Test
+    fun `완료 실패의 늦은 복구는 새 서버 스냅샷을 되돌리지 않는다`() =
+        runTest {
+            todaySchedules.value = listOf(soon)
+            val pending = CompletableDeferred<ScheduleRepository.ScheduleResult<Unit>>()
+            coEvery { scheduleRepository.markScheduleAsCompleted("s1", true) } coAnswers { pending.await() }
+            val vm = createViewModel()
+            vm.onIntent(MainIntent.ToggleComplete("s1"))
+            todaySchedules.value = listOf(soon.copy(title = "다른 기기 수정", completed = true))
+            pending.complete(ScheduleRepository.ScheduleResult.Error(AppError.OnlineWriteError))
+            assertTrue(
+                vm.uiState.value.todaySchedules
+                    .single()
+                    .completed,
+            )
+            assertEquals(
+                "다른 기기 수정",
+                vm.uiState.value.todaySchedules
+                    .single()
+                    .title,
+            )
         }
 }

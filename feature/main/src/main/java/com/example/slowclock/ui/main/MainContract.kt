@@ -101,6 +101,12 @@ sealed interface MainReducerEvent : ReducerEvent {
         val nowMillis: Long,
     ) : MainReducerEvent
 
+    data class CompletionRestored(
+        val schedule: Schedule,
+        val shared: Boolean,
+        val nowMillis: Long,
+    ) : MainReducerEvent
+
     data class DetailShown(
         val schedule: Schedule,
     ) : MainReducerEvent

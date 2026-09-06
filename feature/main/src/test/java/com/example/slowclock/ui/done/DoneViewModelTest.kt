@@ -7,6 +7,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +53,7 @@ class DoneViewModelTest {
         }
 
     @Test
-    fun `토글은 먼저 반영하고 실패하면 오류를 둔다`() =
+    fun `토글 실패는 완료 표시를 되돌리고 오류를 둔다`() =
         runTest {
             todaySchedules.value = listOf(Schedule(id = "a", title = "a"))
             coEvery { scheduleRepository.markScheduleAsCompleted("a", true) } returns
@@ -62,7 +63,7 @@ class DoneViewModelTest {
             viewModel.onIntent(DoneIntent.ToggleComplete("a"))
 
             assertEquals(
-                listOf("a"),
+                emptyList<String>(),
                 viewModel.uiState.value.completed
                     .map { it.id },
             )
@@ -71,5 +72,26 @@ class DoneViewModelTest {
 
             viewModel.onIntent(DoneIntent.ConsumeError)
             assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun `완료 목록의 늦은 실패도 새 서버 내용을 덮지 않는다`() =
+        runTest {
+            val original = Schedule(id = "a", title = "a")
+            todaySchedules.value = listOf(original)
+            val pending = CompletableDeferred<ScheduleRepository.ScheduleResult<Unit>>()
+            coEvery { scheduleRepository.markScheduleAsCompleted("a", true) } coAnswers { pending.await() }
+            val vm = DoneViewModel(scheduleRepository)
+            vm.onIntent(DoneIntent.ToggleComplete("a"))
+            vm.onIntent(DoneIntent.ToggleComplete("a"))
+            coVerify(exactly = 1) { scheduleRepository.markScheduleAsCompleted("a", true) }
+            todaySchedules.value = listOf(original.copy(completed = true, title = "새 서버 내용"))
+            pending.complete(ScheduleRepository.ScheduleResult.Error(AppError.OnlineWriteError))
+            assertEquals(
+                "새 서버 내용",
+                vm.uiState.value.completed
+                    .single()
+                    .title,
+            )
         }
 }

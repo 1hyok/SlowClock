@@ -25,20 +25,15 @@ import java.util.Date
 
 class ScheduleRepositoryUpdateTest {
     private val updatedFields = slot<Map<String, Any?>>()
-    private val document = mockk<DocumentReference>()
+    private lateinit var fixture: ScheduleTransactionFixture
 
     private fun repositoryWith(response: Task<Void>): ScheduleRepository {
-        val user = mockk<FirebaseUser>()
-        every { user.uid } returns "owner"
-        val auth = mockk<FirebaseAuth>()
-        every { auth.currentUser } returns user
-        every { document.update(capture(updatedFields)) } returns response
-        val schedules = mockk<CollectionReference>()
-        every { schedules.document("s1") } returns document
-        val firestore = mockk<FirebaseFirestore>()
-        every { firestore.collection("schedules") } returns schedules
-        every { firestore.collection("users") } returns mockk()
-        return ScheduleRepository(auth, firestore)
+        fixture = ScheduleTransactionFixture(server = Schedule(id = "s1", userId = "owner", sharedCode = "NEW123"))
+        every { fixture.transaction.update(fixture.scheduleRef, capture(updatedFields)) } answers {
+            response.exception?.let { throw it }
+            fixture.transaction
+        }
+        return fixture.repository
     }
 
     @Test
@@ -85,7 +80,7 @@ class ScheduleRepositoryUpdateTest {
             assertEquals(true, currentServer["recurring"])
             assertEquals("weekly", currentServer["recurringType"])
             assertTrue(currentServer["updatedAt"] is Timestamp)
-            verify(exactly = 0) { document.set(any()) }
+            verify(exactly = 0) { fixture.transaction.set(fixture.scheduleRef, any()) }
         }
 
     @Test
@@ -111,6 +106,6 @@ class ScheduleRepositoryUpdateTest {
             val result = repository.updateSchedule(Schedule(id = "s1", title = "삭제된 일정"))
 
             assertEquals(ScheduleRepository.ScheduleResult.Error(AppError.NotFoundError), result)
-            verify(exactly = 0) { document.set(any()) }
+            verify(exactly = 0) { fixture.transaction.set(fixture.scheduleRef, any()) }
         }
 }

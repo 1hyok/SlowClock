@@ -6,6 +6,7 @@ import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.ui.mvi.MviViewModel
 import com.example.slowclock.util.toAppError
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
@@ -20,6 +21,8 @@ class DoneViewModel
         private val scheduleRepository: ScheduleRepository,
     ) : MviViewModel<DoneIntent, DoneUiState, DoneReducerEvent>(DoneUiState()) {
         private var scheduleJob: Job? = null
+        private var scheduleRevision = 0L
+        private val pendingCompletions = mutableSetOf<String>()
 
         /** 지금 구독이 보고 있는 날. 날이 바뀌면 다시 건다(#171). */
         private var subscribedDay: String = ""
@@ -72,6 +75,19 @@ class DoneViewModel
                     )
                 }
 
+                is DoneReducerEvent.Restored -> {
+                    state.copy(
+                        schedules =
+                            state.schedules.map {
+                                if (it.id == event.schedule.id && it.occurrenceDate == event.schedule.occurrenceDate) {
+                                    it.copy(completed = event.schedule.completed)
+                                } else {
+                                    it
+                                }
+                            },
+                    )
+                }
+
                 DoneReducerEvent.ErrorConsumed -> {
                     state.copy(error = null)
                 }
@@ -79,6 +95,7 @@ class DoneViewModel
 
         private fun observeTodaySchedules() {
             scheduleJob?.cancel()
+            scheduleRevision++
             subscribedDay = todayKey()
             scheduleJob =
                 viewModelScope.launch {
@@ -88,7 +105,10 @@ class DoneViewModel
                         .catch { e ->
                             Log.e(TAG, "일정 구독 실패", e)
                             dispatch(DoneReducerEvent.Failed(e.toAppError()))
-                        }.collect { dispatch(DoneReducerEvent.Loaded(it)) }
+                        }.collect {
+                            scheduleRevision++
+                            dispatch(DoneReducerEvent.Loaded(it))
+                        }
                 }
         }
 
@@ -111,17 +131,25 @@ class DoneViewModel
 
         private fun toggleComplete(scheduleId: String) {
             val schedule = currentState.schedules.find { it.id == scheduleId } ?: return
+            if (!pendingCompletions.add(scheduleId)) return
+            val revision = scheduleRevision
             dispatch(DoneReducerEvent.Toggled(scheduleId))
+
+            fun restoreIfCurrent() {
+                if (revision == scheduleRevision) dispatch(DoneReducerEvent.Restored(schedule))
+            }
             viewModelScope.launch {
-                val result =
-                    scheduleRepository.markScheduleAsCompleted(
-                        scheduleId = scheduleId,
-                        completed = !schedule.completed,
-                        occurrenceDate = schedule.occurrenceDate,
-                    )
-                if (result is ScheduleRepository.ScheduleResult.Error) {
-                    Log.e(TAG, "완료 상태 변경 실패: ${result.error.message}")
-                    dispatch(DoneReducerEvent.Failed(result.error))
+                try {
+                    val result = scheduleRepository.markScheduleAsCompleted(scheduleId, !schedule.completed, schedule.occurrenceDate)
+                    if (result is ScheduleRepository.ScheduleResult.Error) {
+                        restoreIfCurrent()
+                        dispatch(DoneReducerEvent.Failed(result.error))
+                    }
+                } catch (e: CancellationException) {
+                    restoreIfCurrent()
+                    throw e
+                } finally {
+                    pendingCompletions.remove(scheduleId)
                 }
             }
         }

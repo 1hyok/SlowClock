@@ -19,6 +19,14 @@ service cloud.firestore {
       );
     }
 
+    // 비공유 일정은 그대로 허용하고, 공유할 때는 등록부의 소유자를 확인한다.
+    function ownsRequestedShareCode() {
+      return !('sharedCode' in request.resource.data)
+        || request.resource.data.sharedCode == ''
+        || (request.resource.data.sharedCode is string
+          && getAfter(/databases/$(database)/documents/shareCodes/$(request.resource.data.sharedCode)).data.userId == request.auth.uid);
+    }
+
     // 사용자 문서. 이메일과 FCM 토큰이 함께 있어 본인만 읽고 쓴다.
     // 다른 사람에게 보여야 하는 이름은 publicProfiles 에 따로 둔다(#93).
     match /users/{userId} {
@@ -51,18 +59,27 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly(['userId'])
         && request.resource.data.userId == request.auth.uid;
-      allow update: if false;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // 기존 코드도 조회 권한을 열지 않고 같은 값으로 등록·확인할 수 있다.
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data == resource.data;
+      // 이전 부분 삭제나 재시도에서 이미 없는 등록부는 성공으로 처리한다.
+      allow delete: if isSignedIn()
+        && (!exists(/databases/$(database)/documents/shareCodes/$(shareCode))
+          || resource.data.userId == request.auth.uid);
     }
 
     // 일정
     match /schedules/{scheduleId} {
+      // 고정 제출 ID의 첫 transaction은 아직 없는 문서도 확인해야 한다. 목록 권한은 열지 않는다.
+      allow get: if isSignedIn() && !exists(/databases/$(database)/documents/schedules/$(scheduleId));
       // 생성할 때 소유자를 확인하고, 기존 일정은 저장된 소유자를 기준으로 확인한다.
       // 일정을 고칠 때도 소유자는 그대로 유지한다.
       allow read, delete: if isSelf(resource.data.userId);
-      allow create: if isSelf(request.resource.data.userId);
+      allow create: if isSelf(request.resource.data.userId) && ownsRequestedShareCode();
       allow update: if isSelf(resource.data.userId)
-        && request.resource.data.userId == resource.data.userId;
+        && request.resource.data.userId == resource.data.userId
+        && ownsRequestedShareCode();
 
       // 공유 일정은 그 코드의 감시자로 등록한 사람만 읽는다.
       allow read: if resource.data.sharedCode is string &&
