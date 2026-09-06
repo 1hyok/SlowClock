@@ -38,7 +38,8 @@ Actions → Firebase WIF Canary → Run workflow 에서 브랜치 `main`, `issue
 성공 판정:
 
 - run summary 에 `Firebase WIF canary. result: PASS`, source SHA, artifact digest, attestation URL 이 남는다.
-- Firebase Console → App Distribution 에 같은 SHA 의 릴리스가 생기고 테스터 그룹 `slowclock` 이 알림을 받는다.
+- Firebase Console → App Distribution 에 같은 SHA 의 릴리스가 생긴다. 업로드 step의 `SLOWCLOCK_DISTRIBUTION_UPLOAD_ONLY=true`로 Gradle의 기본 테스터 그룹을 비워 업로드까지만 검증한다. Gradle CLI는 빈 `--groups` 인자를 거절하므로 빈 CLI 인자를 쓰지 않는다. 테스트 설치나 테스터 알림에는 사용하지 않는다.
+- 버전 이름은 `1.0-canary.<run>.<sha7>`이며 코드도 canary workflow의 run 번호다. 일반 배포와 번호 공간이 다르므로 canary를 일반 테스터에게 수동 배포하지 않는다. 일반 배포본은 `1.0-dist.<run>.<sha7>`로 구분한다.
 
 실패하면 어느 단계에서 멈췄는지로 원인을 가른다.
 

@@ -1,6 +1,6 @@
 # 테스터 APK 배포 (Firebase App Distribution)
 
-`main` 에 머지된 빌드를 Firebase App Distribution 으로 테스터에게 자동 전달하는 흐름. Firebase 프로젝트 `slow-clock-scheduler`, 테스터 그룹 `slowclock`.
+`main` 에 머지된 앱 변경을 Firebase App Distribution 으로 테스터에게 자동 전달하는 흐름. `docs/**`·루트 Markdown·LICENSE만 바뀐 push는 제외한다. Firebase 프로젝트 `slow-clock-scheduler`, 테스터 그룹 `slowclock`.
 
 이 배포는 Google Play 출시가 아니다. Play 내부 테스트 트랙 배포는 [Play release runbook](../play-release.md) 을 따른다.
 
@@ -9,7 +9,7 @@
 | 채널 | 트리거 | 워크플로 | 산출물 | 자격 |
 |---|---|---|---|---|
 | Firebase App Distribution | `main` push | [`release-distribution.yml`](../../.github/workflows/release-distribution.yml) | release APK | `release-distribution` environment |
-| WIF canary | 수동 실행 + environment 승인 | [`firebase-wif-canary.yml`](../../.github/workflows/firebase-wif-canary.yml) | release APK | `release-distribution` environment |
+| WIF canary | 수동 실행 + environment 승인 | [`firebase-wif-canary.yml`](../../.github/workflows/firebase-wif-canary.yml) | 업로드만 하는 canary APK, 테스터 배포 없음 | `release-distribution` environment |
 
 `feat/<N>` → `main` 단일 흐름이라 main 에 머지된 PR 하나가 곧 릴리스 후보다. 별도 릴리스 브랜치·릴리스 PR 은 없다.
 

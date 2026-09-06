@@ -7,6 +7,11 @@ name: Release Distribution (Firebase App Distribution)
 on:
   push:
     branches: [main]
+    # 문서만 바뀐 머지는 같은 앱을 다시 빌드하거나 테스터에게 알리지 않는다.
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
 
 # 같은 Firebase App Distribution 앱에 올리는 경로를 전부 이 group 하나로 직렬화한다 — main 릴리스
 # push 에 WIF canary(firebase-wif-canary.yml)가 겹치면 러너 둘이 같은 앱에 업로드한다. group 문자열은
