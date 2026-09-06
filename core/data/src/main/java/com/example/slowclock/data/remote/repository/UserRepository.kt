@@ -36,7 +36,7 @@ class UserRepository
         /**
          * 아직 임자가 없는 여섯 자리 코드를 하나 만들어 [uid] 앞으로 등록한다.
          *
-         * 등록부는 코드 자체가 문서 이름이라, 이미 있는 코드에 대한 만들기는 규칙이 거절한다.
+         * 등록부는 코드 자체가 문서 이름이라, 다른 소유자의 코드에 대한 쓰기는 규칙이 거절한다.
          * 확인과 저장이 한 번으로 합쳐지므로 그 사이에 같은 코드를 두 사람이 가져가는 틈이 없다.
          * 질의로 확인하던 앞의 방식은 컬렉션을 훑을 권한을 함께 열어야 했다(#174).
          */
@@ -80,11 +80,15 @@ class UserRepository
                         .await()
                         .getString("shareCode")
                         .orEmpty()
-                if (shareCode.isNotBlank()) {
-                    shareCodesCollection.document(shareCode).delete().await()
-                }
-                usersCollection.document(userId).delete().await()
-                publicProfilesCollection.document(userId).delete().await()
+                // 셋 중 하나만 지워지면 다음 시도에서 코드를 잃거나 삭제가 막힐 수 있다.
+                firestore
+                    .batch()
+                    .apply {
+                        if (shareCode.isNotBlank()) delete(shareCodesCollection.document(shareCode))
+                        delete(usersCollection.document(userId))
+                        delete(publicProfilesCollection.document(userId))
+                    }.commit()
+                    .await()
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "사용자 문서 삭제 실패", e)
@@ -116,6 +120,9 @@ class UserRepository
                     usersCollection.document(uid).set(newUser).await()
                     savePublicProfile(newUser.id, newUser.name)
                 } else {
+                    // 등록부 도입 전 발급된 코드도 같은 소유자로 등록한다. 타인 코드와 충돌하면
+                    // 기존 코드·문서를 그대로 두고 실패한다. 자동 회전은 기존 일정을 분리한다.
+                    firestore.ensureShareCodeOwner(uid, existing.shareCode)
                     val updates = mutableMapOf<String, Any>()
                     if (existing.name != name && name.isNotBlank()) updates["name"] = name
                     if (existing.email != email && email.isNotBlank()) updates["email"] = email
