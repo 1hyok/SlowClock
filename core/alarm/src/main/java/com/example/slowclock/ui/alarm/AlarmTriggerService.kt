@@ -64,6 +64,12 @@ class AlarmTriggerService : Service() {
         // 그래서 새 id 를 쓴다(#122).
         private const val CHANNEL_ID = "alarm_ringing_v2"
 
+        /** 겹친 알람을 옮겨 두는 채널. 울리지 않고 「이 일정이 지나갔다」 만 보여 준다(#131). */
+        private const val MISSED_CHANNEL_ID = "alarm_overlapped_v1"
+
+        /** 겹친 알람의 알림 자리. 알람 자리 번호를 더해 서로 덮지 않게 한다. */
+        private const val MISSED_NOTIFICATION_ID_BASE = 1000
+
         /** 종전 채널. 오디오 속성이 없어 알람 소리로 취급되지 않았다. 남아 있으면 지운다. */
         private const val LEGACY_CHANNEL_ID = "alarm_notification_channel"
 
@@ -103,6 +109,13 @@ class AlarmTriggerService : Service() {
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
                 .setAction(ACTION_DISMISS)
+
+        /**
+         * 서비스가 알람 울리기를 끝냈다. 전체 화면이 떠 있으면 이 방송을 받아 함께 닫는다.
+         *
+         * 앱 안에서만 오가는 방송이라 패키지를 못박아 보낸다.
+         */
+        const val ACTION_RINGING_FINISHED = "com.example.slowclock.action.ALARM_RINGING_FINISHED"
 
         /** 울리는 알람을 미룬다. 다시 걸 시각과 횟수 상한은 [SnoozePolicy] 가 정한다. */
         fun snoozeIntent(context: Context): Intent =
@@ -153,6 +166,10 @@ class AlarmTriggerService : Service() {
             return START_NOT_STICKY
         }
 
+        // 이미 울리는 알람이 있으면 그 알림을 별도 자리로 옮겨 남긴다. 알림 자리가 하나뿐이라
+        // 그냥 두면 뒤에 온 알람이 앞의 것을 화면에서 지우고, 끄기 한 번에 둘 다 꺼진다(#131).
+        ringing?.let { previous -> keepAsSeparateNotification(previous) }
+
         val current =
             Ringing(
                 title = intent?.getStringExtra(EXTRA_TITLE) ?: "알람",
@@ -177,6 +194,30 @@ class AlarmTriggerService : Service() {
         stopHandler.postDelayed(stopRunnable, MAX_RINGING_MILLIS)
 
         return START_NOT_STICKY
+    }
+
+    /**
+     * 앞서 울리던 알람을 별도 알림으로 옮긴다.
+     *
+     * 포그라운드 서비스 알림 자리는 하나뿐이라, 겹친 알람을 그대로 두면 뒤에 온 것이 앞의 것을
+     * 덮어써 사용자에게는 「알람이 하나 안 울렸다」 로만 보인다. 소리와 진동은 어차피 한 벌이면
+     * 충분하므로 옮긴 알림은 조용하고, 어떤 일정이 지나갔는지 보여 주는 몫만 한다(#131).
+     */
+    private fun keepAsSeparateNotification(previous: Ringing) {
+        val notification =
+            NotificationCompat
+                .Builder(this, MISSED_CHANNEL_ID)
+                .setSmallIcon(R.drawable.baseline_access_alarm_24)
+                .setContentTitle(previous.title)
+                .setContentText(previous.desc.ifBlank { "지금 할 시간입니다" })
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setAutoCancel(true)
+                .build()
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // 자리 번호로 갈라 두어야 두 알람이 서로 덮지 않는다.
+        runCatching { manager.notify(MISSED_NOTIFICATION_ID_BASE + previous.requestCode, notification) }
     }
 
     private fun startForegroundCompat(notification: Notification) {
@@ -321,12 +362,24 @@ class AlarmTriggerService : Service() {
         service.vibrate(VibrationEffect.createWaveform(VIBRATION_PATTERN, 0), attributes)
     }
 
+    /**
+     * 화면이 꺼져 있어도 소리를 이어 가도록 CPU 를 깨워 둔다.
+     *
+     * 이미 잡고 있으면 먼저 놓는다. 알람이 겹쳐 두 번째로 들어올 때 그냥 덮어쓰면 앞의 잠금은
+     * 참조를 잃어 아무도 놓지 못하고, 타임아웃까지 CPU 를 깨워 둔 채 남는다(#131).
+     */
     private fun acquireWakeLock() {
+        releaseWakeLock()
         val power = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock =
             power
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SlowClock:alarm")
                 .apply { acquire(MAX_RINGING_MILLIS) }
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.takeIf { it.isHeld }?.release()
+        wakeLock = null
     }
 
     /**
@@ -362,8 +415,10 @@ class AlarmTriggerService : Service() {
         stopSound()
         vibrator?.cancel()
         vibrator = null
-        wakeLock?.takeIf { it.isHeld }?.release()
-        wakeLock = null
+        releaseWakeLock()
+        // 화면이 아직 떠 있으면 함께 닫는다. 서비스가 멈춰도 액티비티는 스스로 끝나지 않아
+        // 화면이 켜진 채 남고 1초 타이머가 아침까지 돈다(#131).
+        sendBroadcast(Intent(ACTION_RINGING_FINISHED).setPackage(packageName))
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -392,6 +447,16 @@ class AlarmTriggerService : Service() {
             }
         manager.createNotificationChannel(channel)
 
+        // 겹친 알람을 옮겨 두는 자리. 소리와 진동은 울리는 쪽 한 벌이면 충분하므로 조용하다(#131).
+        manager.createNotificationChannel(
+            NotificationChannel(MISSED_CHANNEL_ID, "겹친 알람", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "같은 시각에 알람이 둘 이상 겹쳤을 때 남는 알림"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(false)
+                setSound(null, null)
+            },
+        )
+
         // 옛 채널은 오디오 속성 없이 만들어져 알람이 아니라 알림 소리로 취급됐다. 채널은 만든 뒤
         // 고칠 수 없으므로 새 id 로 갈아탔고, 남은 것은 사용자 설정 화면에서 지운다.
         runCatching { manager.deleteNotificationChannel(LEGACY_CHANNEL_ID) }
@@ -402,7 +467,7 @@ class AlarmTriggerService : Service() {
         stopHandler.removeCallbacks(stopRunnable)
         stopSound()
         vibrator?.cancel()
-        wakeLock?.takeIf { it.isHeld }?.release()
+        releaseWakeLock()
         Log.d(TAG, "알람 서비스 종료")
     }
 
