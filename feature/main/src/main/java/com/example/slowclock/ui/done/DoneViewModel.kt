@@ -21,6 +21,9 @@ class DoneViewModel
     ) : MviViewModel<DoneIntent, DoneUiState, DoneReducerEvent>(DoneUiState()) {
         private var scheduleJob: Job? = null
 
+        /** 지금 구독이 보고 있는 날. 날이 바뀌면 다시 건다(#171). */
+        private var subscribedDay: String = ""
+
         init {
             observeTodaySchedules()
         }
@@ -38,6 +41,10 @@ class DoneViewModel
 
                 DoneIntent.ConsumeError -> {
                     dispatch(DoneReducerEvent.ErrorConsumed)
+                }
+
+                DoneIntent.ScreenResumed -> {
+                    resubscribeIfDayChanged()
                 }
             }
         }
@@ -72,17 +79,35 @@ class DoneViewModel
 
         private fun observeTodaySchedules() {
             scheduleJob?.cancel()
+            subscribedDay = todayKey()
             scheduleJob =
                 viewModelScope.launch {
                     dispatch(DoneReducerEvent.Loading)
                     scheduleRepository
-                        .observeSchedulesForDate(Calendar.getInstance())
+                        .observeSchedulesForDate(Calendar.getInstance(), today = true)
                         .catch { e ->
                             Log.e(TAG, "일정 구독 실패", e)
                             dispatch(DoneReducerEvent.Failed(e.toAppError()))
                         }.collect { dispatch(DoneReducerEvent.Loaded(it)) }
                 }
         }
+
+        /**
+         * 날이 바뀌었으면 오늘 회차로 다시 구독한다.
+         *
+         * 앱을 켜 둔 채 자정을 넘기면 구독은 어제 회차를 보고 있다. 그 회차 식별자가 완료 기록의
+         * 열쇠라, 그대로 두면 어제 날짜가 서버에 남는다(#171).
+         */
+        private fun resubscribeIfDayChanged() {
+            if (subscribedDay.isNotEmpty() && subscribedDay != todayKey()) {
+                observeTodaySchedules()
+            }
+        }
+
+        private fun todayKey(): String =
+            Calendar.getInstance().let {
+                "%04d-%03d".format(it.get(Calendar.YEAR), it.get(Calendar.DAY_OF_YEAR))
+            }
 
         private fun toggleComplete(scheduleId: String) {
             val schedule = currentState.schedules.find { it.id == scheduleId } ?: return

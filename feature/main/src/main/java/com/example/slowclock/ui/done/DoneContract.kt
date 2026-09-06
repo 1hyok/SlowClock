@@ -13,6 +13,9 @@ sealed interface DoneIntent : MviIntent {
 
     data object Retry : DoneIntent
 
+    /** 화면이 다시 보인다. 날이 바뀌었으면 오늘 회차로 다시 구독한다(#171). */
+    data object ScreenResumed : DoneIntent
+
     data object ConsumeError : DoneIntent
 }
 
