@@ -6,4 +6,5 @@
 <resources>
     <string name="alarm_snooze_action">다시 알림 (%1$d분)</string>
     <string name="alarm_dismiss_action">알람 끄기</string>
+    <string name="alarm_icon_description">알람</string>
 </resources>

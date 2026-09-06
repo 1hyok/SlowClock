@@ -1,77 +1,85 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
+<?xml version="1.0" encoding="utf-8"?><!--
+  알람이 울리는 동안 잠금 화면을 덮는 화면.
+
+  버튼을 세로로 편다. 가로로 나눈 칸은 글자 크기를 키우면 반드시 잘린다 — 부모 padding 을 뺀
+  296dp 에 두 버튼이 나란히 들어가야 하는데, 글자 배율 1.5배면 그 폭을 넘어 좌우가 잘려 나갔다.
+  #107 에서 화면 밝기 선택에 같은 함정이 있었고 같은 방법으로 고쳤다(#132).
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
     android:background="@drawable/alarm_background"
-    android:padding="32dp">
-
-    <!-- 현재 시간 표시 -->
-    <TextView
-        android:id="@+id/currentTimeText"
-        android:text="00:00:00"
-        android:textSize="48sp"
-        android:textColor="#FFFFFF"
-        android:textStyle="bold"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="32dp"
-        android:fontFamily="monospace" />
-
-    <!-- 알람 아이콘 -->
-    <ImageView
-        android:layout_width="80dp"
-        android:layout_height="80dp"
-        android:src="@drawable/baseline_access_alarm_24"
-        android:layout_marginBottom="24dp"
-        android:tint="#FF6B6B" />
-
-    <TextView
-        android:id="@+id/titleText"
-        android:text="알람 제목"
-        android:textSize="32sp"
-        android:textColor="#FFFFFF"
-        android:textStyle="bold"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textAlignment="center"
-        android:layout_marginBottom="16dp" />
-
-    <TextView
-        android:id="@+id/descText"
-        android:text="알람 설명"
-        android:textSize="20sp"
-        android:textColor="#E0E0E0"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textAlignment="center"
-        android:layout_marginBottom="48dp" />
+    android:fillViewport="true">
 
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center">
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/currentTimeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:fontFamily="monospace"
+            android:text="00:00:00"
+            android:textColor="@color/alarm_on_background"
+            android:textSize="48sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginBottom="20dp"
+            android:contentDescription="@string/alarm_icon_description"
+            android:src="@drawable/baseline_access_alarm_24"
+            android:tint="@color/alarm_icon_tint" />
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="알람 제목"
+            android:textAlignment="center"
+            android:textColor="@color/alarm_on_background"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/descText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="36dp"
+            android:text="알람 설명"
+            android:textAlignment="center"
+            android:textColor="@color/alarm_on_background_variant"
+            android:textSize="20sp" />
 
         <Button
             android:id="@+id/snoozeButton"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
-            android:backgroundTint="#FFA726"
-            android:textColor="#FFFFFF"
-            android:padding="16dp" />
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/alarm_snooze_button"
+            android:minHeight="72dp"
+            android:padding="16dp"
+            android:textColor="@color/alarm_on_background"
+            android:textSize="22sp" />
 
         <Button
             android:id="@+id/dismissButton"
-            android:text="@string/alarm_dismiss_action"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:backgroundTint="#FF6B6B"
-            android:textColor="#FFFFFF"
-            android:padding="16dp" />
+            android:backgroundTint="@color/alarm_dismiss_button"
+            android:minHeight="72dp"
+            android:padding="16dp"
+            android:text="@string/alarm_dismiss_action"
+            android:textColor="@color/alarm_on_background"
+            android:textSize="22sp" />
 
     </LinearLayout>
 
-</LinearLayout>
+</ScrollView>
