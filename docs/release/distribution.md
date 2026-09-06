@@ -49,7 +49,7 @@ PR 검증(lint·unit-test·screenshot)은 시크릿 없이 [`setup-ci-config`](.
 
 ## 배포 provenance: 이 APK 가 어느 commit·run 에서 나왔는지
 
-배포 워크플로는 signing 이 끝난 그 APK 하나를 subject 로 [GitHub artifact attestation](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations) 을 발급하고, 업로드 전에 스스로 검증한다. 서명·저장소·signer workflow·source commit·GitHub-hosted 러너 중 하나라도 어긋나거나 attestation subject digest 가 빌드 직후 digest 와 다르면 Firebase 업로드까지 가지 않는다.
+배포 워크플로는 signing이 끝난 APK를 SDK `apksigner verify --verbose --print-certs`로 검증한다. 이 검증을 통과한 APK 하나를 subject로 [GitHub artifact attestation](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations) 을 발급하고, 업로드 전에 스스로 검증한다. 서명·저장소·signer workflow·source commit·GitHub-hosted 러너 중 하나라도 어긋나거나 attestation subject digest 가 빌드 직후 digest 와 다르면 Firebase 업로드까지 가지 않는다.
 
 성공한 run 의 summary 에 남는 값은 넷이다: source commit SHA, `sha256:` artifact digest, attestation URL, run URL. APK·AAB 자체는 public Actions artifact 로 게시하지 않는다.
 
