@@ -36,11 +36,13 @@ service cloud.firestore {
         resource.data.sharedCode != null &&
         resource.data.sharedCode != "";
 
-      // 공유 일정의 완료 상태만 바꿀 수 있다.
+      // 공유 일정의 완료 상태만 바꿀 수 있다. 반복 일정은 회차마다 따로 남으므로
+      // completedDates 도 같은 범위에 든다(#130).
       allow update: if isSignedIn() &&
         resource.data.sharedCode != null &&
         resource.data.sharedCode != "" &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed', 'updatedAt']);
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['completed', 'completedDates', 'updatedAt']);
     }
 
     // 알림 기록. 계정 삭제 때 정리하는 용도로만 남아 있다.

@@ -5,6 +5,7 @@ import android.content.Context
 import com.example.slowclock.data.model.Schedule
 import com.example.slowclock.data.remote.repository.ScheduledAlarm
 import com.example.slowclock.data.remote.repository.ScheduledAlarmRepository
+import com.example.slowclock.util.Recurrence
 import com.google.firebase.Timestamp
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Date
@@ -26,15 +27,40 @@ class AlarmScheduler
         @ApplicationContext private val context: Context,
         private val scheduledAlarms: ScheduledAlarmRepository,
     ) {
+        /**
+         * 일정의 다음 회차 알람을 건다.
+         *
+         * 되풀이하는 일정도 한 번에 하나만 건다. 며칠치를 미리 걸어 두지 않는 이유는, 걸어 둔
+         * 것이 사라져도(재부팅·강제 종료) 지금 시각에서 다시 세면 그만이기 때문이다. 다음 회차는
+         * 알람이 울릴 때 [AlarmReceiver] 가 이어서 건다(#130).
+         */
         fun schedule(schedule: Schedule) {
-            ScheduleAlarmHelper.scheduleAlarm(context, schedule)
+            val nowMillis = System.currentTimeMillis()
             val record = schedule.toRecord()
-            // 걸린 것이 하나도 없으면 기록도 남기지 않는다. 남기면 부팅마다 훑고 버려야 한다.
-            if (record.isLive(System.currentTimeMillis())) {
-                scheduledAlarms.save(record)
-            } else {
+            if (!record.isLive(nowMillis)) {
+                // 걸 것이 없으면 자리도 장부도 비운다. 남기면 부팅마다 훑고 버려야 한다.
+                ScheduleAlarmHelper.cancelAlarm(context, schedule)
                 scheduledAlarms.remove(record.id)
+                return
             }
+            ScheduleAlarmHelper.scheduleAlarm(context, record.toSchedule(nowMillis))
+            scheduledAlarms.save(record)
+        }
+
+        /**
+         * 방금 울린 일정의 다음 회차를 건다. 되풀이하지 않는 일정이면 장부에서 지운다.
+         *
+         * 알람이 울린 그 순간이 다음 회차를 거는 자리다. 여기서 걸지 않으면 되풀이가 한 번으로
+         * 끝난다.
+         */
+        fun scheduleNextOccurrence(scheduleId: String) {
+            val nowMillis = System.currentTimeMillis()
+            val record = scheduledAlarms.all().firstOrNull { it.id == scheduleId } ?: return
+            if (!record.isLive(nowMillis)) {
+                scheduledAlarms.remove(record.id)
+                return
+            }
+            ScheduleAlarmHelper.scheduleAlarm(context, record.toSchedule(nowMillis))
         }
 
         fun cancel(schedule: Schedule) {
@@ -52,6 +78,17 @@ class AlarmScheduler
             scheduledAlarms.clear()
         }
 
+        /** 알람을 거는 쪽이 보는 값. 장부의 기록을 다음 회차로 옮겨 놓은 일정이다. */
+        private fun ScheduledAlarm.toSchedule(nowMillis: Long): Schedule {
+            val next = nextTriggerAfter(nowMillis) ?: return toSchedule()
+            // 반복 일정은 다음 회차의 시작으로 옮긴다. 종료는 시작에서 떨어진 만큼 함께 옮긴다.
+            val shifted = if (rule == Recurrence.NONE) 0L else next - startMillis
+            return toSchedule().copy(
+                startTime = Timestamp(Date(startMillis + shifted)),
+                endTime = endMillis?.let { Timestamp(Date(it + shifted)) },
+            )
+        }
+
         /**
          * 기기 안 장부만으로 알람을 다시 건다. 네트워크와 로그인을 타지 않는다 — 재부팅 직후에는
          * 둘 다 없을 수 있고, 그때 못 걸면 그날 알람이 통째로 사라진다(#127).
@@ -59,10 +96,11 @@ class AlarmScheduler
          * 이미 지난 알람은 다시 걸지 않고 장부에서 지운다. 세 시간 전 일정이 부팅하자마자 울리는
          * 것은 도움이 아니라 오작동이다.
          */
-        fun restoreAll(nowMillis: Long = System.currentTimeMillis()) {
+        fun restoreAll() {
+            val nowMillis = System.currentTimeMillis()
             val (live, expired) = scheduledAlarms.all().partition { it.isLive(nowMillis) }
             expired.forEach { scheduledAlarms.remove(it.id) }
-            live.forEach { ScheduleAlarmHelper.scheduleAlarm(context, it.toSchedule()) }
+            live.forEach { ScheduleAlarmHelper.scheduleAlarm(context, it.toSchedule(nowMillis)) }
         }
 
         /**
@@ -81,6 +119,7 @@ class AlarmScheduler
                 description = description,
                 startMillis = startTime.toDate().time,
                 endMillis = endTime?.toDate()?.time,
+                recurrence = Recurrence.of(recurring, recurringType).name,
             )
 
         // ScheduleAlarmHelper 는 Schedule 의 id·title·description·startTime·endTime 만 읽는다.

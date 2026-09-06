@@ -211,6 +211,14 @@ describe("schedules", () => {
         await assertSucceeds(updateDoc(doc(db, "schedules", "shared-1"), { completed: true }));
     });
 
+    it("공유 반복 일정은 회차별 완료 기록도 바꾼다", async () => {
+        // 반복 일정은 completed 하나로 담을 수 없다. 회차마다 따로 남기므로 completedDates 도
+        // 「완료만 바꾼다」 범위에 든다(#130).
+        await assertSucceeds(
+            updateDoc(doc(other(), "schedules", "shared-1"), { completedDates: ["2026-09-06"] }),
+        );
+    });
+
     it("공유 일정이라도 제목은 바꾸지 못한다", async () => {
         await assertFails(updateDoc(doc(other(), "schedules", "shared-1"), { title: "바뀐 제목" }));
     });

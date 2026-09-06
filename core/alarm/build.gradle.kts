@@ -9,6 +9,8 @@ android {
 
 dependencies {
     api(project(":core:model"))
+    // 반복 규칙을 알람 경로가 함께 본다(#130).
+    implementation(project(":core:common"))
     testImplementation(libs.junit)
     implementation(project(":core:data")) // Notifier 인터페이스 구현 (역결합 제거)
     implementation(libs.androidx.core.ktx)

@@ -2,6 +2,8 @@ package com.example.slowclock.data.remote.repository
 
 import android.content.Context
 import android.util.Log
+import com.example.slowclock.util.Recurrence
+import com.example.slowclock.util.RecurrenceRule
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -19,16 +21,32 @@ data class ScheduledAlarm(
     val id: String,
     val title: String,
     val description: String,
+    /** 첫 회차의 시작 시각. 되풀이하는 일정은 여기서 규칙대로 세어 다음 회차를 얻는다. */
     val startMillis: Long,
     val endMillis: Long? = null,
+    /** [Recurrence] 의 이름. 옛 기록에는 없으므로 기본값은 되풀이 없음이다. */
+    val recurrence: String = Recurrence.NONE.name,
 ) {
+    val rule: Recurrence
+        get() = runCatching { Recurrence.valueOf(recurrence) }.getOrDefault(Recurrence.NONE)
+
     /**
-     * 아직 울릴 것이 남았는가.
+     * [nowMillis] 뒤에 울릴 첫 시각. 더 없으면 null.
      *
-     * 경계는 알람을 거는 쪽과 같은 `> now` 다. 여기서 기준이 갈리면 장부에는 있는데 걸리지는
-     * 않는 유령 기록이 쌓인다.
+     * 되풀이하지 않는 일정은 시작이나 종료 중 아직 안 온 것이 있을 때만 값이 있다. 되풀이하는
+     * 일정은 언제 물어도 값이 있다 — 끝이 없기 때문이다.
+     *
+     * 경계는 알람을 거는 쪽과 같은 `> now` 다. 기준이 갈리면 장부에는 있는데 걸리지는 않는
+     * 유령 기록이 쌓인다.
      */
-    fun isLive(nowMillis: Long): Boolean = startMillis > nowMillis || (endMillis != null && endMillis > nowMillis)
+    fun nextTriggerAfter(nowMillis: Long): Long? {
+        if (rule == Recurrence.NONE) {
+            return listOfNotNull(startMillis, endMillis).filter { it > nowMillis }.minOrNull()
+        }
+        return RecurrenceRule.nextOccurrenceAfter(startMillis, rule, nowMillis)
+    }
+
+    fun isLive(nowMillis: Long): Boolean = nextTriggerAfter(nowMillis) != null
 }
 
 /**
