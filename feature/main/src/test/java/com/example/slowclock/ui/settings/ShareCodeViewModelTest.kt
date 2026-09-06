@@ -8,6 +8,7 @@ import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -22,6 +23,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.Locale
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShareCodeViewModelTest {
@@ -33,6 +35,7 @@ class ShareCodeViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { settingsRepository.getShareCode() } returns "OLD001"
         justRun { settingsRepository.setShareCode(any()) }
+        justRun { settingsRepository.clearShareCode() }
         coEvery { userRepository.registerShareCodeWatcher(any()) } returns true
         coEvery { userRepository.unregisterShareCodeWatcher(any()) } returns true
     }
@@ -99,15 +102,86 @@ class ShareCodeViewModelTest {
         }
 
     @Test
-    fun `빈 입력은 저장하지 않는다`() =
+    fun `빈 입력을 저장하면 감시자 해제 뒤 로컬 코드도 지운다`() =
         runTest {
+            val unregistered = CompletableDeferred<Boolean>()
+            coEvery { userRepository.unregisterShareCodeWatcher("OLD001") } coAnswers { unregistered.await() }
             val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
 
             viewModel.onIntent(ShareCodeIntent.UpdateInput("   "))
             viewModel.onIntent(ShareCodeIntent.Save)
 
+            assertTrue(viewModel.uiState.value.isSaving)
+            verify(exactly = 0) { settingsRepository.clearShareCode() }
+            unregistered.complete(true)
             verify(exactly = 0) { settingsRepository.setShareCode(any()) }
+            verify(exactly = 1) { settingsRepository.clearShareCode() }
+            coVerify(exactly = 0) { userRepository.registerShareCodeWatcher(any()) }
+            assertTrue(viewModel.uiState.value.isSaved)
+            assertFalse(viewModel.uiState.value.hasRegisteredCode)
+        }
+
+    @Test
+    fun `감시자 해제 실패는 기존 코드를 유지하고 다시 시도할 수 있다`() =
+        runTest {
+            coEvery { userRepository.unregisterShareCodeWatcher("OLD001") } returns false
+            val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
+            viewModel.onIntent(ShareCodeIntent.UpdateInput(""))
+            viewModel.onIntent(ShareCodeIntent.Save)
+
+            verify(exactly = 0) { settingsRepository.clearShareCode() }
+            assertTrue(viewModel.uiState.value.hasRegisteredCode)
+            assertTrue(viewModel.uiState.value.canSave)
+            assertNotNull(viewModel.uiState.value.saveError)
             assertFalse(viewModel.uiState.value.isSaved)
+
+            coEvery { userRepository.unregisterShareCodeWatcher("OLD001") } returns true
+            viewModel.onIntent(ShareCodeIntent.Save)
+            verify(exactly = 1) { settingsRepository.clearShareCode() }
+            assertTrue(viewModel.uiState.value.isSaved)
+        }
+
+    @Test
+    fun `저장된 코드가 없으면 빈 입력은 저장하지 않는다`() =
+        runTest {
+            every { settingsRepository.getShareCode() } returns null
+            val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
+            viewModel.onIntent(ShareCodeIntent.Save)
+            assertFalse(viewModel.uiState.value.canSave)
+            verify(exactly = 0) { settingsRepository.clearShareCode() }
+        }
+
+    @Test
+    fun `소문자 입력은 기기 언어와 관계없이 대문자로 등록한다`() =
+        runTest {
+            val previousLocale = Locale.getDefault()
+            try {
+                Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+                val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
+                viewModel.onIntent(ShareCodeIntent.UpdateInput(" ai123b "))
+                assertEquals(" AI123B ", viewModel.uiState.value.input)
+                viewModel.onIntent(ShareCodeIntent.Save)
+                coVerify(exactly = 1) { userRepository.registerShareCodeWatcher("AI123B") }
+                verify(exactly = 1) { settingsRepository.setShareCode("AI123B") }
+            } finally {
+                Locale.setDefault(previousLocale)
+            }
+        }
+
+    @Test
+    fun `저장 중에는 중복 저장이나 입력 변경을 받지 않는다`() =
+        runTest {
+            val registered = CompletableDeferred<Boolean>()
+            coEvery { userRepository.registerShareCodeWatcher("NEW002") } coAnswers { registered.await() }
+            val viewModel = ShareCodeViewModel(settingsRepository, userRepository)
+            viewModel.onIntent(ShareCodeIntent.UpdateInput("NEW002"))
+            viewModel.onIntent(ShareCodeIntent.Save)
+            viewModel.onIntent(ShareCodeIntent.UpdateInput(""))
+            viewModel.onIntent(ShareCodeIntent.Save)
+            assertEquals("NEW002", viewModel.uiState.value.input)
+            registered.complete(true)
+            coVerify(exactly = 1) { userRepository.registerShareCodeWatcher("NEW002") }
+            verify(exactly = 1) { settingsRepository.setShareCode("NEW002") }
         }
 
     @Test

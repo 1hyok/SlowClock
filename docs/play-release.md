@@ -106,14 +106,14 @@ JAVA_HOME=~/Library/Java/JavaVirtualMachines/temurin-21.0.11/Contents/Home ./scr
 
 1. `:app:bundleRelease` 를 실행한다.
 2. `app-release.aab` 의 필수 bundle 항목과 JAR 서명을 `jarsigner -verify -strict` 로 확인한다. 자가서명 인증서 경고(exit 4)만 허용하고, 같은 exit 4 를 공유하는 인증서 만료·TSA 만료·비활성 알고리즘은 진단 문구로 거부한다. unsigned entry 가 있으면 exit 20 으로 실패한다.
-3. R8 mapping 이 있으면 경로를, 없으면 「없음 (isMinifyEnabled=false)」를 보고한다.
+3. 외부 R8 mapping과 AAB 내장 mapping이 모두 있고 바이트가 일치하는지 확인한다. 누락·불일치면 실패한다.
 4. AAB 와 서명 인증서의 SHA-256 을 출력한다.
 
 이미 `bundleRelease` 를 실행한 뒤 산출물만 다시 확인하려면 `--skip-build` 를 붙인다.
 
 산출물: `app/build/outputs/bundle/release/app-release.aab`. AAB 는 GitHub Actions artifact·이슈·PR 에 첨부하지 않는다. Play Console 의 비공개 릴리스에 직접 올린다.
 
-PR 마다 [`release-aab-preflight.yml`](../.github/workflows/release-aab-preflight.yml) 이 임시 서명 키로 같은 검증을 돌리고 bundletool 로 다운로드 크기를 재어 직전 성공 run 과 비교한다. 배포 자격은 없다.
+PR마다 [`release-aab-preflight.yml`](../.github/workflows/release-aab-preflight.yml)이 임시 서명 키로 같은 검증을 돌린다. `lintRelease`와 release merged manifest의 권한 정책을 확인하고, SDK `dexdump`로 모델 클래스별 getter 정의가 남는지 검사한다. bundletool로 다운로드 크기를 재어 직전 성공 run과 비교한다. R8 mapping만으로 리소스 축소 실행을 입증할 수 없어 해당 항목은 보고서에서 미검증으로 표시한다. 배포 자격은 없다.
 
 공식 근거: [명령줄에서 App Bundle 빌드](https://developer.android.com/build/building-cmdline#build_bundle)
 

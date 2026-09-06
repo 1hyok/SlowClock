@@ -14,12 +14,18 @@ import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,13 +46,20 @@ class ProfileViewModelTest {
     private val signOutUseCase = mockk<SignOutUseCase>(relaxed = true)
     private val scheduleRepository = mockk<ScheduleRepository>()
 
+    private val authUid = MutableStateFlow<String?>("uid-1")
+    private val userUpdates =
+        MutableStateFlow<User?>(
+            User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "ABC123"),
+        )
+
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { authRepository.currentProfile } returns
             AuthRepository.Profile(uid = "uid-1", displayName = "Auth 이름", email = "auth@example.com")
-        coEvery { userRepository.getCurrentUser() } returns
-            User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "ABC123")
+        every { authRepository.currentUid } answers { authUid.value }
+        every { authRepository.observeCurrentUid() } returns authUid
+        every { userRepository.observeUser("uid-1") } returns userUpdates
         justRun { authRepository.signOut() }
         coEvery { scheduleRepository.fillMissingSharedCode(any()) } returns 0
     }
@@ -57,6 +70,98 @@ class ProfileViewModelTest {
     }
 
     private fun createViewModel() = ProfileViewModel(userRepository, authRepository, scheduleRepository, deleteAccount, signOutUseCase)
+
+    @Test
+    fun `로그인 전에 만든 화면이 로그인과 늦은 사용자 문서 생성을 따라간다`() =
+        runTest {
+            authUid.value = null
+            userUpdates.value = null
+            val viewModel = createViewModel()
+            assertTrue(viewModel.uiState.value.isSignedOut)
+
+            authUid.value = "uid-1"
+            assertFalse(viewModel.uiState.value.isSignedOut)
+            assertEquals("Auth 이름", viewModel.uiState.value.name)
+            userUpdates.value = User(id = "uid-1", name = "새 이름", shareCode = "NEW123")
+
+            assertEquals("새 이름", viewModel.uiState.value.name)
+            assertEquals("NEW123", viewModel.uiState.value.shareCode)
+        }
+
+    @Test
+    fun `계정이 바뀌면 앞 프로필을 즉시 비우고 새 계정 문서만 받는다`() =
+        runTest {
+            val nextUser = MutableStateFlow<User?>(null)
+            every { userRepository.observeUser("uid-2") } returns nextUser
+            val viewModel = createViewModel()
+            viewModel.onIntent(ProfileIntent.RequestDeleteAccount)
+            every { authRepository.currentProfile } returns
+                AuthRepository.Profile("uid-2", "두 번째 계정", "second@example.com")
+
+            authUid.value = "uid-2"
+            userUpdates.value = User(id = "uid-1", name = "늦은 옛 이름", shareCode = "OLD999")
+
+            assertEquals("두 번째 계정", viewModel.uiState.value.name)
+            assertEquals("", viewModel.uiState.value.shareCode)
+            assertFalse(viewModel.uiState.value.isDeleteConfirmVisible)
+            nextUser.value = User(id = "uid-2", name = "현재 이름", shareCode = "NEW222")
+            assertEquals("NEW222", viewModel.uiState.value.shareCode)
+
+            authUid.value = null
+            assertTrue(viewModel.uiState.value.isSignedOut)
+            assertEquals("", viewModel.uiState.value.name)
+            assertEquals("", viewModel.uiState.value.email)
+            assertEquals("", viewModel.uiState.value.shareCode)
+        }
+
+    @Test
+    fun `인증 알림보다 늦게 도착한 앞 계정 문서는 반영하지 않는다`() =
+        runTest {
+            val viewModel = createViewModel()
+            // Firebase의 현재 계정은 바뀌었지만 UID Flow 알림은 아직 대기 중인 경우다.
+            every { authRepository.currentUid } returns "uid-2"
+            userUpdates.value = User(id = "uid-1", name = "늦은 결과", shareCode = "OLD999")
+
+            assertEquals("정일혁", viewModel.uiState.value.name)
+            assertEquals("ABC123", viewModel.uiState.value.shareCode)
+        }
+
+    @Test
+    fun `읽기 실패는 코드 부재와 구분하고 다시 읽을 수 있다`() =
+        runTest {
+            every { userRepository.observeUser("uid-1") } returns flow { throw IllegalStateException("offline") }
+            val viewModel = createViewModel()
+
+            assertFalse(viewModel.uiState.value.isLoading)
+            assertNotNull(viewModel.uiState.value.loadError)
+            assertFalse(viewModel.uiState.value.isSignedOut)
+
+            every { userRepository.observeUser("uid-1") } returns userUpdates
+            viewModel.onIntent(ProfileIntent.RetryProfile)
+            assertNull(viewModel.uiState.value.loadError)
+            assertEquals("ABC123", viewModel.uiState.value.shareCode)
+        }
+
+    @Test
+    fun `앞 계정의 늦은 코드 재생성 결과가 새 계정 상태를 바꾸지 않는다`() =
+        runTest {
+            val finished = CompletableDeferred<Boolean>()
+            coEvery { userRepository.ensureShareCode("uid-1", any(), any()) } coAnswers {
+                withContext(NonCancellable) { finished.await() }
+            }
+            every { userRepository.observeUser("uid-2") } returns flowOf(User(id = "uid-2", shareCode = "NEW222"))
+            val viewModel = createViewModel()
+            viewModel.onIntent(ProfileIntent.RetryShareCode)
+            assertTrue(viewModel.uiState.value.isRetryingShareCode)
+            every { authRepository.currentProfile } returns AuthRepository.Profile("uid-2", "새 계정", "")
+            authUid.value = "uid-2"
+            finished.complete(true)
+
+            coVerify(exactly = 0) { scheduleRepository.fillMissingSharedCode("uid-1") }
+            assertEquals("NEW222", viewModel.uiState.value.shareCode)
+            assertFalse(viewModel.uiState.value.isRetryingShareCode)
+            assertNull(viewModel.uiState.value.userMessage)
+        }
 
     @Test
     fun `Firestore 사용자 문서로 이름·이메일·공유 코드를 채운다`() =
@@ -72,7 +177,7 @@ class ProfileViewModelTest {
     @Test
     fun `사용자 문서가 없으면 Auth 프로필로 채운다`() =
         runTest {
-            coEvery { userRepository.getCurrentUser() } returns null
+            userUpdates.value = null
 
             val state = createViewModel().uiState.value
 
@@ -85,6 +190,7 @@ class ProfileViewModelTest {
     fun `로그인돼 있지 않으면 로그인 안내 상태가 된다`() =
         runTest {
             every { authRepository.currentProfile } returns null
+            authUid.value = null
 
             val state = createViewModel().uiState.value
 
@@ -170,14 +276,16 @@ class ProfileViewModelTest {
         runTest {
             // 신호가 약한 곳에서 처음 로그인하면 코드가 비어 있는 채로 남고, 그 뒤에 만든 일정은
             // 가족이 어떤 코드로도 읽지 못한다(#134).
-            coEvery { userRepository.getCurrentUser() } returns
+            userUpdates.value =
                 User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "")
             val viewModel = createViewModel()
             assertEquals("", viewModel.uiState.value.shareCode)
 
-            coEvery { userRepository.ensureShareCode("uid-1", any(), any()) } returns true
-            coEvery { userRepository.getCurrentUser() } returns
-                User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "XYZ789")
+            coEvery { userRepository.ensureShareCode("uid-1", any(), any()) } coAnswers {
+                userUpdates.value =
+                    User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "XYZ789")
+                true
+            }
             viewModel.onIntent(ProfileIntent.RetryShareCode)
 
             assertEquals("XYZ789", viewModel.uiState.value.shareCode)
@@ -189,7 +297,7 @@ class ProfileViewModelTest {
         runTest {
             // 코드만 만들면 그 전에 저장한 일정은 sharedCode 가 빈 채라 가족이 영영 못 읽는다.
             // 다시 시도 버튼이 「고쳤다」 는 잘못된 안심을 주면 안 된다(#178).
-            coEvery { userRepository.getCurrentUser() } returns
+            userUpdates.value =
                 User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "")
             coEvery { userRepository.ensureShareCode("uid-1", any(), any()) } returns true
             val viewModel = createViewModel()
@@ -202,7 +310,7 @@ class ProfileViewModelTest {
     @Test
     fun `공유 코드를 못 만들면 일정은 건드리지 않는다`() =
         runTest {
-            coEvery { userRepository.getCurrentUser() } returns
+            userUpdates.value =
                 User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "")
             coEvery { userRepository.ensureShareCode(any(), any(), any()) } returns false
             val viewModel = createViewModel()
@@ -215,7 +323,7 @@ class ProfileViewModelTest {
     @Test
     fun `공유 코드를 또 못 만들면 이유를 알린다`() =
         runTest {
-            coEvery { userRepository.getCurrentUser() } returns
+            userUpdates.value =
                 User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "")
             coEvery { userRepository.ensureShareCode(any(), any(), any()) } returns false
             val viewModel = createViewModel()

@@ -57,7 +57,10 @@ mkdir -p "${RELEASE_AAB_REPORT_DIR}"
 private_dir="$(mktemp -d "${TMPDIR:-/tmp}/slowclock-release-preflight.XXXXXX")"
 trap 'rm -rf "${private_dir}"' EXIT
 
-"${repo_root}/scripts/verify-play-release-bundle.sh"
+"${repo_root}/gradlew" :app:lintRelease :app:bundleRelease --no-daemon --console=plain
+"${repo_root}/scripts/verify-play-release-bundle.sh" --skip-build
+node "${script_dir}/verify-android-manifest.mjs" \
+    "${repo_root}/app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml"
 
 apks_path="${private_dir}/app-release.apks"
 universal_apk_path="${private_dir}/universal.apk"
@@ -103,23 +106,7 @@ shopt -u nullglob
     exit 1
 }
 
-required_symbols=(
-    'Lcom/example/slowclock/data/model/Schedule;'
-    'Lcom/example/slowclock/data/model/User;'
-    'Lcom/example/slowclock/data/model/PublicProfile;'
-    'getTitle'
-    'getStartTime'
-    'getShareCode'
-    'getFcmToken'
-    'Lcom/example/slowclock/navigation/MainKey;'
-)
-for symbol in "${required_symbols[@]}"; do
-    if ! grep -a -l -F -e "${symbol}" "${dex_files[@]}" > /dev/null 2>&1; then
-        printf 'R8 stripped a name the app reads by reflection: %s\n' "${symbol}" >&2
-        echo 'app/proguard-rules.pro 의 keep 규칙을 확인하라.' >&2
-        exit 1
-    fi
-done
+python3 "${script_dir}/verify-dex-reflection.py" "${dex_files[@]}"
 
 # 기동 스모크는 «배포될 그 산출물» 을 그대로 받아야 한다 — 다시 빌드하면 검증 대상과 배포 대상이
 # 갈라진다. 여기서 만든 universal APK 를 요청받은 경로로 넘기고, 지우는 책임은 워크플로에 있다.
@@ -130,11 +117,7 @@ fi
 
 aab_sha256="$(sha256_file "${bundle_path}")"
 aab_size_bytes="$(wc -c < "${bundle_path}" | tr -d '[:space:]')"
-if [[ -s "${mapping_path}" ]]; then
-    mapping_sha256="$(sha256_file "${mapping_path}")"
-else
-    mapping_sha256="none"
-fi
+mapping_sha256="$(sha256_file "${mapping_path}")"
 installable_apk_bytes="$(wc -c < "${universal_apk_path}" | tr -d '[:space:]')"
 signer_sha256="$(
     keytool -printcert -jarfile "${bundle_path}" |

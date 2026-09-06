@@ -170,7 +170,7 @@ jobs:
           echo "path=$bundle_path" >> "$GITHUB_OUTPUT"
           node .github/scripts/verify-release-attestation.mjs digest "$bundle_path" "$GITHUB_OUTPUT"
 
-      # 서명·필수 bundle 항목을 확인한다(R8 mapping 은 minify 를 켠 뒤에만 존재). 잘못 서명된 AAB 가 Play 까지 가서
+      # 서명·필수 bundle 항목·AAB 내외 R8 mapping 일치를 확인한다. 잘못 서명된 AAB 가 Play 까지 가서
       # 거절당하는 대신 여기서 멈춘다.
       - name: Verify the AAB signature and contents
         run: bash scripts/verify-play-release-bundle.sh --skip-build
