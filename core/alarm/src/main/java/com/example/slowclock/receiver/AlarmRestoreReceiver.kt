@@ -4,11 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.example.slowclock.core.alarm.AlarmScheduler
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import com.example.slowclock.core.alarm.AlarmSchedulerEntryPoint
 
 /**
  * 걸어 둔 알람을 다시 거는 자리.
@@ -29,7 +25,7 @@ import dagger.hilt.components.SingletonComponent
  * 한 줄도 없어 다시 계산할 것이 없다. 등록해 두면 뒤에 읽는 사람이 「시각이 현지시각이구나」 로
  * 오해한다.
  *
- * 의존성을 `@AndroidEntryPoint` + 필드 주입이 아니라 [EntryPointAccessors] 로 받는다. Kotlin 은
+ * 의존성을 `@AndroidEntryPoint` + 필드 주입이 아니라 [AlarmSchedulerEntryPoint] 로 받는다. Kotlin 은
  * `BroadcastReceiver.onReceive` 가 추상이라 Hilt 가 요구하는 `super.onReceive` 를 부를 수 없고,
  * 그 호출을 빼면 주입이 되는지 여부가 부팅 때만 드러난다. 여기서는 받는 자리를 눈으로 볼 수 있게 둔다.
  *
@@ -38,12 +34,6 @@ import dagger.hilt.components.SingletonComponent
  * 호출을 들이지 않는 것이 이 파일의 계약이다.
  */
 class AlarmRestoreReceiver : BroadcastReceiver() {
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface AlarmSchedulerEntryPoint {
-        fun alarmScheduler(): AlarmScheduler
-    }
-
     override fun onReceive(
         context: Context,
         intent: Intent,
@@ -58,12 +48,7 @@ class AlarmRestoreReceiver : BroadcastReceiver() {
         }
 
         Log.d(TAG, "알람 복원: ${intent.action}")
-        runCatching {
-            EntryPointAccessors
-                .fromApplication(context.applicationContext, AlarmSchedulerEntryPoint::class.java)
-                .alarmScheduler()
-                .restoreAll()
-        }.onFailure {
+        runCatching { AlarmSchedulerEntryPoint.from(context).restoreAll() }.onFailure {
             // 복원에 실패해도 부팅 방송을 물고 죽지 않는다. 앱을 열면 그때 다시 걸린다.
             Log.e(TAG, "알람 복원 실패", it)
         }
