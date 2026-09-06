@@ -31,6 +31,7 @@ class ProfileViewModel
                 ProfileIntent.ConfirmDeleteAccount -> confirmDeleteAccount()
                 ProfileIntent.ConsumeUserMessage -> dispatch(ProfileReducerEvent.UserMessageConsumed)
                 ProfileIntent.ConsumeLeave -> dispatch(ProfileReducerEvent.LeaveConsumed)
+                ProfileIntent.RetryShareCode -> retryShareCode()
             }
         }
 
@@ -84,7 +85,46 @@ class ProfileViewModel
                 ProfileReducerEvent.LeaveConsumed -> {
                     state.copy(leave = null)
                 }
+
+                ProfileReducerEvent.ShareCodeRetryStarted -> {
+                    state.copy(isRetryingShareCode = true)
+                }
+
+                is ProfileReducerEvent.ShareCodeRetryFinished -> {
+                    state.copy(isRetryingShareCode = false, userMessage = event.message ?: state.userMessage)
+                }
             }
+
+        /**
+         * 공유 코드를 다시 만들어 본다.
+         *
+         * 신호가 약한 곳에서 처음 로그인하면 코드가 비어 있는 채로 남고, 그 뒤에 만든 일정은
+         * 가족이 어떤 코드로도 읽지 못한다. 비어 있다는 사실만 보여 주면 사용자가 할 수 있는 일이
+         * 없으므로 다시 시도할 길을 함께 둔다(#134).
+         */
+        private fun retryShareCode() {
+            if (currentState.isRetryingShareCode) return
+            val profile = authRepository.currentProfile ?: return
+            dispatch(ProfileReducerEvent.ShareCodeRetryStarted)
+            viewModelScope.launch {
+                val created =
+                    userRepository.ensureShareCode(
+                        uid = profile.uid,
+                        name = profile.displayName,
+                        email = profile.email,
+                    )
+                if (created) {
+                    dispatch(ProfileReducerEvent.ShareCodeRetryFinished())
+                    loadProfile()
+                } else {
+                    dispatch(
+                        ProfileReducerEvent.ShareCodeRetryFinished(
+                            "공유 코드를 만들지 못했습니다. 인터넷 연결을 확인한 뒤 다시 눌러 주세요.",
+                        ),
+                    )
+                }
+            }
+        }
 
         private fun loadProfile() {
             viewModelScope.launch {

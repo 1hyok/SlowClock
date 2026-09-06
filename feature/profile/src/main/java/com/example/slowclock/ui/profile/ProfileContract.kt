@@ -17,6 +17,9 @@ sealed interface ProfileIntent : MviIntent {
     data object ConsumeUserMessage : ProfileIntent
 
     data object ConsumeLeave : ProfileIntent
+
+    /** 공유 코드를 못 만든 상태에서 다시 시도한다. */
+    data object RetryShareCode : ProfileIntent
 }
 
 /** 화면을 떠나야 하는 이유. 로그아웃과 계정 삭제 모두 같은 경로(뒤로 가기)로 나간다. */
@@ -43,6 +46,8 @@ data class ProfileUiState(
     val isDeleting: Boolean = false,
     val userMessage: String? = null,
     val leave: ProfileLeaveReason? = null,
+    /** 공유 코드를 다시 만드는 중이다. 그동안 다시 시도 버튼을 막는다. */
+    val isRetryingShareCode: Boolean = false,
 ) : UiState
 
 /** 내 정보 화면의 상태가 겪은 것. 화면은 만들지 않고 ViewModel 만 dispatch 한다. */
@@ -54,6 +59,13 @@ sealed interface ProfileReducerEvent : ReducerEvent {
         val name: String,
         val email: String,
         val shareCode: String,
+    ) : ProfileReducerEvent
+
+    data object ShareCodeRetryStarted : ProfileReducerEvent
+
+    /** [message] 가 있으면 다시 만들지 못했다는 뜻이다. 화면이 한 번 보여 주고 소비한다. */
+    data class ShareCodeRetryFinished(
+        val message: String? = null,
     ) : ProfileReducerEvent
 
     data class LoadFailed(

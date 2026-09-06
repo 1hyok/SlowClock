@@ -21,6 +21,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -157,5 +158,39 @@ class ProfileViewModelTest {
 
             assertEquals("일정을 지우지 못했습니다. 잠시 후 다시 시도해 주세요.", viewModel.uiState.value.userMessage)
             assertNull(viewModel.uiState.value.leave)
+        }
+
+    @Test
+    fun `공유 코드를 다시 만들면 화면에 반영한다`() =
+        runTest {
+            // 신호가 약한 곳에서 처음 로그인하면 코드가 비어 있는 채로 남고, 그 뒤에 만든 일정은
+            // 가족이 어떤 코드로도 읽지 못한다(#134).
+            coEvery { userRepository.getCurrentUser() } returns
+                User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "")
+            val viewModel = createViewModel()
+            assertEquals("", viewModel.uiState.value.shareCode)
+
+            coEvery { userRepository.ensureShareCode("uid-1", any(), any()) } returns true
+            coEvery { userRepository.getCurrentUser() } returns
+                User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "XYZ789")
+            viewModel.onIntent(ProfileIntent.RetryShareCode)
+
+            assertEquals("XYZ789", viewModel.uiState.value.shareCode)
+            assertFalse(viewModel.uiState.value.isRetryingShareCode)
+        }
+
+    @Test
+    fun `공유 코드를 또 못 만들면 이유를 알린다`() =
+        runTest {
+            coEvery { userRepository.getCurrentUser() } returns
+                User(id = "uid-1", name = "정일혁", email = "user@example.com", shareCode = "")
+            coEvery { userRepository.ensureShareCode(any(), any(), any()) } returns false
+            val viewModel = createViewModel()
+
+            viewModel.onIntent(ProfileIntent.RetryShareCode)
+
+            val state = viewModel.uiState.value
+            assertNotNull(state.userMessage)
+            assertFalse(state.isRetryingShareCode)
         }
 }
