@@ -24,7 +24,7 @@ service cloud.firestore {
       return !('sharedCode' in request.resource.data)
         || request.resource.data.sharedCode == ''
         || (request.resource.data.sharedCode is string
-          && get(/databases/$(database)/documents/shareCodes/$(request.resource.data.sharedCode)).data.userId == request.auth.uid);
+          && getAfter(/databases/$(database)/documents/shareCodes/$(request.resource.data.sharedCode)).data.userId == request.auth.uid);
     }
 
     // 사용자 문서. 이메일과 FCM 토큰이 함께 있어 본인만 읽고 쓴다.
@@ -71,6 +71,8 @@ service cloud.firestore {
 
     // 일정
     match /schedules/{scheduleId} {
+      // 고정 제출 ID의 첫 transaction은 아직 없는 문서도 확인해야 한다. 목록 권한은 열지 않는다.
+      allow get: if isSignedIn() && !exists(/databases/$(database)/documents/schedules/$(scheduleId));
       // 생성할 때 소유자를 확인하고, 기존 일정은 저장된 소유자를 기준으로 확인한다.
       // 일정을 고칠 때도 소유자는 그대로 유지한다.
       allow read, delete: if isSelf(resource.data.userId);

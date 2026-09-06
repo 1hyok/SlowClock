@@ -2,12 +2,15 @@ package com.example.slowclock.ui.timeline
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.ui.mvi.MviViewModel
+import com.example.slowclock.util.AppError
 import com.example.slowclock.util.toAppError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
@@ -18,11 +21,18 @@ class TimelineViewModel
     @Inject
     constructor(
         private val scheduleRepository: ScheduleRepository,
+        private val authRepository: AuthRepository,
     ) : MviViewModel<TimelineIntent, TimelineUiState, TimelineReducerEvent>(TimelineUiState()) {
         private var scheduleJob: Job? = null
+        private var subscriptionGeneration = 0L
 
         init {
-            observeSchedules(currentState.selectedDate)
+            viewModelScope.launch {
+                authRepository.observeCurrentUid().distinctUntilChanged().collect {
+                    dispatch(TimelineReducerEvent.Loaded(emptyList()))
+                    observeSchedules(currentState.selectedDate)
+                }
+            }
         }
 
         override fun onIntent(intent: TimelineIntent) {
@@ -73,6 +83,13 @@ class TimelineViewModel
 
         private fun observeSchedules(date: Calendar) {
             scheduleJob?.cancel()
+            val generation = ++subscriptionGeneration
+            val uid = authRepository.currentUid
+            if (uid == null) {
+                dispatch(TimelineReducerEvent.Loaded(emptyList()))
+                dispatch(TimelineReducerEvent.Failed(AppError.AuthError))
+                return
+            }
             scheduleJob =
                 viewModelScope.launch {
                     dispatch(TimelineReducerEvent.Loading)
@@ -80,8 +97,14 @@ class TimelineViewModel
                         .observeSchedulesForDate(date)
                         .catch { e ->
                             Log.e(TAG, "일정 구독 실패", e)
-                            dispatch(TimelineReducerEvent.Failed(e.toAppError()))
-                        }.collect { dispatch(TimelineReducerEvent.Loaded(it)) }
+                            if (authRepository.currentUid == uid && generation == subscriptionGeneration) {
+                                dispatch(TimelineReducerEvent.Failed(e.toAppError()))
+                            }
+                        }.collect {
+                            if (authRepository.currentUid == uid && generation == subscriptionGeneration) {
+                                dispatch(TimelineReducerEvent.Loaded(it))
+                            }
+                        }
                 }
         }
 

@@ -11,6 +11,7 @@ import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.ui.mvi.MviViewModel
 import com.example.slowclock.util.toAppError
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -27,9 +28,9 @@ import java.util.UUID
 import javax.inject.Inject
 
 /**
- * 메인 화면. 오늘 일정은 Firestore 리스너로 받는다. 완료 토글·삭제는 낙관적으로 먼저 반영하고,
- * 실패하면 리스너가 서버 상태로 되돌린다. 공유 일정은 기기에 저장된 공유 코드가 바뀔 때마다
- * 다시 구독한다.
+ * 메인 화면. 오늘 일정은 Firestore 리스너로 받는다. 완료는 임시 표시하고 삭제는 서버 확인 후 반영한다.
+ * 완료 실패는 최신 서버 목록을 덮지 않는 범위에서 표시를 되돌린다.
+ * 공유 일정은 기기에 저장된 공유 코드가 바뀔 때마다 다시 구독한다.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -43,6 +44,10 @@ class MainViewModel
         private val alarmScheduler: AlarmScheduler,
     ) : MviViewModel<MainIntent, MainUiState, MainReducerEvent>(MainUiState()) {
         private var scheduleJob: Job? = null
+        private var completionUserGeneration = 0L
+        private var ownRevision = 0L
+        private var sharedRevision = 0L
+        private val pendingCompletions = mutableSetOf<String>()
         private var deleteJob: Job? = null
 
         /** 지금 구독이 보고 있는 날. 날이 바뀌면 다시 건다(#171). */
@@ -54,6 +59,7 @@ class MainViewModel
 
         init {
             observeSignedInUser()
+            dispatch(MainReducerEvent.AlarmControlsChecked(alarmScheduler.canShowAlarmControls()))
             // 정확한 알람 권한이 없으면 첫 진입에 한 번만 이유를 설명한다. 설정으로 보내는 건
             // 사용자가 「설정 열기」 를 눌렀을 때다(#83).
             if (!alarmScheduler.canScheduleExactAlarms() && !settingsRepository.hasSeenExactAlarmNotice()) {
@@ -66,6 +72,7 @@ class MainViewModel
         override fun onIntent(intent: MainIntent) {
             when (intent) {
                 MainIntent.ScreenResumed -> {
+                    dispatch(MainReducerEvent.AlarmControlsChecked(alarmScheduler.canShowAlarmControls()))
                     resubscribeIfDayChanged()
                     authRepository.currentUid?.let(::syncAlarms)
                 }
@@ -129,6 +136,14 @@ class MainViewModel
                 MainIntent.DismissExactAlarmNotice -> {
                     settingsRepository.markExactAlarmNoticeSeen()
                     dispatch(MainReducerEvent.ExactAlarmNoticeDismissed)
+                }
+
+                MainIntent.OpenNotificationSettings -> {
+                    dispatch(MainReducerEvent.NotificationSettingsRequested)
+                }
+
+                MainIntent.ConsumeNotificationSettingsRequest -> {
+                    dispatch(MainReducerEvent.NotificationSettingsRequestConsumed)
                 }
 
                 MainIntent.ConsumeExactAlarmSettingsRequest -> {
@@ -204,6 +219,20 @@ class MainViewModel
                     state.copy(isLoading = false, error = event.error, canRetry = event.canRetry, failedDelete = null)
                 }
 
+                is MainReducerEvent.CompletionRestored -> {
+                    fun restore(schedule: Schedule): Schedule =
+                        if (schedule.id == event.schedule.id && schedule.occurrenceDate == event.schedule.occurrenceDate) {
+                            schedule.copy(completed = event.schedule.completed)
+                        } else {
+                            schedule
+                        }
+                    if (event.shared) {
+                        state.copy(sharedReminders = state.sharedReminders.map(::restore))
+                    } else {
+                        state.withSchedules(state.todaySchedules.map(::restore), event.nowMillis)
+                    }
+                }
+
                 is MainReducerEvent.CompletionToggled -> {
                     state.withSchedules(
                         state.todaySchedules.map { if (it.id == event.scheduleId) it.copy(completed = !it.completed) else it },
@@ -276,6 +305,18 @@ class MainViewModel
                     state.copy(error = null, canRetry = false, failedDelete = null)
                 }
 
+                is MainReducerEvent.AlarmControlsChecked -> {
+                    state.copy(alarmControlsAvailable = event.available)
+                }
+
+                MainReducerEvent.NotificationSettingsRequested -> {
+                    state.copy(openNotificationSettings = Unit)
+                }
+
+                MainReducerEvent.NotificationSettingsRequestConsumed -> {
+                    state.copy(openNotificationSettings = null)
+                }
+
                 MainReducerEvent.ExactAlarmNoticeShown -> {
                     state.copy(showExactAlarmNotice = true)
                 }
@@ -329,6 +370,9 @@ class MainViewModel
                     alarmSyncJob?.cancel()
                     alarmSyncJob = null
                     alarmSyncedFor = null
+                    completionUserGeneration++
+                    ownRevision++
+                    sharedRevision++
                     deleteJob?.cancel()
                     deleteJob = null
                     dispatch(MainReducerEvent.UserResolved(uid.orEmpty()))
@@ -382,6 +426,7 @@ class MainViewModel
                             Log.e(TAG, "일정 구독 실패", e)
                             dispatch(MainReducerEvent.LoadFailed(e.toAppError(), canRetry = true))
                         }.collect { schedules ->
+                            ownRevision++
                             dispatch(MainReducerEvent.SchedulesLoaded(schedules, System.currentTimeMillis()))
                         }
                 }
@@ -418,6 +463,7 @@ class MainViewModel
                             }
                         }
                     }.collect { reminders ->
+                        sharedRevision++
                         val today = Calendar.getInstance()
                         val todayReminders = reminders.filter { it.startTime.toDate().isSameDay(today) }
                         dispatch(MainReducerEvent.SharedRemindersLoaded(todayReminders))
@@ -445,18 +491,45 @@ class MainViewModel
             }
 
         private fun toggleComplete(scheduleId: String) {
-            val schedule = currentState.todaySchedules.find { it.id == scheduleId } ?: return
-            dispatch(MainReducerEvent.CompletionToggled(scheduleId, System.currentTimeMillis()))
+            currentState.todaySchedules.find { it.id == scheduleId }?.let { toggleCompletion(it, shared = false) }
+        }
+
+        private fun toggleCompletion(
+            schedule: Schedule,
+            shared: Boolean,
+        ) {
+            val uid = authRepository.currentUid ?: return
+            val generation = completionUserGeneration
+            val key = "$uid:$generation:${schedule.id}"
+            if (!pendingCompletions.add(key)) return
+            val revision = if (shared) sharedRevision else ownRevision
+            if (shared) {
+                dispatch(MainReducerEvent.SharedReminderToggled(schedule.id))
+            } else {
+                dispatch(MainReducerEvent.CompletionToggled(schedule.id, System.currentTimeMillis()))
+            }
+
+            fun restoreIfCurrent() {
+                if (authRepository.currentUid == uid && generation == completionUserGeneration &&
+                    revision == if (shared) sharedRevision else ownRevision
+                ) {
+                    dispatch(MainReducerEvent.CompletionRestored(schedule, shared, System.currentTimeMillis()))
+                }
+            }
             viewModelScope.launch {
-                val result =
-                    scheduleRepository.markScheduleAsCompleted(
-                        scheduleId = scheduleId,
-                        completed = !schedule.completed,
-                        occurrenceDate = schedule.occurrenceDate,
-                    )
-                if (result is ScheduleRepository.ScheduleResult.Error) {
-                    Log.e(TAG, "완료 상태 변경 실패: ${result.error.message}")
-                    dispatch(MainReducerEvent.LoadFailed(result.error, canRetry = false))
+                try {
+                    val result = scheduleRepository.markScheduleAsCompleted(schedule.id, !schedule.completed, schedule.occurrenceDate)
+                    if (result is ScheduleRepository.ScheduleResult.Error && authRepository.currentUid == uid &&
+                        generation == completionUserGeneration
+                    ) {
+                        restoreIfCurrent()
+                        dispatch(MainReducerEvent.LoadFailed(result.error, canRetry = false))
+                    }
+                } catch (e: CancellationException) {
+                    restoreIfCurrent()
+                    throw e
+                } finally {
+                    pendingCompletions.remove(key)
                 }
             }
         }
@@ -486,27 +559,7 @@ class MainViewModel
         }
 
         private fun toggleSharedReminderComplete(scheduleId: String) {
-            val reminder = currentState.sharedReminders.find { it.id == scheduleId } ?: return
-            dispatch(MainReducerEvent.SharedReminderToggled(scheduleId))
-            viewModelScope.launch {
-                // 공유 일정이 바뀌면 Firestore 트리거(sendFcmToShareCodeWatchers)가 감시자에게 알린다.
-                // 클라이언트가 남의 FCM 토큰을 읽어 직접 보내던 경로는 지웠다(#93).
-                val result =
-                    scheduleRepository.markScheduleAsCompleted(
-                        scheduleId = scheduleId,
-                        completed = !reminder.completed,
-                        occurrenceDate = reminder.occurrenceDate,
-                    )
-                when (result) {
-                    is ScheduleRepository.ScheduleResult.Success -> {
-                        Unit
-                    }
-
-                    is ScheduleRepository.ScheduleResult.Error -> {
-                        dispatch(MainReducerEvent.LoadFailed(result.error, canRetry = false))
-                    }
-                }
-            }
+            currentState.sharedReminders.find { it.id == scheduleId }?.let { toggleCompletion(it, shared = true) }
         }
 
         private companion object {

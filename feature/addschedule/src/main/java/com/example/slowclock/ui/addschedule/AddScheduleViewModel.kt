@@ -1,6 +1,7 @@
 package com.example.slowclock.ui.addschedule
 
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.model.Schedule
@@ -9,10 +10,14 @@ import com.example.slowclock.ui.mvi.MviViewModel
 import com.example.slowclock.util.AppError
 import com.google.firebase.Timestamp
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.UUID
 import javax.inject.Inject
 
 private const val MAX_TITLE_LENGTH = 100
@@ -24,12 +29,20 @@ class AddScheduleViewModel
     constructor(
         private val scheduleRepository: ScheduleRepository,
         private val alarmScheduler: AlarmScheduler,
-    ) : MviViewModel<AddScheduleIntent, AddScheduleUiState, AddScheduleReducerEvent>(AddScheduleUiState()) {
+        private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    ) : MviViewModel<AddScheduleIntent, AddScheduleUiState, AddScheduleReducerEvent>(savedStateHandle.restoreDraft()) {
+        private val draftId =
+            savedStateHandle.get<String>(DRAFT_ID) ?: UUID.randomUUID().toString().also { savedStateHandle[DRAFT_ID] = it }
         private var editLoadJob: Job? = null
 
         override fun onIntent(intent: AddScheduleIntent) {
             // 폼이 읽히거나 저장되는 중의 중복 입력·저장은 진행 중인 작업을 바꾸지 않는다.
             if (currentState.isLoading && (intent !is AddScheduleIntent.LoadForEdit || editLoadJob?.isActive != true)) return
+            if (currentState.pendingAlarmSchedule != null &&
+                intent != AddScheduleIntent.Retry && intent != AddScheduleIntent.ConsumeError
+            ) {
+                return
+            }
             when (intent) {
                 is AddScheduleIntent.UpdateTitle -> {
                     dispatch(AddScheduleReducerEvent.TitleChanged(intent.value))
@@ -70,7 +83,9 @@ class AddScheduleViewModel
                 AddScheduleIntent.Retry -> {
                     dispatch(AddScheduleReducerEvent.ErrorConsumed)
                     val state = currentState
-                    if (state.isEditMode && state.editingSchedule == null) {
+                    if (state.pendingAlarmSchedule != null) {
+                        reserveSavedAlarm(state.pendingAlarmSchedule)
+                    } else if (state.isEditMode && state.editingSchedule == null) {
                         state.editScheduleId?.let(::loadForEdit)
                     } else {
                         save()
@@ -78,13 +93,18 @@ class AddScheduleViewModel
                 }
 
                 AddScheduleIntent.ConsumeError -> {
-                    dispatch(AddScheduleReducerEvent.ErrorConsumed)
+                    if (currentState.pendingAlarmSchedule != null) {
+                        dispatch(AddScheduleReducerEvent.Saved)
+                    } else {
+                        dispatch(AddScheduleReducerEvent.ErrorConsumed)
+                    }
                 }
 
                 AddScheduleIntent.ConsumeSaved -> {
                     dispatch(AddScheduleReducerEvent.SavedConsumed)
                 }
             }
+            if (!currentState.isEditMode) savedStateHandle.saveDraft(currentState)
         }
 
         override fun reduce(
@@ -167,7 +187,16 @@ class AddScheduleViewModel
                 }
 
                 AddScheduleReducerEvent.Saved -> {
-                    state.copy(isLoading = false, isSaved = true)
+                    state.copy(isLoading = false, isSaved = true, pendingAlarmSchedule = null, error = null)
+                }
+
+                is AddScheduleReducerEvent.AlarmFailed -> {
+                    state.copy(
+                        isLoading = false,
+                        pendingAlarmSchedule = event.schedule,
+                        error = AppError.GeneralError("일정은 저장됐지만 알람을 예약하지 못했습니다. 다시 시도하면 알람만 예약합니다."),
+                        canRetry = true,
+                    )
                 }
 
                 is AddScheduleReducerEvent.Failed -> {
@@ -182,6 +211,19 @@ class AddScheduleViewModel
                     state.copy(isSaved = false)
                 }
             }
+
+        private fun reserveSavedAlarm(schedule: Schedule) {
+            dispatch(AddScheduleReducerEvent.Saving)
+            try {
+                alarmScheduler.schedule(schedule)
+                dispatch(AddScheduleReducerEvent.Saved)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.e(TAG, "일정 저장 후 알람 예약 실패", error)
+                dispatch(AddScheduleReducerEvent.AlarmFailed(schedule))
+            }
+        }
 
         private fun loadForEdit(scheduleId: String) {
             if (currentState.editingSchedule?.id == scheduleId ||
@@ -228,21 +270,20 @@ class AddScheduleViewModel
             viewModelScope.launch {
                 val result =
                     if (state.isEditMode) {
-                        scheduleRepository.updateSchedule(schedule).map { schedule.id }
+                        scheduleRepository.updateSchedule(schedule).map { schedule }
                     } else {
                         scheduleRepository.addSchedule(schedule)
                     }
+                currentCoroutineContext().ensureActive()
                 when (result) {
                     is ScheduleRepository.ScheduleResult.Success -> {
-                        // 새 일정은 Firestore 가 준 ID 로 알람을 건다. 빈 ID 로 걸면 모든 새 일정이 같은 요청 코드를 쓴다.
-                        runCatching { alarmScheduler.schedule(schedule.copy(id = result.data)) }
-                            .onFailure { Log.e(TAG, "알람 예약 실패", it) }
-                        dispatch(AddScheduleReducerEvent.Saved)
+                        // 같은 ID 재시도에서도 서버가 돌려준 최신 일정으로 알람을 예약한다.
+                        reserveSavedAlarm(result.data)
                     }
 
                     is ScheduleRepository.ScheduleResult.Error -> {
                         Log.e(TAG, "저장 실패: ${result.error.message}")
-                        dispatch(AddScheduleReducerEvent.Failed(result.error, canRetry = true))
+                        dispatch(AddScheduleReducerEvent.Failed(result.error, canRetry = result.error !is AppError.ScheduleConflictError))
                     }
                 }
             }
@@ -279,7 +320,7 @@ class AddScheduleViewModel
             }
 
         private fun AddScheduleUiState.toSchedule(title: String): Schedule {
-            val base = if (isEditMode) requireNotNull(editingSchedule) else Schedule()
+            val base = if (isEditMode) requireNotNull(editingSchedule) else Schedule(id = draftId)
             return base.copy(
                 title = title,
                 description = description.trim(),
@@ -298,6 +339,7 @@ class AddScheduleViewModel
 
         private companion object {
             const val TAG = "AddScheduleViewModel"
+            const val DRAFT_ID = "new_schedule_id"
         }
     }
 

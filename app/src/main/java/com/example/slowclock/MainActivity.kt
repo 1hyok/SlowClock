@@ -3,10 +3,8 @@ package com.example.slowclock
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -14,11 +12,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
-import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.slowclock.auth.AuthManager
+import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.model.ThemeMode
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
@@ -29,6 +27,7 @@ import com.example.slowclock.navigation.AppNavigation
 import com.example.slowclock.ui.theme.SlowClockTheme
 import com.firebase.ui.auth.AuthUI
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -50,6 +49,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var signOutUseCase: SignOutUseCase
+
+    @Inject
+    lateinit var alarmScheduler: AlarmScheduler
 
     private fun handleNewInstallation() {
         val prefs = getSharedPreferences("app_state", MODE_PRIVATE)
@@ -74,6 +76,12 @@ class MainActivity : ComponentActivity() {
         Log.d("MAIN", "onCreate 시작")
 
         handleNewInstallation()
+        // API 32–34에서는 강제 종료 해제 시 BOOT_COMPLETED가 오지 않는다.
+        // 설치 정리 이후, 네트워크와 독립적으로 프로세스당 한 번만 복원한다.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { alarmScheduler.restoreOnAppStart() }
+                .onFailure { Log.e("ALARM", "앱 시작 알람 복원 실패", it) }
+        }
 
         try {
             // AuthManager 초기화
@@ -125,7 +133,7 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.e("MAIN", "onCreate 실패", e)
         }
-        requestNotificationPermission()
+        // 알림은 메인의 설명을 읽고 설정 버튼을 누른 뒤 허용한다. 로그인 위로 권한창을 띄우지 않는다.
         // 정확한 알람 권한은 메인 화면이 이유를 설명한 뒤 사용자가 원할 때 요청한다(#83).
         createNotificationChannel() // ← 반드시 호출 필요
     }
@@ -153,21 +161,6 @@ class MainActivity : ComponentActivity() {
         val notificationManager: NotificationManager =
             getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
-    }
-
-    // POST_NOTIFICATIONS 는 API 33 에 생겼다. minSdk 32 기기는 설치 시점에 알림 권한을 갖는다.
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (ContextCompat.checkSelfPermission(
-                this,
-                android.Manifest.permission.POST_NOTIFICATIONS,
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(
-                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                1001,
-            )
-        }
     }
 
     private fun saveFcmTokenToFirestore() {

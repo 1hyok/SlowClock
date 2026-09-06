@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.example.slowclock.core.alarm.AlarmSchedulerEntryPoint
+import java.util.concurrent.Executors
 
 /**
  * 걸어 둔 알람을 다시 거는 자리.
@@ -20,18 +21,16 @@ import com.example.slowclock.core.alarm.AlarmSchedulerEntryPoint
  * - `TIME_SET`(상수 이름은 `ACTION_TIME_CHANGED`): 부팅 직후 시계가 아직 네트워크 시각과 맞지
  *   않을 수 있다. 그 상태에서 「지났다」 로 걸러 버린 알람을, 시각이 교정된 뒤 되살린다.
  *
- * `TIMEZONE_CHANGED` 는 받지 않는다. `Schedule.startTime` 은 Firebase `Timestamp`, 곧 절대
- * 시각이고 알람 경로는 그 epoch 밀리초를 그대로 AlarmManager 에 넘긴다. 시간대를 읽는 코드가
- * 한 줄도 없어 다시 계산할 것이 없다. 등록해 두면 뒤에 읽는 사람이 「시각이 현지시각이구나」 로
- * 오해한다.
+ * `TIMEZONE_CHANGED`는 받지 않는다. 반복 계산은 기기 시간대를 사용하지만 저장 모델은
+ * epoch뿐이다. 방송을 추가하는 것만으로 원래 선택한 현지 시각을 보존할 수 없으므로
+ * 시간대 정책과 모델을 함께 정하기 전에는 기존 동작을 유지한다.
  *
  * 의존성을 `@AndroidEntryPoint` + 필드 주입이 아니라 [AlarmSchedulerEntryPoint] 로 받는다. Kotlin 은
  * `BroadcastReceiver.onReceive` 가 추상이라 Hilt 가 요구하는 `super.onReceive` 를 부를 수 없고,
  * 그 호출을 빼면 주입이 되는지 여부가 부팅 때만 드러난다. 여기서는 받는 자리를 눈으로 볼 수 있게 둔다.
  *
- * `goAsync` 를 쓰지 않는다. 이 경로에는 네트워크도 Firestore 도 없어 동기로 끝난다. `goAsync`
- * 를 써도 10초 제한은 그대로이고 `finish()` 를 빠뜨릴 자리만 는다. 그래서 이 수신기에 suspend
- * 호출을 들이지 않는 것이 이 파일의 계약이다.
+ * 장부 읽기와 OS 예약은 goAsync 작업에서 수행해 메인 스레드를 막지 않는다.
+ * 방송 완료 제한은 여전히 적용되며 finally에서 반드시 finish한다.
  */
 class AlarmRestoreReceiver : BroadcastReceiver() {
     override fun onReceive(
@@ -48,13 +47,20 @@ class AlarmRestoreReceiver : BroadcastReceiver() {
         }
 
         Log.d(TAG, "알람 복원: ${intent.action}")
-        runCatching { AlarmSchedulerEntryPoint.from(context).restoreAll() }.onFailure {
-            // 복원에 실패해도 부팅 방송을 물고 죽지 않는다. 앱을 열면 그때 다시 걸린다.
-            Log.e(TAG, "알람 복원 실패", it)
+        val pending = goAsync()
+        executor.execute {
+            try {
+                AlarmSchedulerEntryPoint.from(context).restoreAll()
+            } catch (error: Exception) {
+                Log.e(TAG, "알람 복원 실패", error)
+            } finally {
+                pending.finish()
+            }
         }
     }
 
     private companion object {
         const val TAG = "AlarmRestoreReceiver"
+        val executor = Executors.newSingleThreadExecutor()
     }
 }

@@ -4,8 +4,11 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -22,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -32,12 +37,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.feature.main.R
 import com.example.slowclock.ui.common.ScheduleLoadingIndicator
 import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.SignInPrompt
@@ -69,6 +76,7 @@ fun MainScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val notificationSettingsUnavailable = stringResource(R.string.notification_settings_unavailable)
     ObserveSignal(
         signal = state.userMessage,
         consumed = MainIntent.ConsumeUserMessage,
@@ -91,6 +99,27 @@ fun MainScreen(
                 },
             )
         if (!opened) viewModel.onIntent(MainIntent.ExactAlarmSettingsUnavailable)
+    }
+    ObserveSignal(
+        signal = state.openNotificationSettings,
+        consumed = MainIntent.ConsumeNotificationSettingsRequest,
+        onIntent = viewModel::onIntent,
+    ) {
+        val opened =
+            launchExternalActivity(
+                open = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                    )
+                },
+                fallback = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
+                },
+            )
+        if (!opened) {
+            scope.launch { snackbarHostState.showSnackbar(notificationSettingsUnavailable) }
+        }
     }
     MainContent(
         state = state,
@@ -238,6 +267,32 @@ internal fun MainContent(
             if (isSignedOut) {
                 item { SignInPrompt(onSignIn = onSignIn) }
                 return@LazyColumn
+            }
+
+            if (!state.alarmControlsAvailable) {
+                item {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.alarm_notifications_disabled),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                            Button(
+                                onClick = { onIntent(MainIntent.OpenNotificationSettings) },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                            ) {
+                                Text(stringResource(R.string.open_notification_settings))
+                            }
+                        }
+                    }
+                }
             }
 
             state.currentSchedule?.let { schedule ->

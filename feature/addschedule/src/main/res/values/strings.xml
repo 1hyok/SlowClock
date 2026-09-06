@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="retry_saved_alarm">알람 다시 예약</string>
+    <string name="return_to_saved_schedules">목록으로 돌아가기</string>
+</resources>
