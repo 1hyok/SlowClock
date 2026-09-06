@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,6 +67,16 @@ internal fun ShareCodeContent(
             enabled = state.canSave,
         ) {
             Text(if (state.isSaving) "저장 중..." else "저장하고 돌아가기")
+        }
+        // 등록이 곧 읽기 권한이라, 실패를 알리지 않으면 가족 일정이 왜 비어 있는지 알 수 없다(#174).
+        if (state.saveError != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = state.saveError,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
