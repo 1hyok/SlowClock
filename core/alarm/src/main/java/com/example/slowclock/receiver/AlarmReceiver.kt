@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.slowclock.core.alarm.R
+import com.example.slowclock.core.alarm.ScheduleAlarmHelper
 import com.example.slowclock.ui.alarm.AlarmTriggerService
 
 /**
@@ -32,16 +33,32 @@ class AlarmReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        val title = intent.getStringExtra("title") ?: "알람"
-        val desc = intent.getStringExtra("desc").orEmpty()
-        val isFullScreen = intent.getBooleanExtra("isFullScreen", true)
+        val title = intent.getStringExtra(ScheduleAlarmHelper.EXTRA_TITLE) ?: "알람"
+        val desc = intent.getStringExtra(ScheduleAlarmHelper.EXTRA_DESC).orEmpty()
+        val isFullScreen = intent.getBooleanExtra(ScheduleAlarmHelper.EXTRA_FULL_SCREEN, true)
+        val scheduleId = intent.getStringExtra(ScheduleAlarmHelper.EXTRA_SCHEDULE_ID).orEmpty()
+        // 이 판 이전에 걸린 알람에는 자리 번호가 실려 있지 않다. 그때는 시작 자리로 되돌린다.
+        val requestCode =
+            intent.getIntExtra(
+                ScheduleAlarmHelper.EXTRA_REQUEST_CODE,
+                ScheduleAlarmHelper.generateStartRequestCode(scheduleId),
+            )
+        val snoozeCount = intent.getIntExtra(ScheduleAlarmHelper.EXTRA_SNOOZE_COUNT, 0)
 
         Log.d(TAG, "알람 수신: $title")
 
         try {
             ContextCompat.startForegroundService(
                 context,
-                AlarmTriggerService.ringIntent(context, title, desc, isFullScreen),
+                AlarmTriggerService.ringIntent(
+                    context = context,
+                    title = title,
+                    desc = desc,
+                    isFullScreen = isFullScreen,
+                    scheduleId = scheduleId,
+                    requestCode = requestCode,
+                    snoozeCount = snoozeCount,
+                ),
             )
         } catch (e: Exception) {
             // 정시 알람 권한이 없어 부정확 알람으로 깨어난 경우에는 백그라운드에서 포그라운드
