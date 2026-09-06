@@ -2,6 +2,7 @@ package com.example.slowclock.ui.profile
 
 import androidx.lifecycle.viewModelScope
 import com.example.slowclock.data.remote.repository.AuthRepository
+import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.domain.profile.DeleteAccountResult
 import com.example.slowclock.domain.profile.DeleteAccountStep
@@ -18,6 +19,7 @@ class ProfileViewModel
     constructor(
         private val userRepository: UserRepository,
         private val authRepository: AuthRepository,
+        private val scheduleRepository: ScheduleRepository,
         private val deleteAccount: DeleteAccountUseCase,
         private val signOutUseCase: SignOutUseCase,
     ) : MviViewModel<ProfileIntent, ProfileUiState, ProfileReducerEvent>(ProfileUiState()) {
@@ -116,6 +118,9 @@ class ProfileViewModel
                         email = profile.email,
                     )
                 if (created) {
+                    // 코드만 만들면 그 전에 저장한 일정은 sharedCode 가 빈 채라 가족이 영영
+                    // 못 읽는다. 다시 시도 버튼이 「고쳤다」 는 잘못된 안심을 주면 안 된다(#178).
+                    scheduleRepository.fillMissingSharedCode(profile.uid)
                     dispatch(ProfileReducerEvent.ShareCodeRetryFinished())
                     loadProfile()
                 } else {
