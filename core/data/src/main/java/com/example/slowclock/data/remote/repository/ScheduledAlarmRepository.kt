@@ -26,27 +26,45 @@ data class ScheduledAlarm(
     val endMillis: Long? = null,
     /** [Recurrence] 의 이름. 옛 기록에는 없으므로 기본값은 되풀이 없음이다. */
     val recurrence: String = Recurrence.NONE.name,
+    /**
+     * 지금 기기에 걸어 둔 회차의 시작 시각. 아직 아무것도 안 걸었으면 null.
+     *
+     * 이 값이 없으면 「지금 걸린 것이 어느 회차인가」 를 알 수 없다. 그러면 시작 알람이 울린
+     * 직후 다음 회차를 앞당겨 걸면서, 아직 안 울린 그 회차의 종료 알람까지 지운다 — 자리가
+     * 일정마다 시작 하나·종료 하나뿐이기 때문이다(#163).
+     */
+    val bookedStartMillis: Long? = null,
 ) {
     val rule: Recurrence
         get() = runCatching { Recurrence.valueOf(recurrence) }.getOrDefault(Recurrence.NONE)
 
+    /** 시작에서 종료까지의 길이. 종료가 없으면 0 이다. */
+    private val durationMillis: Long
+        get() = endMillis?.let { it - startMillis } ?: 0L
+
     /**
-     * [nowMillis] 뒤에 울릴 첫 시각. 더 없으면 null.
+     * 지금 걸어 두어야 할 회차의 시작 시각. 걸 것이 더 없으면 null.
      *
-     * 되풀이하지 않는 일정은 시작이나 종료 중 아직 안 온 것이 있을 때만 값이 있다. 되풀이하는
-     * 일정은 언제 물어도 값이 있다 — 끝이 없기 때문이다.
+     * **걸어 둔 회차에 아직 울릴 것이 남아 있으면 그 회차를 그대로 지킨다.** 앞당겨 걸면
+     * 남은 알람이 지워지기 때문이다(#163). 그래서 되풀이하는 일정은 종료 알람까지 울린 뒤에야
+     * 다음 회차로 넘어간다.
      *
      * 경계는 알람을 거는 쪽과 같은 `> now` 다. 기준이 갈리면 장부에는 있는데 걸리지는 않는
      * 유령 기록이 쌓인다.
      */
-    fun nextTriggerAfter(nowMillis: Long): Long? {
+    fun occurrenceToBook(nowMillis: Long): Long? {
+        val booked = bookedStartMillis
+        if (booked != null && (booked > nowMillis || booked + durationMillis > nowMillis)) {
+            return booked
+        }
         if (rule == Recurrence.NONE) {
-            return listOfNotNull(startMillis, endMillis).filter { it > nowMillis }.minOrNull()
+            // 되풀이하지 않는 일정은 첫 회차가 전부다. 시작이 지났어도 종료가 남았으면 건다.
+            return startMillis.takeIf { it > nowMillis || it + durationMillis > nowMillis }
         }
         return RecurrenceRule.nextOccurrenceAfter(startMillis, rule, nowMillis)
     }
 
-    fun isLive(nowMillis: Long): Boolean = nextTriggerAfter(nowMillis) != null
+    fun isLive(nowMillis: Long): Boolean = occurrenceToBook(nowMillis) != null
 }
 
 /**

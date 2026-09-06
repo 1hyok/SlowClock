@@ -1,8 +1,10 @@
 package com.example.slowclock.data.remote.repository
 
+import com.example.slowclock.util.Recurrence
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.TimeZone
@@ -87,5 +89,81 @@ class ScheduledAlarmTest {
         } finally {
             TimeZone.setDefault(original)
         }
+    }
+
+    // ── 걸어 둔 회차 (#163) ────────────────────────────────────────────────
+
+    private fun daily(
+        start: Long,
+        end: Long? = null,
+        booked: Long? = null,
+    ) = ScheduledAlarm(
+        id = "daily-1",
+        title = "물리치료",
+        description = "",
+        startMillis = start,
+        endMillis = end,
+        recurrence = Recurrence.DAILY.name,
+        bookedStartMillis = booked,
+    )
+
+    private val day = 24 * 60 * 60 * 1000L
+
+    @Test
+    fun `시작만 울리고 종료가 남았으면 그 회차를 그대로 지킨다`() {
+        // 앞당겨 걸면 알람을 다시 거는 일이 그 일정의 자리를 먼저 비우므로, 아직 안 울린
+        // 종료 알람이 지워진다. 그러면 반복 일정의 종료는 영영 울리지 않는다(#163).
+        val start = 1_800_000_000_000
+        val end = start + 60 * 60 * 1000
+        val record = daily(start, end, booked = start)
+
+        assertEquals(start, record.occurrenceToBook(nowMillis = start + 10))
+    }
+
+    @Test
+    fun `종료까지 울린 뒤에야 다음 회차로 넘어간다`() {
+        val start = 1_800_000_000_000
+        val end = start + 60 * 60 * 1000
+        val record = daily(start, end, booked = start)
+
+        assertEquals(start + day, record.occurrenceToBook(nowMillis = end + 10))
+    }
+
+    @Test
+    fun `종료가 없는 반복 일정은 시작이 울리면 바로 다음 회차로 넘어간다`() {
+        val start = 1_800_000_000_000
+        val record = daily(start, end = null, booked = start)
+
+        assertEquals(start + day, record.occurrenceToBook(nowMillis = start + 10))
+    }
+
+    @Test
+    fun `아직 아무것도 안 걸었으면 지금 이후 첫 회차를 낸다`() {
+        val start = 1_800_000_000_000
+        val record = daily(start, end = null, booked = null)
+
+        assertEquals(start, record.occurrenceToBook(nowMillis = start - 10))
+        assertEquals(start + day, record.occurrenceToBook(nowMillis = start + 10))
+    }
+
+    @Test
+    fun `되풀이하지 않는 일정도 시작이 지났어도 종료가 남았으면 건다`() {
+        val start = 1_800_000_000_000
+        val end = start + 60 * 60 * 1000
+        val once = ScheduledAlarm("once-1", "병원", "", start, end)
+
+        assertEquals(start, once.occurrenceToBook(nowMillis = start + 10))
+        assertNull(once.occurrenceToBook(nowMillis = end + 10))
+    }
+
+    @Test
+    fun `옛 기록은 걸어 둔 회차가 없어도 읽힌다`() {
+        // bookedStartMillis 가 없던 판에서 넘어온 JSON 이다. 못 읽으면 그 알람이 통째로 사라진다.
+        val stored = """{"id":"old-1","title":"약","description":"","startMillis":1800000000000}"""
+
+        val restored = json.decodeFromString<ScheduledAlarm>(stored)
+
+        assertNull(restored.bookedStartMillis)
+        assertEquals(Recurrence.NONE, restored.rule)
     }
 }
