@@ -93,8 +93,12 @@ class MainActivity : ComponentActivity() {
             // MainActivity.kt - onCreate()에서
             val currentUser = this.authManager.getCurrentUser()
             if (currentUser == null) {
-                Log.d("AUTH", "로그인 필요 - 구글 로그인 시작")
-                authManager.signInWithGoogle()
+                // 취소나 진행 중인 로그인을 화면 회전으로 다시 띄우지 않는다.
+                // 복원된 화면에서는 사용자가 로그인 버튼으로 다시 시작할 수 있다.
+                if (savedInstanceState == null) {
+                    Log.d("AUTH", "로그인 필요 - 구글 로그인 시작")
+                    authManager.signInWithGoogle()
+                }
             } else {
                 Log.d("AUTH", "=== MainActivity에서 Firebase 사용자 정보 ===")
                 Log.d("AUTH", "이미 로그인됨: ${currentUser.displayName}")

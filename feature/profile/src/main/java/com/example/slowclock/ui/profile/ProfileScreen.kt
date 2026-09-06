@@ -134,14 +134,26 @@ internal fun ProfileContent(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             when {
-                state.isLoading -> Text("로딩 중...")
+                state.isLoading -> {
+                    Text("로딩 중...")
+                }
 
                 // 로그인하지 않은 상태는 오류가 아니라 할 일이다. 버튼을 주어 되돌아갈 길을 만든다(#103).
-                state.isSignedOut -> SignInPrompt(onSignIn = onSignIn)
+                state.isSignedOut -> {
+                    SignInPrompt(onSignIn = onSignIn)
+                }
 
-                state.loadError != null -> Text(state.loadError, color = MaterialTheme.colorScheme.error)
+                state.loadError != null -> {
+                    Text(state.loadError, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { onIntent(ProfileIntent.RetryProfile) }) {
+                        Text("내 정보 다시 읽기")
+                    }
+                }
 
-                else -> ProfileBody(state = state, onIntent = onIntent)
+                else -> {
+                    ProfileBody(state = state, onIntent = onIntent)
+                }
             }
         }
     }

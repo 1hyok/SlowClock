@@ -13,7 +13,13 @@ import com.google.firebase.firestore.toObject
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -67,6 +73,32 @@ class UserRepository
                 null
             }
         }
+
+        /** 로그인 직후 만들어지는 사용자 문서도 받는다. 읽기 실패는 문서 부재와 구분한다. */
+        fun observeUser(userId: String): Flow<User?> =
+            flow {
+                val document = usersCollection.document(userId)
+                // 캐시도 없는 오프라인 상태는 빈 문서로 보이지 않게 첫 읽기의 실패를 전달한다.
+                // 읽기 직후 문서가 생성돼도 이어지는 리스너의 최초 스냅샷에서 받는다.
+                emit(document.get().await().toObject<User>())
+                emitAll(
+                    callbackFlow {
+                        val registration =
+                            document.addSnapshotListener { snapshot, error ->
+                                if (error != null) {
+                                    close(error)
+                                } else {
+                                    try {
+                                        trySend(snapshot?.toObject<User>())
+                                    } catch (e: Exception) {
+                                        close(e)
+                                    }
+                                }
+                            }
+                        awaitClose { registration.remove() }
+                    },
+                )
+            }.distinctUntilChanged()
 
         // 계정 삭제용: 사용자 문서 삭제
         suspend fun deleteUserDocument(userId: String): Boolean =
