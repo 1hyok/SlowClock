@@ -140,7 +140,7 @@ internal fun MainContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = "느린시계",
+                        text = "느린 시계",
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
