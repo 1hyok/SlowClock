@@ -18,7 +18,14 @@ internal enum class AlarmKind(
     END("종료"),
 }
 
-object ScheduleAlarmHelper {
+/**
+ * AlarmManager 를 직접 만지는 유일한 자리. 모듈 밖에서는 [AlarmScheduler] 만 보인다.
+ *
+ * `internal` 인 이유는 기록 때문이다. 예약·취소는 기기 안 장부 갱신과 짝을 이뤄야 하고
+ * 그 짝을 [AlarmScheduler] 가 맞춘다. 여기로 바로 들어오는 문이 열려 있으면 장부가 새고,
+ * 그 결과는 「재부팅하니 그 알람만 안 울린다」 로만 드러난다(#127).
+ */
+internal object ScheduleAlarmHelper {
     private const val TAG = "ScheduleAlarmHelper"
 
     /**

@@ -1,5 +1,6 @@
 package com.example.slowclock.domain.profile
 
+import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.FamilyGroupRepository
 import com.example.slowclock.data.remote.repository.NotificationRepository
@@ -47,6 +48,7 @@ class DeleteAccountUseCase
         private val notificationRepository: NotificationRepository,
         private val userRepository: UserRepository,
         private val settingsRepository: SettingsRepository,
+        private val alarmScheduler: AlarmScheduler,
     ) {
         suspend operator fun invoke(): DeleteAccountResult {
             val uid = authRepository.currentUid ?: return DeleteAccountResult.NotSignedIn
@@ -54,6 +56,9 @@ class DeleteAccountUseCase
             if (!scheduleRepository.deleteAllSchedulesOf(uid)) {
                 return DeleteAccountResult.Failed(DeleteAccountStep.SCHEDULES)
             }
+            // 서버 일정이 사라지면 이 기기에 걸린 알람은 근거를 잃는다. 지우지 않으면 계정을
+            // 지운 뒤에도 울리고, 재부팅 뒤에도 장부를 보고 되살아난다(#127).
+            alarmScheduler.cancelAll()
             if (!familyGroupRepository.leaveAllGroupsOf(uid)) {
                 return DeleteAccountResult.Failed(DeleteAccountStep.FAMILY_GROUPS)
             }

@@ -16,6 +16,7 @@ test('current allowed permissions and protected exported components pass', () =>
     manifest({
       permissions: `
         <uses-permission android:name="android.permission.INTERNET" />
+        <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
         <uses-permission android:name="com.example.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />`,
       components: `
         <activity android:name="com.example.slowclock.MainActivity" android:exported="true" />

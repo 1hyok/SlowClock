@@ -1,5 +1,6 @@
 package com.example.slowclock.domain.profile
 
+import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.FamilyGroupRepository
 import com.example.slowclock.data.remote.repository.NotificationRepository
@@ -11,6 +12,7 @@ import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -22,6 +24,7 @@ class DeleteAccountUseCaseTest {
     private val notificationRepository = mockk<NotificationRepository>()
     private val userRepository = mockk<UserRepository>()
     private val settingsRepository = mockk<SettingsRepository>()
+    private val alarmScheduler = mockk<AlarmScheduler>(relaxed = true)
 
     private val useCase =
         DeleteAccountUseCase(
@@ -31,6 +34,7 @@ class DeleteAccountUseCaseTest {
             notificationRepository = notificationRepository,
             userRepository = userRepository,
             settingsRepository = settingsRepository,
+            alarmScheduler = alarmScheduler,
         )
 
     private fun givenSignedIn(uid: String = "uid-1") {
@@ -155,5 +159,36 @@ class DeleteAccountUseCaseTest {
 
             assertEquals(DeleteAccountResult.Success, result)
             coVerify(exactly = 0) { userRepository.unregisterShareCodeWatcher(any()) }
+        }
+
+    @Test
+    fun `일정을 지운 뒤 이 기기에 걸린 알람도 지운다`() =
+        runTest {
+            // 지우지 않으면 계정을 지운 뒤에도 알람이 울리고, 재부팅 뒤에도 장부를 보고
+            // 되살아난다(#127).
+            givenSignedIn()
+            givenDataDeletionSucceeds()
+            coEvery { authRepository.deleteCurrentUser() } returns AuthRepository.DeleteResult.Success
+
+            useCase()
+
+            coVerifyOrder {
+                scheduleRepository.deleteAllSchedulesOf("uid-1")
+                alarmScheduler.cancelAll()
+            }
+        }
+
+    @Test
+    fun `일정 삭제가 실패하면 알람은 건드리지 않는다`() =
+        runTest {
+            // 서버 일정이 남아 있는데 기기 알람만 지우면, 앱을 다시 열기 전까지 그 일정이
+            // 소리 없이 지나간다.
+            givenSignedIn()
+            coEvery { scheduleRepository.deleteAllSchedulesOf("uid-1") } returns false
+
+            val result = useCase()
+
+            assertEquals(DeleteAccountResult.Failed(DeleteAccountStep.SCHEDULES), result)
+            verify(exactly = 0) { alarmScheduler.cancelAll() }
         }
 }
