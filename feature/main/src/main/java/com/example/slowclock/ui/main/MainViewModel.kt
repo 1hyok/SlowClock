@@ -28,9 +28,9 @@ import java.util.UUID
 import javax.inject.Inject
 
 /**
- * 메인 화면. 오늘 일정은 Firestore 리스너로 받는다. 완료 토글·삭제는 낙관적으로 먼저 반영하고,
- * 실패하면 최신 서버 목록을 덮지 않는 범위에서 완료 표시를 되돌린다. 공유 일정은 기기에 저장된 공유 코드가 바뀔 때마다
- * 다시 구독한다.
+ * 메인 화면. 오늘 일정은 Firestore 리스너로 받는다. 완료는 임시 표시하고 삭제는 서버 확인 후 반영한다.
+ * 완료 실패는 최신 서버 목록을 덮지 않는 범위에서 표시를 되돌린다.
+ * 공유 일정은 기기에 저장된 공유 코드가 바뀔 때마다 다시 구독한다.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
