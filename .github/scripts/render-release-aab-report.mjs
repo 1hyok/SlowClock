@@ -34,8 +34,11 @@ export function compareSize(currentBytes, baselineBytes) {
 export const NO_MAPPING = "none";
 
 export function buildReport(current, baseline = null, generatedAt = new Date().toISOString()) {
-    // release 는 R8 을 켠다(#113). mapping 이 없으면 그 사실을 그대로 보고한다 — 꺼졌다는 신호다.
-    const mappingPresent = current.mappingSha256 !== NO_MAPPING;
+    // mapping 의 유무는 관측값이다. 없다고 빌드 설정이 꺼졌다고 단정할 수는 없다.
+    const mappingPresent = /^[a-f0-9]{64}$/i.test(current.mappingSha256 ?? "");
+    if (!mappingPresent && current.mappingSha256 !== NO_MAPPING) {
+        throw new Error("mapping-sha256 must be a SHA-256 digest or none");
+    }
     const comparison = baseline
         ? {
               aab: compareSize(current.aabSizeBytes, baseline.artifacts.aab.sizeBytes),
@@ -65,8 +68,9 @@ export function buildReport(current, baseline = null, generatedAt = new Date().t
             ciConfigMode: "stub",
             signingMode: "ephemeral",
             releaseVariant: "release",
-            r8Minification: mappingPresent,
-            resourceShrinking: mappingPresent,
+            r8Minification: mappingPresent ? true : null,
+            resourceShrinking: null,
+            resourceShrinkingEvidence: "Not verified: R8 mapping does not establish resource shrinking.",
             requiredEntries: true,
             jarSignature: true,
             mappingPresent,
@@ -134,7 +138,8 @@ export function renderMarkdown(report) {
         `- Signer SHA-256: \`${report.artifacts.aab.signerSha256}\``,
         report.artifacts.mapping.present
             ? `- R8 mapping: present (SHA-256 \`${report.artifacts.mapping.sha256}\`)`
-            : "- R8 mapping: absent (isMinifyEnabled=false)",
+            : "- R8 mapping: absent (R8 minification unverified)",
+        `- Resource shrinking: unverified. ${report.validation.resourceShrinkingEvidence}`,
         `- Baseline: ${report.baseline ? `\`${report.baseline.sourceSha}\`` : "unavailable"}`,
         "",
         "| Metric | Current | Change from baseline |",
