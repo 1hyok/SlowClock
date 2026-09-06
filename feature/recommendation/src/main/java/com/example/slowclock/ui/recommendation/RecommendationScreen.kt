@@ -2,7 +2,7 @@ package com.example.slowclock.ui.recommendation
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,8 +18,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.slowclock.data.model.Recommendation
+import com.example.slowclock.feature.recommendation.R
 import com.example.slowclock.ui.common.components.ScreenHeader
 import com.example.slowclock.ui.recommendation.components.RecommendationList
 
@@ -63,6 +67,7 @@ private val allRecommendations =
 @Composable
 fun RecommendationScreen(
     onSelectRecommendation: (String) -> Unit,
+    onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var group by rememberSaveable { mutableStateOf(RecommendationGroup.ELDERLY) }
@@ -76,9 +81,17 @@ fun RecommendationScreen(
     ) {
         ScreenHeader(title = "추천 일정", subtitle = "고르면 일정 제목으로 들어갑니다")
 
-        Row(
+        OutlinedButton(
+            onClick = onNavigateBack,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).heightIn(min = 56.dp),
+        ) {
+            Text(stringResource(R.string.recommendation_back_without_selection), textAlign = TextAlign.Center)
+        }
+
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             RecommendationGroup.entries.forEach { entry ->
                 FilterChip(

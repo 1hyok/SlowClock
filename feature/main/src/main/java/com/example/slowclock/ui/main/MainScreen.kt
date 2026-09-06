@@ -32,12 +32,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.feature.main.R
 import com.example.slowclock.ui.common.ScheduleLoadingIndicator
 import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.SignInPrompt
@@ -192,7 +194,7 @@ internal fun MainContent(
                     IconButton(onClick = onNavigateToSettings, modifier = Modifier.size(56.dp)) {
                         Icon(
                             Icons.Outlined.Settings,
-                            contentDescription = "설정",
+                            contentDescription = stringResource(R.string.share_code_settings_description),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(30.dp),
                         )

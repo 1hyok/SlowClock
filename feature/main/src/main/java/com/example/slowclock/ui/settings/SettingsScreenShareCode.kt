@@ -4,22 +4,27 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.feature.main.R
 import com.example.slowclock.ui.mvi.ObserveSignal
 
 /** 공유 코드 입력 화면(stateful). 저장이 끝나면 [onReturn] 으로 돌아간다. */
@@ -37,7 +42,7 @@ fun SettingsScreenShareCode(
         onIntent = viewModel::onIntent,
     ) { onReturn() }
 
-    ShareCodeContent(state = state, onIntent = viewModel::onIntent, modifier = modifier)
+    ShareCodeContent(state = state, onIntent = viewModel::onIntent, onReturn = onReturn, modifier = modifier)
 }
 
 /** 공유 코드 입력 화면(stateless). */
@@ -45,6 +50,7 @@ fun SettingsScreenShareCode(
 internal fun ShareCodeContent(
     state: ShareCodeUiState,
     onIntent: (ShareCodeIntent) -> Unit,
+    onReturn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -85,6 +91,13 @@ internal fun ShareCodeContent(
                     else -> "저장하고 돌아가기"
                 },
             )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onReturn,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        ) {
+            Text(stringResource(R.string.share_code_back_without_saving), textAlign = TextAlign.Center)
         }
         // 등록이 곧 읽기 권한이라, 실패를 알리지 않으면 가족 일정이 왜 비어 있는지 알 수 없다(#174).
         if (state.saveError != null) {
