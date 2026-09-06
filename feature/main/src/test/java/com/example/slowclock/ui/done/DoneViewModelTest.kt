@@ -72,4 +72,17 @@ class DoneViewModelTest {
             viewModel.onIntent(DoneIntent.ConsumeError)
             assertNull(viewModel.uiState.value.error)
         }
+
+    @Test
+    fun `반복 일정 완료와 취소는 표시된 발생일을 전달한다`() =
+        runTest {
+            todaySchedules.value = listOf(Schedule(id = "a", title = "산책", occurrenceDate = "2026-09-06"))
+            coEvery { scheduleRepository.markScheduleAsCompleted("a", any(), "2026-09-06") } returns
+                ScheduleRepository.ScheduleResult.Success(Unit)
+            val viewModel = DoneViewModel(scheduleRepository)
+            viewModel.onIntent(DoneIntent.ToggleComplete("a"))
+            viewModel.onIntent(DoneIntent.ToggleComplete("a"))
+            coVerify(exactly = 1) { scheduleRepository.markScheduleAsCompleted("a", true, "2026-09-06") }
+            coVerify(exactly = 1) { scheduleRepository.markScheduleAsCompleted("a", false, "2026-09-06") }
+        }
 }

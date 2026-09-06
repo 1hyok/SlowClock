@@ -53,12 +53,22 @@ class TimelineViewModelTest {
         runTest {
             val viewModel = TimelineViewModel(scheduleRepository)
 
+            val requested = mutableListOf<Calendar>()
+            every { scheduleRepository.observeSchedulesForDate(capture(requested), any()) } returns
+                flowOf(listOf(Schedule(id = "a", title = "a")))
             viewModel.onIntent(TimelineIntent.SelectDate(2026, Calendar.SEPTEMBER, 20))
 
             val selected = viewModel.uiState.value.selectedDate
             assertEquals(2026, selected.get(Calendar.YEAR))
             assertEquals(Calendar.SEPTEMBER, selected.get(Calendar.MONTH))
             assertEquals(20, selected.get(Calendar.DAY_OF_MONTH))
+            assertEquals(2026, requested.single().get(Calendar.YEAR))
+            assertEquals(Calendar.SEPTEMBER, requested.single().get(Calendar.MONTH))
+            assertEquals(20, requested.single().get(Calendar.DAY_OF_MONTH))
+            assertEquals(0, requested.single().get(Calendar.HOUR_OF_DAY))
+            assertEquals(0, requested.single().get(Calendar.MINUTE))
+            assertEquals(0, requested.single().get(Calendar.SECOND))
+            assertEquals(0, requested.single().get(Calendar.MILLISECOND))
             assertEquals(
                 listOf("a"),
                 viewModel.uiState.value.schedules
@@ -72,11 +82,16 @@ class TimelineViewModelTest {
         runTest {
             val viewModel = TimelineViewModel(scheduleRepository)
             val start = viewModel.uiState.value.selectedDate
+            val tomorrow = (start.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 1) }
+            val requested = mutableListOf<Calendar>()
+            every { scheduleRepository.observeSchedulesForDate(capture(requested), any()) } returns flowOf(emptyList())
 
             viewModel.onIntent(TimelineIntent.NextDay)
-            assertEquals(start.timeInMillis + 24 * 60 * 60 * 1000L, viewModel.uiState.value.selectedDate.timeInMillis)
+            assertEquals(tomorrow.timeInMillis, viewModel.uiState.value.selectedDate.timeInMillis)
+            assertEquals(tomorrow.timeInMillis, requested.last().timeInMillis)
 
             viewModel.onIntent(TimelineIntent.PreviousDay)
             assertEquals(start.timeInMillis, viewModel.uiState.value.selectedDate.timeInMillis)
+            assertEquals(start.timeInMillis, requested.last().timeInMillis)
         }
 }

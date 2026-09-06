@@ -1,8 +1,10 @@
 // app/src/main/java/com/example/slowclock/ui/main/components/ScheduleDetailDialog.kt
 package com.example.slowclock.ui.main.components
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccessTime
@@ -28,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.slowclock.data.model.Schedule
@@ -41,229 +47,244 @@ fun ScheduleDetailDialog(
     onEdit: () -> Unit = {}, // 새로 추가
     onDelete: () -> Unit = {}, // 새로 추가
 ) {
+    Dialog(onDismissRequest = onDismiss) {
+        ScheduleDetailContent(schedule = schedule, onDismiss = onDismiss, onEdit = onEdit, onDelete = onDelete)
+    }
+}
+
+/** Dialog 또는 프리뷰의 유한한 높이 안에서 모든 내용과 액션에 스크롤로 닿는다. */
+@Composable
+internal fun ScheduleDetailContent(
+    schedule: Schedule,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+    scrollState: ScrollState = rememberScrollState(),
+) {
     val timeFormat = SimpleDateFormat("a h:mm", Locale.KOREAN)
     val dateFormat = SimpleDateFormat("M월 d일", Locale.KOREAN)
+    val actionMinWidth = 96.dp * LocalDensity.current.fontScale
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = MaterialTheme.shapes.large,
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    Card(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = MaterialTheme.shapes.large,
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.verticalScroll(scrollState).padding(28.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(28.dp),
+            // 헤더 (제목 + 닫기 버튼)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                // 헤더 (제목 + 닫기 버튼)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "일정 상세",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary,
+                Text(
+                    text = "일정 상세",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "닫기",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp),
                     )
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "닫기",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp),
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 제목 (크게)
+            Text(
+                text = schedule.title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 시간 정보
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.AccessTime,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "${dateFormat.format(schedule.startTime.toDate())} ${
+                            timeFormat.format(
+                                schedule.startTime.toDate(),
+                            )
+                        }",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    schedule.endTime?.let { endTime ->
+                        Text(
+                            text = "~ ${timeFormat.format(endTime.toDate())}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+            }
 
+            // 설명 (있을 때만)
+            if (schedule.description.isNotBlank()) {
                 Spacer(modifier = Modifier.height(20.dp))
-
-                // 제목 (크게)
-                Text(
-                    text = schedule.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // 시간 정보
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                 ) {
                     Icon(
-                        Icons.Default.AccessTime,
+                        Icons.AutoMirrored.Filled.Notes,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(24.dp),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "${dateFormat.format(schedule.startTime.toDate())} ${
-                                timeFormat.format(
-                                    schedule.startTime.toDate(),
-                                )
-                            }",
+                            text = "상세 내용",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = schedule.description,
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        schedule.endTime?.let { endTime ->
-                            Text(
-                                text = "~ ${timeFormat.format(endTime.toDate())}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
-                // 설명 (있을 때만)
-                if (schedule.description.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Row(
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Notes,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "상세 내용",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = schedule.description,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
-                            )
-                        }
-                    }
-                }
-
-                // 반복 일정 정보 (있을 때만)
-                if (schedule.recurring) {
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            Icons.Default.Loop,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(24.dp),
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text =
-                                when (schedule.recurringType) {
-                                    "daily" -> "매일 반복"
-                                    "weekly" -> "매주 반복"
-                                    "monthly" -> "매월 반복"
-                                    else -> "반복 일정"
-                                },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.tertiary,
+                            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
                         )
                     }
                 }
+            }
 
-                // 완료 상태
+            // 반복 일정 정보 (있을 때만)
+            if (schedule.recurring) {
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Default.CheckCircle,
+                        Icons.Default.Loop,
                         contentDescription = null,
-                        tint =
-                            if (schedule.completed) {
-                                MaterialTheme.colorScheme.secondary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                        tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(24.dp),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = if (schedule.completed) "✅ 완료됨" else "⏳ 미완료",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color =
-                            if (schedule.completed) {
-                                MaterialTheme.colorScheme.secondary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                        text =
+                            when (schedule.recurringType) {
+                                "daily" -> "매일 반복"
+                                "weekly" -> "매주 반복"
+                                "monthly" -> "매월 반복"
+                                else -> "반복 일정"
                             },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.tertiary,
                     )
                 }
+            }
 
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    // 수정 버튼
-                    Button(
-                        onClick = {
-                            onEdit()
-                            onDismiss()
+            // 완료 상태
+            Spacer(modifier = Modifier.height(20.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint =
+                        if (schedule.completed) {
+                            MaterialTheme.colorScheme.tertiary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        modifier = Modifier.weight(1f),
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                            ),
-                    ) {
-                        Text(
-                            "수정",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    }
-
-                    // 삭제 버튼
-                    Button(
-                        onClick = {
-                            onDelete()
-                            onDismiss()
+                    modifier = Modifier.size(24.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = if (schedule.completed) "완료됨" else "미완료",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color =
+                        if (schedule.completed) {
+                            MaterialTheme.colorScheme.tertiary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        modifier = Modifier.weight(1f),
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                            ),
-                    ) {
-                        Text(
-                            "삭제",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onError,
-                        )
-                    }
-                }
+                )
+            }
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-                // 닫기 버튼
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // 수정 버튼
+                Button(
+                    onClick = {
+                        onEdit()
+                        onDismiss()
+                    },
+                    modifier = Modifier.widthIn(min = actionMinWidth).weight(1f),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                        ),
                 ) {
                     Text(
-                        text = "닫기",
+                        "수정",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface, // 색상 명시
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
+
+                // 삭제 버튼
+                Button(
+                    onClick = {
+                        onDelete()
+                        onDismiss()
+                    },
+                    modifier = Modifier.widthIn(min = actionMinWidth).weight(1f),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                        ),
+                ) {
+                    Text(
+                        "삭제",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onError,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 닫기 버튼
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = "닫기",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface, // 색상 명시
+                )
             }
         }
     }

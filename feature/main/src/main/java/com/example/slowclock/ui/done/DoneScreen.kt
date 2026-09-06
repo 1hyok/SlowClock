@@ -19,6 +19,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.slowclock.ui.common.ScheduleLoadingIndicator
 import com.example.slowclock.ui.common.components.DayProgress
 import com.example.slowclock.ui.common.components.EmptyState
 import com.example.slowclock.ui.common.components.ErrorCard
@@ -77,7 +78,11 @@ internal fun DoneContent(
             )
         }
 
+        if (state.isLoading) {
+            ScheduleLoadingIndicator()
+        }
         if (completed.isEmpty() && remaining.isEmpty()) {
+            if (state.isLoading || state.error != null) return@Column
             EmptyState(
                 icon = Icons.Outlined.TaskAlt,
                 title = "오늘 일정이 없습니다",
