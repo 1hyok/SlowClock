@@ -71,7 +71,82 @@ data class ScheduledAlarm(
     }
 
     fun isLive(nowMillis: Long): Boolean = occurrenceToBook(nowMillis) != null
+
+    /**
+     * 걸어 둔 회차를 뺀 내용이 [other] 와 같은가.
+     *
+     * 서버 목록으로 이 기기의 알람을 맞출 때 쓴다. 같으면 다시 걸지 않고 지금 걸린 회차를
+     * 지킨다. 매번 다시 걸면 앱을 열 때마다 방금 미뤄 둔 알람이 지워진다.
+     */
+    fun sameContentAs(other: ScheduledAlarm): Boolean = copy(bookedStartMillis = null) == other.copy(bookedStartMillis = null)
 }
+
+/**
+ * 미뤄 둔 알람 하나의 기록.
+ *
+ * 다시 알림은 `AlarmManager` 에만 걸려 있어 재부팅과 앱 교체로 사라진다. 미룬 사람은 5분 뒤
+ * 울릴 것이라고 믿고 있고, 그 믿음이 이 기능의 전부다. 그래서 걸어 둔 사실을 기기에 남긴다.
+ *
+ * [baseRequestCode] 가 이 기록의 열쇠다. 다시 알림은 원래 알람과 자리 번호가 같고 action 으로만
+ * 갈리므로, 그 번호 하나가 「어느 알람을 미뤘는가」 를 가리킨다(#129).
+ */
+@Serializable
+data class SnoozedAlarm(
+    val baseRequestCode: Int,
+    val scheduleId: String,
+    val title: String,
+    val description: String,
+    val isFullScreen: Boolean,
+    val snoozeCount: Int,
+    /** 다시 울릴 시각. 이미 지났으면 복원에서 버린다. */
+    val triggerAtMillis: Long,
+)
+
+/**
+ * 기기 안에만 남는 「미뤄 둔 알람 장부」.
+ *
+ * [ScheduledAlarmRepository] 와 파일을 나눈다. 열쇠가 다르고(자리 번호 대 일정 id) 수명도 다르다
+ * — 이쪽은 몇 분이면 없어질 기록이다. 한 파일에 섞으면 「전부 읽기」 가 둘을 갈라야 한다.
+ */
+@Singleton
+class SnoozedAlarmRepository
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+    ) {
+        private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        private val json = Json { ignoreUnknownKeys = true }
+
+        fun save(alarm: SnoozedAlarm) {
+            prefs.edit().putString(alarm.baseRequestCode.toString(), json.encodeToString(alarm)).apply()
+        }
+
+        fun remove(baseRequestCode: Int) {
+            prefs.edit().remove(baseRequestCode.toString()).apply()
+        }
+
+        fun clear() {
+            prefs.edit().clear().apply()
+        }
+
+        /** 장부 전체. 못 읽은 기록은 버린다. 하나가 깨졌다고 나머지까지 못 걸면 안 된다. */
+        fun all(): List<SnoozedAlarm> =
+            prefs.all.values.mapNotNull { raw ->
+                (raw as? String)?.let { stored ->
+                    runCatching { json.decodeFromString<SnoozedAlarm>(stored) }
+                        .onFailure { Log.w(TAG, "깨진 다시 알림 기록을 버린다: ${it.message}") }
+                        .getOrNull()
+                }
+            }
+
+        private companion object {
+            const val TAG = "SnoozedAlarmRepo"
+
+            // scheduled_alarms 와 같은 이유로 백업에서 뺀다
+            // (app/src/main/res/xml/data_extraction_rules.xml).
+            const val PREFS_NAME = "snoozed_alarms"
+        }
+    }
 
 /**
  * 기기 안에만 남는 「걸어 둔 알람 장부」.

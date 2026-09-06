@@ -57,6 +57,7 @@ class MainViewModelTest {
         every { settingsRepository.observeShareCode() } returns shareCode
         every { scheduleRepository.observeSchedulesBySharedCode(any()) } returns flowOf(emptyList())
         coEvery { userRepository.getUserNames(any()) } returns emptyMap()
+        coEvery { scheduleRepository.getSchedulesOf(any()) } returns emptyList()
         // 기본값은 정시 알람이 허용된 기기다. 안내 다이얼로그를 다루는 테스트만 이 값을 뒤집는다.
         every { alarmScheduler.canScheduleExactAlarms() } returns true
         every { settingsRepository.hasSeenExactAlarmNotice() } returns false
@@ -69,6 +70,30 @@ class MainViewModelTest {
     }
 
     private fun createViewModel() = MainViewModel(scheduleRepository, userRepository, authRepository, settingsRepository, alarmScheduler)
+
+    @Test
+    fun `로그인하면 서버 일정으로 이 기기의 알람을 맞춘다`() =
+        runTest {
+            // 알람 장부는 기기 안에만 있어 새 기기·재설치에서는 비어 있다. 맞추지 않으면 화면에
+            // 일정은 다 보이는데 알람은 하나도 걸리지 않는다(#176).
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } returns listOf(soon, done)
+
+            createViewModel()
+
+            verify(exactly = 1) { alarmScheduler.syncWith(listOf(soon, done)) }
+        }
+
+    @Test
+    fun `일정 목록을 못 읽으면 알람을 건드리지 않는다`() =
+        runTest {
+            // 빈 목록으로 맞추면 걸려 있던 알람을 전부 지운다. 신호가 약한 것과 일정이 없는 것은
+            // 다른 사실이다(#176).
+            coEvery { scheduleRepository.getSchedulesOf("uid-1") } returns null
+
+            createViewModel()
+
+            verify(exactly = 0) { alarmScheduler.syncWith(any()) }
+        }
 
     @Test
     fun `리스너가 낸 오늘 일정으로 상태를 채우고 지금 할 일을 고른다`() =

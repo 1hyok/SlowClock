@@ -1,18 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?><!--
   https://developer.android.com/about/versions/12/backup-restore#xml-changes
 
-  걸어 둔 알람 장부(scheduled_alarms)는 이 기기에서만 뜻이 있다. 새 기기로 복원되면 그 기기가
-  남의 일정으로 알람을 울린다. 클라우드 백업과 기기 이전 양쪽에서 뺀다(#127).
+  걸어 둔 알람 장부(scheduled_alarms)와 미뤄 둔 알람 장부(snoozed_alarms)는 이 기기에서만 뜻이
+  있다. 새 기기로 복원되면 그 기기가 남의 일정으로 알람을 울린다. 클라우드 백업과 기기 이전
+  양쪽에서 뺀다(#127 · #177).
+
+  장부가 빈 채로 시작하는 새 기기에서는 로그인 뒤 서버의 일정 목록으로 알람을 다시 맞춘다(#176).
 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude
             domain="sharedpref"
             path="scheduled_alarms.xml" />
+        <exclude
+            domain="sharedpref"
+            path="snoozed_alarms.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude
             domain="sharedpref"
             path="scheduled_alarms.xml" />
+        <exclude
+            domain="sharedpref"
+            path="snoozed_alarms.xml" />
     </device-transfer>
 </data-extraction-rules>

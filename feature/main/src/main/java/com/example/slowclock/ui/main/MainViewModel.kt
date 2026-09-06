@@ -43,6 +43,9 @@ class MainViewModel
         /** 지금 구독이 보고 있는 날. 날이 바뀌면 다시 건다(#171). */
         private var subscribedDay: String = ""
 
+        /** 알람을 이미 맞춘 사용자. 화면이 다시 만들어져도 한 번만 맞춘다(#176). */
+        private var alarmSyncedFor: String? = null
+
         init {
             observeSignedInUser()
             // 정확한 알람 권한이 없으면 첫 진입에 한 번만 이유를 설명한다. 설정으로 보내는 건
@@ -251,12 +254,37 @@ class MainViewModel
                     dispatch(MainReducerEvent.UserResolved(uid.orEmpty()))
                     if (uid != null) {
                         observeTodaySchedules()
+                        syncAlarms(uid)
                     } else {
                         scheduleJob?.cancel()
                         scheduleJob = null
                         dispatch(MainReducerEvent.SignedOut)
                     }
                 }
+            }
+        }
+
+        /**
+         * 서버의 일정으로 이 기기의 알람을 맞춘다.
+         *
+         * 알람 장부는 기기 안에만 있고 백업·기기 이전에서 뺐다. 폰을 바꾸거나 앱을 다시 깔면
+         * 장부가 빈 채로 시작해, 화면에는 일정이 다 보이는데 알람은 하나도 걸려 있지 않다.
+         * 사용자가 고칠 방법은 일정을 하나하나 다시 저장하는 것뿐인데 그걸 알 길이 없다(#176).
+         *
+         * 목록을 못 읽으면 아무것도 하지 않는다. 빈 목록으로 맞추면 걸려 있던 알람을 전부 지운다.
+         */
+        private fun syncAlarms(uid: String) {
+            if (alarmSyncedFor == uid) return
+            alarmSyncedFor = uid
+            viewModelScope.launch {
+                val schedules = scheduleRepository.getSchedulesOf(uid)
+                if (schedules == null) {
+                    Log.w(TAG, "일정 목록을 못 읽어 알람을 맞추지 못했다")
+                    alarmSyncedFor = null
+                    return@launch
+                }
+                runCatching { alarmScheduler.syncWith(schedules) }
+                    .onFailure { Log.e(TAG, "알람 맞추기 실패", it) }
             }
         }
 

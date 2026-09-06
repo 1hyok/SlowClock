@@ -23,6 +23,7 @@ import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.example.slowclock.core.alarm.AlarmSchedulerEntryPoint
 import com.example.slowclock.core.alarm.R
 import com.example.slowclock.core.alarm.ScheduleAlarmHelper
 import com.example.slowclock.core.alarm.SnoozePolicy
@@ -467,8 +468,7 @@ class AlarmTriggerService : Service() {
         val snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
         if (!SnoozePolicy.canSnooze(snoozeCount)) return
         val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0)
-        ScheduleAlarmHelper.scheduleSnooze(
-            context = this,
+        snoozeThrough(
             baseRequestCode = requestCode,
             scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID).orEmpty(),
             title = intent.getStringExtra(EXTRA_TITLE) ?: "알람",
@@ -494,8 +494,7 @@ class AlarmTriggerService : Service() {
             stopRinging("다시 알림을 걸 수 없다")
             return
         }
-        ScheduleAlarmHelper.scheduleSnooze(
-            context = this,
+        snoozeThrough(
             baseRequestCode = current.requestCode,
             scheduleId = current.scheduleId,
             title = current.title,
@@ -504,6 +503,47 @@ class AlarmTriggerService : Service() {
             snoozeCount = current.snoozeCount + 1,
         )
         stopRinging("다시 알림")
+    }
+
+    /**
+     * 다시 알림을 [AlarmScheduler] 를 거쳐 건다.
+     *
+     * 여기서 [ScheduleAlarmHelper] 를 바로 부르면 예약만 되고 기기 안 장부에는 아무것도 남지
+     * 않는다. 그러면 재부팅이나 앱 교체로 미뤄 둔 알람이 조용히 사라진다(#177).
+     *
+     * 스케줄러를 못 꺼내는 상황이라도 미루기 자체는 되어야 한다. 장부 없이라도 거는 것이
+     * 아무 일도 일어나지 않는 버튼보다 낫다.
+     */
+    private fun snoozeThrough(
+        baseRequestCode: Int,
+        scheduleId: String,
+        title: String,
+        desc: String,
+        isFullScreen: Boolean,
+        snoozeCount: Int,
+    ) {
+        runCatching {
+            AlarmSchedulerEntryPoint.from(this).snooze(
+                baseRequestCode = baseRequestCode,
+                scheduleId = scheduleId,
+                title = title,
+                desc = desc,
+                isFullScreen = isFullScreen,
+                snoozeCount = snoozeCount,
+            )
+        }.onFailure { failure ->
+            Log.e(TAG, "다시 알림을 장부에 남기지 못했다. 예약만 건다", failure)
+            ScheduleAlarmHelper.scheduleSnooze(
+                context = this,
+                baseRequestCode = baseRequestCode,
+                scheduleId = scheduleId,
+                title = title,
+                desc = desc,
+                isFullScreen = isFullScreen,
+                snoozeCount = snoozeCount,
+                triggerTime = SnoozePolicy.nextTriggerAt(System.currentTimeMillis()),
+            )
+        }
     }
 
     private fun stopRinging(reason: String) {

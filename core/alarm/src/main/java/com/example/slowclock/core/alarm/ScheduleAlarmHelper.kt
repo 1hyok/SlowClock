@@ -19,6 +19,21 @@ internal enum class AlarmKind(
 }
 
 /**
+ * 알람 하나가 차지하는 자리.
+ *
+ * `PendingIntent` 가 같은 자리인지는 [requestCode] 와 `Intent.filterEquals` 로 정해진다.
+ * filterEquals 는 action 과 component 를 보고 extras 는 보지 않는데, 이 앱에서 component 는
+ * 언제나 `AlarmReceiver` 라 실제로 자리를 가르는 값은 이 둘뿐이다.
+ *
+ * 예약과 취소가 반드시 같은 자리를 가리켜야 해서 두 쪽 모두 이 값에서 시작한다. 한쪽만 고치면
+ * 취소가 빗나가 지워졌어야 할 알람이 남고, 화면에는 아무 표시도 나지 않는다(#117 · #129 · #179).
+ */
+internal data class AlarmSlot(
+    val requestCode: Int,
+    val action: String?,
+)
+
+/**
  * AlarmManager 를 직접 만지는 유일한 자리. 모듈 밖에서는 [AlarmScheduler] 만 보인다.
  *
  * `internal` 인 이유는 기록 때문이다. 예약·취소는 기기 안 장부 갱신과 짝을 이뤄야 하고
@@ -103,11 +118,12 @@ internal object ScheduleAlarmHelper {
             return
         }
 
-        val requestCode = requestCodeOf(schedule.id, kind)
+        val slot = slotOf(schedule.id, kind)
         val intent =
             Intent(context, AlarmReceiver::class.java)
                 // 대상을 한 번 더 못박는다. 중복이 아니라 정적 분석을 위한 것이다(#121).
                 .setClass(context, AlarmReceiver::class.java)
+                .setAction(slot.action)
                 .apply {
                     putExtra(EXTRA_TITLE, "${schedule.title} (${kind.label})")
                     putExtra(EXTRA_DESC, schedule.description)
@@ -115,12 +131,12 @@ internal object ScheduleAlarmHelper {
                     putExtra(EXTRA_SCHEDULE_ID, schedule.id)
                     putExtra(EXTRA_ALARM_TYPE, kind.label)
                     // 이 알람이 어느 자리 것인지 받는 쪽이 알아야 다시 알림을 같은 자리에 건다(#129).
-                    putExtra(EXTRA_REQUEST_CODE, requestCode)
+                    putExtra(EXTRA_REQUEST_CODE, slot.requestCode)
                 }
         val pendingIntent =
             PendingIntent.getBroadcast(
                 context,
-                requestCode,
+                slot.requestCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
@@ -138,7 +154,7 @@ internal object ScheduleAlarmHelper {
                 // 정시 허용이 없을 때의 차선. 몇 분 늦을 수 있지만 절전 상태에서도 울린다.
                 alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
             }
-            Log.d(TAG, "${kind.label} 알람 예약: ${schedule.title} at ${Date(triggerTime)} (requestCode=$requestCode)")
+            Log.d(TAG, "${kind.label} 알람 예약: ${schedule.title} at ${Date(triggerTime)} (requestCode=${slot.requestCode})")
         } catch (e: Exception) {
             Log.e(TAG, "${kind.label} 알람 예약 실패: ${e.message}")
         }
@@ -175,13 +191,14 @@ internal object ScheduleAlarmHelper {
         desc: String,
         isFullScreen: Boolean,
         snoozeCount: Int,
+        triggerTime: Long,
     ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val triggerTime = SnoozePolicy.nextTriggerAt(System.currentTimeMillis())
+        val slot = snoozeSlotOf(baseRequestCode)
         val intent =
             Intent(context, AlarmReceiver::class.java)
                 .setClass(context, AlarmReceiver::class.java)
-                .setAction(ACTION_SNOOZE_ALARM)
+                .setAction(slot.action)
                 .apply {
                     putExtra(EXTRA_TITLE, title)
                     putExtra(EXTRA_DESC, desc)
@@ -194,7 +211,7 @@ internal object ScheduleAlarmHelper {
         val pendingIntent =
             PendingIntent.getBroadcast(
                 context,
-                baseRequestCode,
+                slot.requestCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
@@ -226,14 +243,15 @@ internal object ScheduleAlarmHelper {
         baseRequestCode: Int,
     ) {
         try {
+            val slot = snoozeSlotOf(baseRequestCode)
             val intent =
                 Intent(context, AlarmReceiver::class.java)
                     .setClass(context, AlarmReceiver::class.java)
-                    .setAction(ACTION_SNOOZE_ALARM)
+                    .setAction(slot.action)
             val pendingIntent =
                 PendingIntent.getBroadcast(
                     context,
-                    baseRequestCode,
+                    slot.requestCode,
                     intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
@@ -256,12 +274,13 @@ internal object ScheduleAlarmHelper {
         schedule: Schedule,
         kind: AlarmKind,
     ) {
-        val requestCode = requestCodeOf(schedule.id, kind)
+        val slot = slotOf(schedule.id, kind)
         try {
             val intent =
                 Intent(context, AlarmReceiver::class.java)
                     // 예약 쪽과 같은 이유로 대상을 다시 지정한다(#121).
                     .setClass(context, AlarmReceiver::class.java)
+                    .setAction(slot.action)
                     .apply {
                         putExtra(EXTRA_TITLE, "${schedule.title} (${kind.label})")
                         putExtra(EXTRA_DESC, schedule.description)
@@ -271,14 +290,14 @@ internal object ScheduleAlarmHelper {
             val pendingIntent =
                 PendingIntent.getBroadcast(
                     context,
-                    requestCode,
+                    slot.requestCode,
                     intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
             alarmManager.cancel(pendingIntent)
             pendingIntent.cancel()
-            Log.d(TAG, "${kind.label} 알람 취소: ${schedule.title} (requestCode=$requestCode)")
+            Log.d(TAG, "${kind.label} 알람 취소: ${schedule.title} (requestCode=${slot.requestCode})")
         } catch (e: Exception) {
             Log.e(TAG, "${kind.label} 알람 취소 실패: ${e.message}")
         }
@@ -299,6 +318,20 @@ internal object ScheduleAlarmHelper {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
             }
+
+    /** 일정 알람의 자리. action 이 없다 — 이 앱에서 action 을 쓰는 알람은 다시 알림뿐이다. */
+    internal fun slotOf(
+        scheduleId: String,
+        kind: AlarmKind,
+    ): AlarmSlot = AlarmSlot(requestCodeOf(scheduleId, kind), null)
+
+    /**
+     * 다시 알림의 자리. 원래 알람과 번호가 같고 action 으로만 갈린다.
+     *
+     * 일정 알람의 번호는 짝수 전체와 홀수 전체, 곧 32비트 정수 전체를 덮으므로 「비어 있는
+     * 번호 대역」 이 없다. 그래서 번호로는 가를 수 없다(#129).
+     */
+    internal fun snoozeSlotOf(baseRequestCode: Int): AlarmSlot = AlarmSlot(baseRequestCode, ACTION_SNOOZE_ALARM)
 
     internal fun requestCodeOf(
         scheduleId: String,

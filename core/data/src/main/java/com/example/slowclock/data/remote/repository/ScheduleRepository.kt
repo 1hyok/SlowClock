@@ -470,6 +470,27 @@ class ScheduleRepository
             }
         }
 
+        /**
+         * 사용자가 만든 일정 전부. 알람을 이 기기에 다시 맞추는 데 쓴다.
+         *
+         * 오늘 것만으로는 모자란다. 알람 장부는 회차가 아니라 일정 단위로 남고, 며칠 뒤 한 번만
+         * 있는 일정도 지금 걸어 두어야 그날 울린다(#176).
+         *
+         * 실패하면 null 이다. 빈 목록과 갈라야 한다 — 빈 목록으로 맞추면 걸려 있던 알람을 전부
+         * 지우게 된다.
+         */
+        suspend fun getSchedulesOf(userId: String): List<Schedule>? =
+            try {
+                schedulesCollection
+                    .whereEqualTo("userId", userId)
+                    .get()
+                    .await()
+                    .mapNotNull { parseScheduleFromDocument(it) }
+            } catch (e: Exception) {
+                Log.e("ScheduleRepo", "알람을 맞출 일정 목록 조회 실패", e)
+                null
+            }
+
         // 계정 삭제용: 사용자가 만든 일정 전부 삭제
         suspend fun deleteAllSchedulesOf(userId: String): Boolean =
             try {
