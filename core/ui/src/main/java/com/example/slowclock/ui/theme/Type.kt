@@ -6,7 +6,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// ============== 느린시계 글자 ==============
+// ============== 느린 시계 글자 ==============
 //
 // 고령자가 읽는 화면이라 기본 크기를 Material 기본값보다 크게 잡는다. 크기만 키우면 화면이
 // 평평해지므로 단계마다 굵기도 함께 바꿔 위아래를 만든다.
