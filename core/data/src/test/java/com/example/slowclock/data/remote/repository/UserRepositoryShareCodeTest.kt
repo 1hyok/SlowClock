@@ -28,6 +28,7 @@ import org.junit.Test
 class UserRepositoryShareCodeTest {
     private val uid = "owner"
     private val code = "ABC123"
+    private val auth = mockk<FirebaseAuth>()
     private val firestore = mockk<FirebaseFirestore>()
     private val users = mockk<CollectionReference>()
     private val profiles = mockk<CollectionReference>()
@@ -40,6 +41,7 @@ class UserRepositoryShareCodeTest {
     private val repository: UserRepository
 
     init {
+        every { auth.currentUser } returns mockk { every { uid } returns this@UserRepositoryShareCodeTest.uid }
         every { firestore.collection("users") } returns users
         every { firestore.collection("publicProfiles") } returns profiles
         every { firestore.collection("shareCodes") } returns registry
@@ -56,7 +58,7 @@ class UserRepositoryShareCodeTest {
         every { firestore.batch() } returns batch
         every { batch.delete(any()) } returns batch
         every { batch.commit() } returns Tasks.forResult(null)
-        repository = UserRepository(mockk<FirebaseAuth>(), firestore, mockk<FirebaseMessaging>())
+        repository = UserRepository(auth, firestore, mockk<FirebaseMessaging>())
     }
 
     @Test
@@ -164,6 +166,51 @@ class UserRepositoryShareCodeTest {
 
             verify(exactly = 0) { firestore.batch() }
             verify(exactly = 0) { batch.commit() }
+        }
+
+    @Test
+    fun `현재 사용자 읽기 취소는 문서 없음으로 반환하지 않는다`() =
+        runTest {
+            every { userRef.get() } returns TaskCompletionSource<DocumentSnapshot>().task
+            assertCancellationStops { repository.getCurrentUser() }
+        }
+
+    @Test
+    fun `계정 삭제 읽기 취소는 batch를 시작하지 않는다`() =
+        runTest {
+            every { userRef.get() } returns TaskCompletionSource<DocumentSnapshot>().task
+            assertCancellationStops { repository.deleteUserDocument(uid) }
+            verify(exactly = 0) { firestore.batch() }
+        }
+
+    @Test
+    fun `계정 삭제 commit 대기 취소는 실패 결과로 바꾸지 않는다`() =
+        runTest {
+            every { batch.commit() } returns TaskCompletionSource<Void>().task
+            assertCancellationStops { repository.deleteUserDocument(uid) }
+        }
+
+    @Test
+    fun `코드 등록 대기 취소는 사용자 쓰기로 이어지지 않는다`() =
+        runTest {
+            every { codeRef.set(any()) } returns TaskCompletionSource<Void>().task
+            assertCancellationStops { repository.ensureShareCode(uid, "이름", "email@example.com") }
+            verify(exactly = 0) { userRef.update(any<Map<String, Any>>()) }
+            verify(exactly = 0) { profileRef.set(any()) }
+        }
+
+    @Test
+    fun `공개 프로필 저장 대기 취소도 ensureShareCode 성공으로 반환하지 않는다`() =
+        runTest {
+            every { profileRef.set(any()) } returns TaskCompletionSource<Void>().task
+            assertCancellationStops { repository.ensureShareCode(uid, "이름", "email@example.com") }
+        }
+
+    @Test
+    fun `공유 소유자 이름 읽기 취소는 빈 이름 목록으로 반환하지 않는다`() =
+        runTest {
+            every { profileRef.get() } returns TaskCompletionSource<DocumentSnapshot>().task
+            assertCancellationStops { repository.getUserNames(listOf(uid)) }
         }
 
     private fun denied() = FirebaseFirestoreException("denied", FirebaseFirestoreException.Code.PERMISSION_DENIED)
