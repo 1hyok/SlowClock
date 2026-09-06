@@ -21,6 +21,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.slowclock.auth.AuthManager
 import com.example.slowclock.data.model.ThemeMode
 import com.example.slowclock.data.remote.repository.AuthRepository
+import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
 import com.example.slowclock.domain.profile.SignOutUseCase
@@ -37,6 +38,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var userRepository: UserRepository
+
+    @Inject
+    lateinit var scheduleRepository: ScheduleRepository
 
     @Inject
     lateinit var authRepository: AuthRepository
@@ -73,7 +77,7 @@ class MainActivity : ComponentActivity() {
 
         try {
             // AuthManager 초기화
-            authManager = AuthManager(this, userRepository, authRepository)
+            authManager = AuthManager(this, userRepository, authRepository, scheduleRepository)
             authManager.initialize(
                 onSuccess = {
                     Log.d("AUTH", "로그인 성공 콜백")
