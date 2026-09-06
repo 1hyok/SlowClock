@@ -45,6 +45,10 @@ sealed interface MainIntent : MviIntent {
 
     data object ConsumeExactAlarmSettingsRequest : MainIntent
 
+    data object OpenNotificationSettings : MainIntent
+
+    data object ConsumeNotificationSettingsRequest : MainIntent
+
     data object ExactAlarmSettingsUnavailable : MainIntent
 
     data object ConsumeUserMessage : MainIntent
@@ -81,6 +85,8 @@ data class MainUiState(
     val showExactAlarmNotice: Boolean = false,
     /** null 이 아니면 화면이 시스템 설정을 한 번 연다. */
     val openExactAlarmSettings: Unit? = null,
+    val alarmControlsAvailable: Boolean = true,
+    val openNotificationSettings: Unit? = null,
     val userMessage: String? = null,
 ) : UiState
 
@@ -113,6 +119,12 @@ sealed interface MainReducerEvent : ReducerEvent {
 
     data class CompletionToggled(
         val scheduleId: String,
+        val nowMillis: Long,
+    ) : MainReducerEvent
+
+    data class CompletionRestored(
+        val schedule: Schedule,
+        val shared: Boolean,
         val nowMillis: Long,
     ) : MainReducerEvent
 
@@ -163,6 +175,14 @@ sealed interface MainReducerEvent : ReducerEvent {
     data object ExactAlarmSettingsRequested : MainReducerEvent
 
     data object ExactAlarmSettingsRequestConsumed : MainReducerEvent
+
+    data class AlarmControlsChecked(
+        val available: Boolean,
+    ) : MainReducerEvent
+
+    data object NotificationSettingsRequested : MainReducerEvent
+
+    data object NotificationSettingsRequestConsumed : MainReducerEvent
 
     data object ExactAlarmSettingsFailed : MainReducerEvent
 

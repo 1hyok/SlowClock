@@ -33,12 +33,15 @@ permissions:
   issues: read
   pull-requests: write
 
+# API dispatch로 받은 번호는 문자열일 수 있다. reusable workflow의 number 계약에
+# 맞춰 명시적으로 변환한다. PR 이벤트의 숫자와 번호 없는 경우의 0도 같은 경로를 쓴다.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#fromjson
 jobs:
   repository-quality:
     name: Repository Quality
     uses: ./.github/workflows/repository-quality.yml
     with:
-      pull_request_number: ${{ inputs.pull_request_number || github.event.pull_request.number || 0 }}
+      pull_request_number: ${{ fromJSON(format('{0}', inputs.pull_request_number || github.event.pull_request.number || 0)) }}
 
   static-analysis:
     name: Static Analysis
@@ -46,7 +49,7 @@ jobs:
     if: ${{ !cancelled() }}
     uses: ./.github/workflows/lint.yml
     with:
-      pull_request_number: ${{ inputs.pull_request_number || github.event.pull_request.number || 0 }}
+      pull_request_number: ${{ fromJSON(format('{0}', inputs.pull_request_number || github.event.pull_request.number || 0)) }}
       run_ktlint: ${{ needs.repository-quality.result != 'success' || needs.repository-quality.outputs.ktlint_required != 'false' }}
       ktlint_tasks: ${{ needs.repository-quality.result == 'success' && needs.repository-quality.outputs.ktlint_tasks || 'ktlintCheck' }}
       run_android_lint: ${{ needs.repository-quality.result != 'success' || needs.repository-quality.outputs.android_lint_required != 'false' }}
@@ -59,7 +62,7 @@ jobs:
     if: ${{ !cancelled() }}
     uses: ./.github/workflows/unit-test.yml
     with:
-      pull_request_number: ${{ inputs.pull_request_number || github.event.pull_request.number || 0 }}
+      pull_request_number: ${{ fromJSON(format('{0}', inputs.pull_request_number || github.event.pull_request.number || 0)) }}
       run_validation: ${{ needs.repository-quality.result != 'success' || needs.repository-quality.outputs.unit_test_required != 'false' }}
       run_node_tests: ${{ needs.repository-quality.result != 'success' || needs.repository-quality.outputs.run_node_tests != 'false' }}
       gradle_tasks: ${{ needs.repository-quality.result == 'success' && needs.repository-quality.outputs.unit_test_tasks || 'testDebugUnitTest :app:compileDebugAndroidTestKotlin' }}
@@ -70,7 +73,7 @@ jobs:
     if: ${{ !cancelled() }}
     uses: ./.github/workflows/screenshot.yml
     with:
-      pull_request_number: ${{ inputs.pull_request_number || github.event.pull_request.number || 0 }}
+      pull_request_number: ${{ fromJSON(format('{0}', inputs.pull_request_number || github.event.pull_request.number || 0)) }}
       run_validation: ${{ needs.repository-quality.result != 'success' || needs.repository-quality.outputs.screenshot_required != 'false' }}
       gradle_tasks: ${{ needs.repository-quality.result == 'success' && needs.repository-quality.outputs.screenshot_tasks || ':app:validateScreenshotTest' }}
       screenshot_modules: ${{ needs.repository-quality.result == 'success' && needs.repository-quality.outputs.screenshot_modules || ':app' }}

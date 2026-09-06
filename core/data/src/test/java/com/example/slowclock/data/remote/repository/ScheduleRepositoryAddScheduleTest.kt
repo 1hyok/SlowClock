@@ -32,21 +32,12 @@ class ScheduleRepositoryAddScheduleTest {
     private val uid = "uid-1"
 
     private fun repositoryWith(userDocTask: com.google.android.gms.tasks.Task<DocumentSnapshot>): ScheduleRepository {
-        val user = mockk<FirebaseUser>()
-        every { user.uid } returns uid
-        val auth = mockk<FirebaseAuth>()
-        every { auth.currentUser } returns user
-
-        val userDocRef = mockk<DocumentReference>()
-        every { userDocRef.get() } returns userDocTask
-        val usersCollection = mockk<CollectionReference>()
-        every { usersCollection.document(uid) } returns userDocRef
-        val schedulesCollection = mockk<CollectionReference>()
-        val firestore = mockk<FirebaseFirestore>()
-        every { firestore.collection("schedules") } returns schedulesCollection
-        every { firestore.collection("users") } returns usersCollection
-
-        return ScheduleRepository(auth, firestore)
+        val fixture = ScheduleTransactionFixture()
+        every { fixture.transaction.get(fixture.userRef) } answers {
+            userDocTask.exception?.let { throw it }
+            userDocTask.result
+        }
+        return fixture.repository
     }
 
     @Test
@@ -59,7 +50,7 @@ class ScheduleRepositoryAddScheduleTest {
                 )
             val repository = repositoryWith(Tasks.forException(denied))
 
-            val result = repository.addSchedule(Schedule(title = "혈압약 먹기"))
+            val result = repository.addSchedule(Schedule(id = "s1", title = "혈압약 먹기"))
 
             assertTrue(result is ScheduleRepository.ScheduleResult.Error)
             assertEquals(
@@ -78,10 +69,10 @@ class ScheduleRepositoryAddScheduleTest {
                 )
             val repository = repositoryWith(Tasks.forException(unavailable))
 
-            val result = repository.addSchedule(Schedule(title = "병원 가기"))
+            val result = repository.addSchedule(Schedule(id = "s1", title = "병원 가기"))
 
             assertEquals(
-                AppError.NetworkError,
+                AppError.OnlineWriteError,
                 (result as ScheduleRepository.ScheduleResult.Error).error,
             )
         }

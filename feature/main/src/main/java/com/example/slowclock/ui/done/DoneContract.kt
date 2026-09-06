@@ -43,5 +43,9 @@ sealed interface DoneReducerEvent : ReducerEvent {
         val scheduleId: String,
     ) : DoneReducerEvent
 
+    data class Restored(
+        val schedule: Schedule,
+    ) : DoneReducerEvent
+
     data object ErrorConsumed : DoneReducerEvent
 }

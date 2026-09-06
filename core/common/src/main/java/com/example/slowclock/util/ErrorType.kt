@@ -5,6 +5,10 @@ sealed class AppError(
     val message: String,
 ) {
     // 네트워크 관련 에러
+    object ScheduleConflictError : AppError("이 일정은 이미 다른 내용으로 저장되어 있습니다. 목록에서 확인한 뒤 수정해 주세요.")
+
+    object OnlineWriteError : AppError("일정 변경에는 인터넷 연결이 필요합니다. 연결을 확인하고 다시 시도해 주세요.")
+
     object NetworkError : AppError("인터넷 연결을 확인해주세요")
 
     object TimeoutError : AppError("요청 시간이 초과되었습니다. 다시 시도해주세요")
