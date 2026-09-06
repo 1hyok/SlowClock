@@ -72,6 +72,14 @@ sealed interface MainReducerEvent : ReducerEvent {
         val userId: String,
     ) : MainReducerEvent
 
+    /**
+     * 로그아웃했다. 앞 사용자의 일정과 집계를 비운다.
+     *
+     * [UserResolved] 만 내면 화면은 로그인 안내로 바뀌지만 상태에는 앞 사람 목록이 남아,
+     * 다른 계정으로 로그인한 직후 Firestore 첫 응답이 오기 전까지 그 목록이 그대로 보인다(#137).
+     */
+    data object SignedOut : MainReducerEvent
+
     data object Loading : MainReducerEvent
 
     /** [nowMillis] 는 「지금 할 일」 계산에만 쓴다. reduce 가 시계를 읽지 않도록 밖에서 넣는다. */
