@@ -3,6 +3,7 @@ package com.example.slowclock.domain.profile
 import com.example.slowclock.core.alarm.AlarmScheduler
 import com.example.slowclock.data.remote.repository.AuthRepository
 import com.example.slowclock.data.remote.repository.SettingsRepository
+import com.example.slowclock.notification.SharedScheduleNotifier
 import javax.inject.Inject
 
 /**
@@ -24,12 +25,15 @@ class SignOutUseCase
         private val authRepository: AuthRepository,
         private val alarmScheduler: AlarmScheduler,
         private val settingsRepository: SettingsRepository,
+        private val sharedScheduleNotifier: SharedScheduleNotifier,
     ) {
         operator fun invoke() {
             // 세션을 끊기 전에 기기 잔재부터 지운다. 순서가 반대면 중간에 실패했을 때
             // 로그인은 풀렸는데 알람만 남는 상태가 된다.
             alarmScheduler.cancelAll()
-            settingsRepository.clearShareCode()
-            authRepository.signOut()
+            sharedScheduleNotifier.changeSession {
+                settingsRepository.clearShareCode()
+                authRepository.signOut()
+            }
         }
     }

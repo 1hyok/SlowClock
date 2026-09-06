@@ -7,6 +7,7 @@ import com.example.slowclock.data.remote.repository.NotificationRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
+import com.example.slowclock.notification.SharedScheduleNotifier
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
@@ -23,7 +24,11 @@ class DeleteAccountUseCaseTest {
     private val familyGroupRepository = mockk<FamilyGroupRepository>()
     private val notificationRepository = mockk<NotificationRepository>()
     private val userRepository = mockk<UserRepository>()
-    private val settingsRepository = mockk<SettingsRepository>()
+    private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
+    private val notifier =
+        mockk<SharedScheduleNotifier> {
+            every { changeSession(any()) } answers { firstArg<() -> Unit>().invoke() }
+        }
     private val alarmScheduler = mockk<AlarmScheduler>(relaxed = true)
 
     private val useCase =
@@ -35,6 +40,7 @@ class DeleteAccountUseCaseTest {
             userRepository = userRepository,
             settingsRepository = settingsRepository,
             alarmScheduler = alarmScheduler,
+            sharedScheduleNotifier = notifier,
         )
 
     private fun givenSignedIn(uid: String = "uid-1") {
@@ -60,6 +66,10 @@ class DeleteAccountUseCaseTest {
             val result = useCase()
 
             assertEquals(DeleteAccountResult.Success, result)
+            verify(exactly = 1) {
+                notifier.changeSession(any())
+                settingsRepository.clearShareCode()
+            }
             coVerifyOrder {
                 scheduleRepository.deleteAllSchedulesOf("uid-1")
                 familyGroupRepository.leaveAllGroupsOf("uid-1")

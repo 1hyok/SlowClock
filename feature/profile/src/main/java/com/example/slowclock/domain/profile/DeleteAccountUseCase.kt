@@ -7,6 +7,7 @@ import com.example.slowclock.data.remote.repository.NotificationRepository
 import com.example.slowclock.data.remote.repository.ScheduleRepository
 import com.example.slowclock.data.remote.repository.SettingsRepository
 import com.example.slowclock.data.remote.repository.UserRepository
+import com.example.slowclock.notification.SharedScheduleNotifier
 import javax.inject.Inject
 
 /** 계정 삭제 중 실패한 단계. 사용자 안내와 재시도 판단에 쓴다. */
@@ -49,6 +50,7 @@ class DeleteAccountUseCase
         private val userRepository: UserRepository,
         private val settingsRepository: SettingsRepository,
         private val alarmScheduler: AlarmScheduler,
+        private val sharedScheduleNotifier: SharedScheduleNotifier,
     ) {
         suspend operator fun invoke(): DeleteAccountResult {
             val uid = authRepository.currentUid ?: return DeleteAccountResult.NotSignedIn
@@ -78,10 +80,23 @@ class DeleteAccountUseCase
             }
 
             return when (authRepository.deleteCurrentUser()) {
-                AuthRepository.DeleteResult.Success -> DeleteAccountResult.Success
-                AuthRepository.DeleteResult.NotSignedIn -> DeleteAccountResult.NotSignedIn
-                AuthRepository.DeleteResult.RecentLoginRequired -> DeleteAccountResult.RecentLoginRequired
-                is AuthRepository.DeleteResult.Failure -> DeleteAccountResult.Failed(DeleteAccountStep.AUTH_USER)
+                AuthRepository.DeleteResult.Success -> {
+                    sharedScheduleNotifier.changeSession { settingsRepository.clearShareCode() }
+                    DeleteAccountResult.Success
+                }
+
+                AuthRepository.DeleteResult.NotSignedIn -> {
+                    sharedScheduleNotifier.changeSession { settingsRepository.clearShareCode() }
+                    DeleteAccountResult.NotSignedIn
+                }
+
+                AuthRepository.DeleteResult.RecentLoginRequired -> {
+                    DeleteAccountResult.RecentLoginRequired
+                }
+
+                is AuthRepository.DeleteResult.Failure -> {
+                    DeleteAccountResult.Failed(DeleteAccountStep.AUTH_USER)
+                }
             }
         }
     }

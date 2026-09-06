@@ -223,11 +223,31 @@ class UserRepository
             val uid = auth.currentUser?.uid ?: return false
             return try {
                 val token = messaging.token.await()
+                if (auth.currentUser?.uid != uid) return false
                 usersCollection.document(uid).update("fcmToken", token).await()
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "FCM 토큰 저장 실패", e)
                 false
+            }
+        }
+
+        /** FCM 콜백은 서버 응답을 기다리지 않고 현재 세션의 갱신 쓰기만 제출한다. */
+        fun updateFcmRegistration(
+            token: String,
+            expectedUid: String,
+            shareCode: String?,
+        ) {
+            if (token.isBlank() || expectedUid.isBlank() || auth.currentUser?.uid != expectedUid) return
+            usersCollection
+                .document(expectedUid)
+                .update("fcmToken", token)
+                .addOnFailureListener { Log.w(TAG, "사용자 FCM 등록 갱신 실패") }
+            if (!shareCode.isNullOrBlank() && auth.currentUser?.uid == expectedUid) {
+                shareCodeWatcherTokens(shareCode)
+                    .document(expectedUid)
+                    .set(mapOf("userId" to expectedUid, "fcmToken" to token), SetOptions.merge())
+                    .addOnFailureListener { Log.w(TAG, "공유 FCM 등록 갱신 실패") }
             }
         }
 
@@ -242,6 +262,7 @@ class UserRepository
             val uid = auth.currentUser?.uid ?: return false
             return try {
                 val token = runCatching { messaging.token.await() }.getOrNull()
+                if (auth.currentUser?.uid != uid) return false
                 if (token == null) Log.w(TAG, "FCM 토큰 없이 감시자를 등록한다. 알림은 다음 등록에서 붙는다")
                 val fields = mutableMapOf<String, Any>("userId" to uid)
                 token?.let { fields["fcmToken"] = it }
