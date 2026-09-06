@@ -35,37 +35,47 @@ class AlarmScheduler
          * 알람이 울릴 때 [AlarmReceiver] 가 이어서 건다(#130).
          */
         fun schedule(schedule: Schedule) {
-            val nowMillis = System.currentTimeMillis()
-            val record = schedule.toRecord()
-            if (!record.isLive(nowMillis)) {
-                // 걸 것이 없으면 자리도 장부도 비운다. 남기면 부팅마다 훑고 버려야 한다.
-                ScheduleAlarmHelper.cancelAlarm(context, schedule)
-                scheduledAlarms.remove(record.id)
-                return
-            }
-            ScheduleAlarmHelper.scheduleAlarm(context, record.toSchedule(nowMillis))
-            scheduledAlarms.save(record)
-        }
-
-        /**
-         * 방금 울린 일정의 다음 회차를 건다. 되풀이하지 않는 일정이면 장부에서 지운다.
-         *
-         * 알람이 울린 그 순간이 다음 회차를 거는 자리다. 여기서 걸지 않으면 되풀이가 한 번으로
-         * 끝난다.
-         */
-        fun scheduleNextOccurrence(scheduleId: String) {
-            val nowMillis = System.currentTimeMillis()
-            val record = scheduledAlarms.all().firstOrNull { it.id == scheduleId } ?: return
-            if (!record.isLive(nowMillis)) {
-                scheduledAlarms.remove(record.id)
-                return
-            }
-            ScheduleAlarmHelper.scheduleAlarm(context, record.toSchedule(nowMillis))
+            book(schedule.toRecord(), System.currentTimeMillis())
         }
 
         fun cancel(schedule: Schedule) {
             ScheduleAlarmHelper.cancelAlarm(context, schedule)
             scheduledAlarms.remove(schedule.id)
+        }
+
+        /**
+         * 방금 울린 일정의 다음 회차를 건다. 걸 것이 더 없으면 장부에서 지운다.
+         *
+         * 걸어 둔 회차에 아직 울릴 것이 남아 있으면(시작만 울리고 종료가 남았을 때) 아무것도
+         * 하지 않는다. 알람을 다시 거는 일은 그 일정의 자리를 먼저 비우므로, 앞당겨 걸면 아직
+         * 안 울린 종료 알람이 지워진다(#163).
+         */
+        fun scheduleNextOccurrence(scheduleId: String) {
+            val record = scheduledAlarms.all().firstOrNull { it.id == scheduleId } ?: return
+            book(record, System.currentTimeMillis())
+        }
+
+        /**
+         * 장부의 기록 하나를 지금 걸어야 할 회차로 맞춘다.
+         *
+         * 이미 그 회차가 걸려 있으면 손대지 않는다. 예약·복원·다음 회차가 모두 이 자리를 지나므로
+         * 「어느 회차가 걸려 있나」 를 아는 곳이 하나뿐이다.
+         */
+        private fun book(
+            record: ScheduledAlarm,
+            nowMillis: Long,
+        ) {
+            val occurrence = record.occurrenceToBook(nowMillis)
+            if (occurrence == null) {
+                // 걸 것이 없으면 자리도 장부도 비운다. 남기면 부팅마다 훑고 버려야 한다.
+                ScheduleAlarmHelper.cancelAlarm(context, record.toSchedule())
+                scheduledAlarms.remove(record.id)
+                return
+            }
+            if (occurrence == record.bookedStartMillis) return
+
+            ScheduleAlarmHelper.scheduleAlarm(context, record.toSchedule(occurrence))
+            scheduledAlarms.save(record.copy(bookedStartMillis = occurrence))
         }
 
         /**
@@ -78,11 +88,10 @@ class AlarmScheduler
             scheduledAlarms.clear()
         }
 
-        /** 알람을 거는 쪽이 보는 값. 장부의 기록을 다음 회차로 옮겨 놓은 일정이다. */
-        private fun ScheduledAlarm.toSchedule(nowMillis: Long): Schedule {
-            val next = nextTriggerAfter(nowMillis) ?: return toSchedule()
-            // 반복 일정은 다음 회차의 시작으로 옮긴다. 종료는 시작에서 떨어진 만큼 함께 옮긴다.
-            val shifted = if (rule == Recurrence.NONE) 0L else next - startMillis
+        /** 알람을 거는 쪽이 보는 값. 장부의 기록을 [occurrenceStartMillis] 회차로 옮겨 놓은 일정이다. */
+        private fun ScheduledAlarm.toSchedule(occurrenceStartMillis: Long): Schedule {
+            // 종료는 시작에서 떨어진 만큼 함께 옮긴다. 자정을 넘는 일정도 길이가 유지된다.
+            val shifted = occurrenceStartMillis - startMillis
             return toSchedule().copy(
                 startTime = Timestamp(Date(startMillis + shifted)),
                 endTime = endMillis?.let { Timestamp(Date(it + shifted)) },
@@ -98,9 +107,10 @@ class AlarmScheduler
          */
         fun restoreAll() {
             val nowMillis = System.currentTimeMillis()
-            val (live, expired) = scheduledAlarms.all().partition { it.isLive(nowMillis) }
-            expired.forEach { scheduledAlarms.remove(it.id) }
-            live.forEach { ScheduleAlarmHelper.scheduleAlarm(context, it.toSchedule(nowMillis)) }
+            scheduledAlarms.all().forEach { record ->
+                // 재부팅으로 걸린 것이 전부 사라졌으므로, 지키던 회차라도 다시 걸어야 한다.
+                book(record.copy(bookedStartMillis = null), nowMillis)
+            }
         }
 
         /**
