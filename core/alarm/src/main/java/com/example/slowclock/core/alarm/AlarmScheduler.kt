@@ -5,6 +5,8 @@ import android.content.Context
 import com.example.slowclock.data.model.Schedule
 import com.example.slowclock.data.remote.repository.ScheduledAlarm
 import com.example.slowclock.data.remote.repository.ScheduledAlarmRepository
+import com.example.slowclock.data.remote.repository.SnoozedAlarm
+import com.example.slowclock.data.remote.repository.SnoozedAlarmRepository
 import com.example.slowclock.util.Recurrence
 import com.google.firebase.Timestamp
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -26,6 +28,7 @@ class AlarmScheduler
     constructor(
         @ApplicationContext private val context: Context,
         private val scheduledAlarms: ScheduledAlarmRepository,
+        private val snoozedAlarms: SnoozedAlarmRepository,
     ) {
         /**
          * 일정의 다음 회차 알람을 건다.
@@ -41,6 +44,92 @@ class AlarmScheduler
         fun cancel(schedule: Schedule) {
             ScheduleAlarmHelper.cancelAlarm(context, schedule)
             scheduledAlarms.remove(schedule.id)
+            forgetSnoozesOf(schedule.id)
+        }
+
+        /**
+         * 서버에 있는 일정으로 이 기기의 알람을 맞춘다.
+         *
+         * 장부는 기기 안에만 있고 백업·기기 이전에서 일부러 뺐다. 그래서 폰을 바꾸거나 앱을 다시
+         * 깔면 장부가 빈 채로 시작하고, 서버에 일정이 그대로 있어도 알람은 하나도 걸리지 않는다.
+         * 사용자에게는 「일정은 보이는데 안 울린다」 로만 보인다(#176).
+         *
+         * 내용이 그대로인 일정은 걸린 회차를 지킨다. 앱을 열 때마다 다시 걸면 방금 미뤄 둔
+         * 알람이 그때마다 사라진다.
+         */
+        fun syncWith(schedules: List<Schedule>) {
+            val nowMillis = System.currentTimeMillis()
+            val incoming = schedules.associateBy { it.id }
+            val booked = scheduledAlarms.all()
+            // 서버에서 사라진 일정의 알람은 지운다. 다른 기기에서 지운 일정이 이 기기에서만
+            // 계속 울리는 것도 이 자리에서 함께 막힌다.
+            booked.filterNot { incoming.containsKey(it.id) }.forEach { stale ->
+                ScheduleAlarmHelper.cancelAlarm(context, stale.toSchedule())
+                scheduledAlarms.remove(stale.id)
+                forgetSnoozesOf(stale.id)
+            }
+            // 마지막 회차가 끝난 미룸은 일정 장부에 없을 수 있다. 다른 기기에서 그 일정을
+            // 지웠다면 미룸 예약도 따로 찾아 지운다.
+            snoozedAlarms.all().filterNot { incoming.containsKey(it.scheduleId) }.forEach { stale ->
+                ScheduleAlarmHelper.cancelSnooze(context, stale.baseRequestCode)
+                snoozedAlarms.remove(stale.baseRequestCode)
+            }
+            val bookedById = booked.associateBy { it.id }
+            incoming.values.forEach { schedule ->
+                val fresh = schedule.toRecord()
+                val existing = bookedById[schedule.id]
+                // 장부에도 없고 걸 것도 남지 않은 일정은 손댈 것이 없다. 지난 일정을 앱을 열
+                // 때마다 훑어 취소하지 않는다.
+                if (existing == null && !fresh.isLive(nowMillis)) return@forEach
+                book(if (existing != null && existing.sameContentAs(fresh)) existing else fresh, nowMillis)
+            }
+        }
+
+        /**
+         * 알람 하나를 미룬다. 걸어 둔 사실을 기기에 남긴다.
+         *
+         * 다시 알림은 AlarmManager 에만 걸려 있어 재부팅과 앱 교체로 사라진다. 미룬 사람은 5분
+         * 뒤 울릴 것이라고 믿고 있고, 그 믿음이 이 기능의 전부다(#177).
+         */
+        fun snooze(
+            baseRequestCode: Int,
+            scheduleId: String,
+            title: String,
+            desc: String,
+            isFullScreen: Boolean,
+            snoozeCount: Int,
+        ) {
+            val triggerAt = SnoozePolicy.nextTriggerAt(System.currentTimeMillis())
+            ScheduleAlarmHelper.scheduleSnooze(
+                context = context,
+                baseRequestCode = baseRequestCode,
+                scheduleId = scheduleId,
+                title = title,
+                desc = desc,
+                isFullScreen = isFullScreen,
+                snoozeCount = snoozeCount,
+                triggerTime = triggerAt,
+            )
+            snoozedAlarms.save(
+                SnoozedAlarm(
+                    baseRequestCode = baseRequestCode,
+                    scheduleId = scheduleId,
+                    title = title,
+                    description = desc,
+                    isFullScreen = isFullScreen,
+                    snoozeCount = snoozeCount,
+                    triggerAtMillis = triggerAt,
+                ),
+            )
+        }
+
+        /** 미뤄 둔 알람이 울렸다. 기록을 지운다. 남기면 다음 부팅에 한 번 더 울린다. */
+        fun snoozeFired(baseRequestCode: Int) {
+            snoozedAlarms.remove(baseRequestCode)
+        }
+
+        private fun forgetSnoozesOf(scheduleId: String) {
+            snoozedAlarms.all().filter { it.scheduleId == scheduleId }.forEach { snoozedAlarms.remove(it.baseRequestCode) }
         }
 
         /**
@@ -60,21 +149,26 @@ class AlarmScheduler
          *
          * 이미 그 회차가 걸려 있으면 손대지 않는다. 예약·복원·다음 회차가 모두 이 자리를 지나므로
          * 「어느 회차가 걸려 있나」 를 아는 곳이 하나뿐이다.
+         * [preserveSnoozes] 는 재부팅 복원 때만 쓴다. 그때는 미룸을 뒤에서 다시 걸고, 그 밖의
+         * 재예약은 기존 미룸 예약을 취소하므로 복원 장부도 함께 지워야 한다.
          */
         private fun book(
             record: ScheduledAlarm,
             nowMillis: Long,
+            preserveSnoozes: Boolean = false,
         ) {
             val occurrence = record.occurrenceToBook(nowMillis)
             if (occurrence == null) {
                 // 걸 것이 없으면 자리도 장부도 비운다. 남기면 부팅마다 훑고 버려야 한다.
                 ScheduleAlarmHelper.cancelAlarm(context, record.toSchedule())
                 scheduledAlarms.remove(record.id)
+                if (!preserveSnoozes) forgetSnoozesOf(record.id)
                 return
             }
             if (occurrence == record.bookedStartMillis) return
 
             ScheduleAlarmHelper.scheduleAlarm(context, record.toSchedule(occurrence))
+            if (!preserveSnoozes) forgetSnoozesOf(record.id)
             scheduledAlarms.save(record.copy(bookedStartMillis = occurrence))
         }
 
@@ -86,6 +180,10 @@ class AlarmScheduler
         fun cancelAll() {
             scheduledAlarms.all().forEach { ScheduleAlarmHelper.cancelAlarm(context, it.toSchedule()) }
             scheduledAlarms.clear()
+            // 마지막 회차가 울리면 일정 장부는 먼저 비워진다. 그 뒤 미룬 알람은 미룸 장부에만
+            // 있으므로, 일정 장부와 별개로 예약을 취소해야 로그아웃 뒤에도 울리지 않는다.
+            snoozedAlarms.all().forEach { ScheduleAlarmHelper.cancelSnooze(context, it.baseRequestCode) }
+            snoozedAlarms.clear()
         }
 
         /** 알람을 거는 쪽이 보는 값. 장부의 기록을 [occurrenceStartMillis] 회차로 옮겨 놓은 일정이다. */
@@ -109,7 +207,34 @@ class AlarmScheduler
             val nowMillis = System.currentTimeMillis()
             scheduledAlarms.all().forEach { record ->
                 // 재부팅으로 걸린 것이 전부 사라졌으므로, 지키던 회차라도 다시 걸어야 한다.
-                book(record.copy(bookedStartMillis = null), nowMillis)
+                book(record.copy(bookedStartMillis = null), nowMillis, preserveSnoozes = true)
+            }
+            restoreSnoozes(nowMillis)
+        }
+
+        /**
+         * 미뤄 둔 알람을 다시 건다. 이미 지난 것은 버린다.
+         *
+         * 일정 알람보다 뒤에 건다. 자리 번호가 같아 순서가 바뀌면 방금 되살린 다시 알림을
+         * 일정 알람 쪽 취소가 지운다(#177).
+         */
+        private fun restoreSnoozes(nowMillis: Long) {
+            snoozedAlarms.all().forEach { snoozed ->
+                if (snoozed.triggerAtMillis <= nowMillis) {
+                    // 부팅하자마자 지난 알람이 울리는 것은 도움이 아니라 오작동이다.
+                    snoozedAlarms.remove(snoozed.baseRequestCode)
+                    return@forEach
+                }
+                ScheduleAlarmHelper.scheduleSnooze(
+                    context = context,
+                    baseRequestCode = snoozed.baseRequestCode,
+                    scheduleId = snoozed.scheduleId,
+                    title = snoozed.title,
+                    desc = snoozed.description,
+                    isFullScreen = snoozed.isFullScreen,
+                    snoozeCount = snoozed.snoozeCount,
+                    triggerTime = snoozed.triggerAtMillis,
+                )
             }
         }
 

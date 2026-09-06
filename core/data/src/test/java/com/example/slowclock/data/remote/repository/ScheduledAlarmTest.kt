@@ -186,4 +186,26 @@ class ScheduledAlarmTest {
 
         assertEquals(start + day, record.occurrenceToBook(nowMillis = end + 10))
     }
+
+    @Test
+    fun `걸어 둔 회차만 다른 기록은 내용이 같다고 본다`() {
+        // 서버 목록으로 알람을 맞출 때 쓴다. 이 판정이 없으면 앱을 열 때마다 전부 다시 걸고,
+        // 다시 걸기는 그 자리를 먼저 비우므로 방금 미뤄 둔 알람이 그때마다 사라진다(#176).
+        val start = 1_800_000_000_000
+        val booked = daily(start, start + 60 * 60 * 1000, booked = start + day)
+        val fresh = daily(start, start + 60 * 60 * 1000, booked = null)
+
+        assertTrue(booked.sameContentAs(fresh))
+    }
+
+    @Test
+    fun `제목이나 시각이 바뀌면 내용이 다르다고 본다`() {
+        val start = 1_800_000_000_000
+        val end = start + 60 * 60 * 1000
+        val booked = daily(start, end, booked = start)
+
+        assertFalse(booked.sameContentAs(daily(start, end, booked = null).copy(title = "다른 제목")))
+        assertFalse(booked.sameContentAs(daily(start + 60_000, end, booked = null)))
+        assertFalse(booked.sameContentAs(daily(start, end, booked = null).copy(recurrence = Recurrence.WEEKLY.name)))
+    }
 }

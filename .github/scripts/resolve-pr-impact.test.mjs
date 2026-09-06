@@ -1,14 +1,19 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
+    analyzeRepositoryImpact,
     changedPathsFromGithubFiles,
     githubOutputLines,
     isAndroidModuleBuild,
     resolvePrImpact,
 } from "./resolve-pr-impact.mjs";
 
-// settings.gradle.kts 의 실제 모듈 구성을 본뜬 fixture. :app 만 screenshotTest 소스셋을 갖는다.
+// 영향 전파 알고리즘용 축약 fixture. 실제 저장소 탐색은 별도 통합 회귀로 확인한다.
 const modules = [
     module(":app", { screenshot: true }),
     module(":core:model"),
@@ -232,6 +237,7 @@ test("a module build script change compiles for CodeQL and lints the module", ()
     const impact = resolvePrImpact(["core/data/build.gradle.kts"], modules, dependencies);
 
     assert.equal(impact.codeqlJavaKotlin, true);
+    assert.equal(impact.runNodeTests, true);
     assert.deepEqual(impact.ktlintTasks, [":core:data:ktlintCheck"]);
     assert.deepEqual(impact.androidLintTasks, [
         ":app:lintDebug",
@@ -240,4 +246,92 @@ test("a module build script change compiles for CodeQL and lints the module", ()
         ":feature:main:lintDebug",
         ":app:processDebugMainManifest",
     ]);
+});
+
+test("module build and R8 rule changes run Node policy tests without forcing unrelated Gradle work", () => {
+    for (const filePath of ["app/build.gradle.kts", "app/proguard-rules.pro"]) {
+        const impact = resolvePrImpact([filePath], modules, dependencies);
+
+        assert.equal(impact.runNodeTests, true, filePath);
+        assert.deepEqual(impact.unitTestModules, [":app"], filePath);
+        assert.equal(impact.repositoryQualityFull, false, filePath);
+    }
+});
+
+test("real core UI and data changes validate convention consumers and their screenshot baselines", async () => {
+    const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+    for (const filename of [
+        "core/ui/src/main/java/com/example/slowclock/ui/theme/Color.kt",
+        "core/data/src/main/java/com/example/slowclock/data/remote/repository/ScheduleRepository.kt",
+    ]) {
+        const impact = await analyzeRepositoryImpact(repositoryRoot, [{ filename }]);
+
+        for (const consumer of [":feature:main", ":feature:addschedule", ":feature:profile"]) {
+            assert.ok(impact.unitTestTasks.includes(`${consumer}:testDebugUnitTest`), `${filename}: ${consumer}`);
+            assert.ok(impact.androidLintTasks.includes(`${consumer}:lintDebug`), `${filename}: ${consumer}`);
+        }
+        assert.ok(impact.screenshotTasks.includes(":feature:main:validateScreenshotTest"), filename);
+        assert.equal(impact.repositoryQualityFull, false, filename);
+    }
+});
+
+async function conventionFixture(t, featurePlugin, conventionSources = {}) {
+    const root = await mkdtemp(join(tmpdir(), "slowclock-impact-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const projects = [":app", ":core:ui", ":core:data", ":core:common", ":feature:main"];
+    const files = {
+        "settings.gradle.kts": projects.map((name) => `include("${name}")`).join("\n"),
+        ...Object.fromEntries(projects.map((name) => [
+            `${name.slice(1).replaceAll(":", "/")}/build.gradle.kts`,
+            name === ":feature:main" ? `plugins { ${featurePlugin} }` : 'plugins { id("com.android.library") }',
+        ])),
+        ...Object.fromEntries(Object.entries(conventionSources).map(([name, source]) => [
+            `build-logic/convention/src/main/kotlin/${name}.kt`, source,
+        ])),
+    };
+    await Promise.all(Object.entries(files).map(async ([name, source]) => {
+        await mkdir(dirname(join(root, name)), { recursive: true });
+        await writeFile(join(root, name), source);
+    }));
+    await mkdir(join(root, "feature/main/src/screenshotTest"), { recursive: true });
+    return root;
+}
+
+test("direct IDs and catalog aliases follow nested conventions and changed dependency declarations", async (t) => {
+    for (const plugin of ['id("slowclock.android.feature")', "alias(libs.plugins.slowclock.android.feature)"]) {
+        const root = await conventionFixture(t, plugin, {
+            AndroidFeatureConventionPlugin: 'pluginManager.apply("slowclock.android.library")',
+            AndroidLibraryConventionPlugin: 'add("implementation", project(":core:common"))',
+        });
+        const impact = await analyzeRepositoryImpact(root, [{ filename: "core/common/src/main/Value.kt" }]);
+        assert.deepEqual(impact.unitTestModules, [":core:common", ":feature:main"], plugin);
+        assert.deepEqual(impact.screenshotModules, [":feature:main"], plugin);
+        assert.equal(impact.repositoryQualityFull, false, plugin);
+
+        // 플러그인의 의존을 바꾸면 계산기 안의 별도 간선 목록 수정 없이 다음 분석에 반영된다.
+        await writeFile(
+            join(root, "build-logic/convention/src/main/kotlin/AndroidLibraryConventionPlugin.kt"),
+            'add("implementation", project(":core:data"))',
+        );
+        const changed = await analyzeRepositoryImpact(root, [{ filename: "core/data/src/main/Value.kt" }]);
+        assert.deepEqual(changed.unitTestModules, [":core:data", ":feature:main"], plugin);
+    }
+});
+
+test("unknown or missing convention sources widen production validation instead of omitting consumers", async (t) => {
+    for (const plugin of [
+        'id("slowclock.android.feature")',
+        'id("slowclock.android.new")',
+        "alias(libs.plugins.slowclock.android.new)",
+    ]) {
+        const root = await conventionFixture(t, plugin);
+        const impact = await analyzeRepositoryImpact(root, [{ filename: "core/ui/src/main/Value.kt" }]);
+        assert.equal(impact.repositoryQualityFull, true, plugin);
+        assert.equal(impact.runNodeTests, true, plugin);
+        assert.deepEqual(impact.unitTestModules, [":app", ":core:common", ":core:data", ":core:ui", ":feature:main"], plugin);
+        assert.deepEqual(impact.screenshotModules, [":feature:main"], plugin);
+
+        const docs = await analyzeRepositoryImpact(root, [{ filename: "README.md" }]);
+        assert.deepEqual(docs.unitTestTasks, [], plugin);
+    }
 });
