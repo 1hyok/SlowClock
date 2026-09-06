@@ -50,6 +50,9 @@ class AlarmTriggerService : Service() {
         /** 울리는 알람을 지금 멈추고 몇 분 뒤에 다시 울리게 한다(#129). */
         const val ACTION_SNOOZE = "com.example.slowclock.action.SNOOZE_RINGING"
 
+        /** 겹쳐서 밀려난 알람을 미룬다. 지금 울리는 알람과 무관하다(#167). */
+        const val ACTION_SNOOZE_MISSED = "com.example.slowclock.action.SNOOZE_MISSED"
+
         const val EXTRA_TITLE = "title"
         const val EXTRA_DESC = "desc"
         const val EXTRA_FULL_SCREEN = "isFullScreen"
@@ -70,6 +73,12 @@ class AlarmTriggerService : Service() {
 
         /** 겹친 알람의 알림 자리. 알람 자리 번호를 더해 서로 덮지 않게 한다. */
         private const val MISSED_NOTIFICATION_ID_BASE = 1000
+
+        /** 자리 번호가 실려 오지 않은 요청. 옛 판에서 걸린 알림의 버튼이다. */
+        private const val UNKNOWN_REQUEST_CODE = Int.MIN_VALUE
+
+        /** 밀려난 알람의 다시 알림 자리. 울리는 쪽(0·1·2)과 겹치지 않게 띄워 둔다. */
+        private const val MISSED_SNOOZE_REQUEST_BASE = 10_000
 
         /** 종전 채널. 오디오 속성이 없어 알람 소리로 취급되지 않았다. 남아 있으면 지운다. */
         private const val LEGACY_CHANNEL_ID = "alarm_notification_channel"
@@ -106,10 +115,14 @@ class AlarmTriggerService : Service() {
                 .putExtra(EXTRA_SNOOZE_COUNT, snoozeCount)
 
         /** 울리는 알람을 끈다. */
-        fun dismissIntent(context: Context): Intent =
+        fun dismissIntent(
+            context: Context,
+            requestCode: Int,
+        ): Intent =
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
                 .setAction(ACTION_DISMISS)
+                .putExtra(EXTRA_REQUEST_CODE, requestCode)
 
         /**
          * 서비스가 알람 울리기를 끝냈다. 전체 화면이 떠 있으면 이 방송을 받아 함께 닫는다.
@@ -119,10 +132,14 @@ class AlarmTriggerService : Service() {
         const val ACTION_RINGING_FINISHED = "com.example.slowclock.action.ALARM_RINGING_FINISHED"
 
         /** 울리는 알람을 미룬다. 다시 걸 시각과 횟수 상한은 [SnoozePolicy] 가 정한다. */
-        fun snoozeIntent(context: Context): Intent =
+        fun snoozeIntent(
+            context: Context,
+            requestCode: Int,
+        ): Intent =
             Intent(context, AlarmTriggerService::class.java)
                 .setClass(context, AlarmTriggerService::class.java)
                 .setAction(ACTION_SNOOZE)
+                .putExtra(EXTRA_REQUEST_CODE, requestCode)
     }
 
     /**
@@ -158,12 +175,17 @@ class AlarmTriggerService : Service() {
         startId: Int,
     ): Int {
         if (intent?.action == ACTION_DISMISS) {
-            stopRinging("사용자가 껐다")
+            if (isForCurrentRinging(intent)) stopRinging("사용자가 껐다")
             return START_NOT_STICKY
         }
 
         if (intent?.action == ACTION_SNOOZE) {
-            snoozeRinging()
+            if (isForCurrentRinging(intent)) snoozeRinging()
+            return START_NOT_STICKY
+        }
+
+        if (intent?.action == ACTION_SNOOZE_MISSED) {
+            snoozeMissed(intent)
             return START_NOT_STICKY
         }
 
@@ -204,8 +226,9 @@ class AlarmTriggerService : Service() {
      * 덮어써 사용자에게는 「알람이 하나 안 울렸다」 로만 보인다. 소리와 진동은 어차피 한 벌이면
      * 충분하므로 옮긴 알림은 조용하고, 어떤 일정이 지나갔는지 보여 주는 몫만 한다(#131).
      */
+
     private fun keepAsSeparateNotification(previous: Ringing) {
-        val notification =
+        val builder =
             NotificationCompat
                 .Builder(this, MISSED_CHANNEL_ID)
                 .setSmallIcon(R.drawable.baseline_access_alarm_24)
@@ -215,11 +238,44 @@ class AlarmTriggerService : Service() {
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
-                .build()
+
+        // 밀려난 알람에도 다시 알림을 남긴다. 없으면 그 일정만 다시 울릴 기회가 아예 없어,
+        // 겹친 순간에 뒤에 온 알람이 앞의 것을 통째로 삼킨 셈이 된다(#167).
+        if (SnoozePolicy.canSnooze(previous.snoozeCount)) {
+            builder.addAction(
+                R.drawable.baseline_access_alarm_24,
+                getString(R.string.alarm_snooze_action, SnoozePolicy.MINUTES),
+                PendingIntent.getService(
+                    this,
+                    // 자리 번호로 갈라 두어야 겹친 알람마다 자기 것을 미룬다.
+                    MISSED_SNOOZE_REQUEST_BASE + previous.requestCode,
+                    snoozeMissedIntent(previous),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+        }
+        val notification = builder.build()
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         // 자리 번호로 갈라 두어야 두 알람이 서로 덮지 않는다.
         runCatching { manager.notify(MISSED_NOTIFICATION_ID_BASE + previous.requestCode, notification) }
     }
+
+    /**
+     * 겹쳐서 밀려난 알람을 미루라는 요청. 서비스가 그 알람을 더 이상 들고 있지 않으므로
+     * 필요한 값을 전부 실어 보낸다(#167).
+     *
+     * [Ringing] 이 이 클래스 안에만 있는 타입이라 companion 이 아니라 여기 둔다.
+     */
+    private fun snoozeMissedIntent(missed: Ringing): Intent =
+        Intent(this, AlarmTriggerService::class.java)
+            .setClass(this, AlarmTriggerService::class.java)
+            .setAction(ACTION_SNOOZE_MISSED)
+            .putExtra(EXTRA_TITLE, missed.title)
+            .putExtra(EXTRA_DESC, missed.desc)
+            .putExtra(EXTRA_FULL_SCREEN, missed.isFullScreen)
+            .putExtra(EXTRA_SCHEDULE_ID, missed.scheduleId)
+            .putExtra(EXTRA_REQUEST_CODE, missed.requestCode)
+            .putExtra(EXTRA_SNOOZE_COUNT, missed.snoozeCount)
 
     private fun startForegroundCompat(notification: Notification) {
         // 알람이 울리는 동안 소리를 재생하므로 미디어 재생 타입이다. 종전의 shortService 는
@@ -240,7 +296,7 @@ class AlarmTriggerService : Service() {
             PendingIntent.getService(
                 this,
                 0,
-                dismissIntent(this),
+                dismissIntent(this, current.requestCode),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
@@ -274,7 +330,7 @@ class AlarmTriggerService : Service() {
                 PendingIntent.getService(
                     this,
                     2,
-                    snoozeIntent(this),
+                    snoozeIntent(this, current.requestCode),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 ),
             )
@@ -290,6 +346,8 @@ class AlarmTriggerService : Service() {
                     .putExtra(EXTRA_TITLE, title)
                     .putExtra(EXTRA_DESC, desc)
                     .putExtra(EXTRA_SNOOZE_COUNT, current.snoozeCount)
+                    // 화면이 되돌려 줄 신원. 겹친 알람에서 조작 대상이 어긋나지 않게 한다(#167).
+                    .putExtra(EXTRA_REQUEST_CODE, current.requestCode)
             builder.setFullScreenIntent(
                 PendingIntent.getActivity(
                     this,
@@ -378,6 +436,48 @@ class AlarmTriggerService : Service() {
     private fun releaseWakeLock() {
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
+    }
+
+    /**
+     * 이 요청이 지금 울리는 알람에 대한 것인가.
+     *
+     * 알람이 겹치면 뒤에 온 것이 ringing 을 덮는다. 그런데 화면은 잠금이 풀린 상태에서 전체
+     * 화면이 안 뜨면 onNewIntent 를 못 받아 앞 알람 제목을 그대로 보여 준다. 그 상태에서 신원
+     * 없는 요청을 그대로 받으면, 사용자가 화면에서 본 일정이 아니라 마지막에 도착한 알람이
+     * 미뤄지거나 꺼진다(#167).
+     *
+     * 자리 번호가 없는 옛 알림에서 온 요청은 지금 울리는 것에 대한 것으로 본다. 그러지 않으면
+     * 그 버튼이 아무 일도 하지 않는 버튼이 된다.
+     */
+    private fun isForCurrentRinging(intent: Intent): Boolean {
+        val current = ringing ?: return false
+        val requested = intent.getIntExtra(EXTRA_REQUEST_CODE, UNKNOWN_REQUEST_CODE)
+        if (requested == UNKNOWN_REQUEST_CODE || requested == current.requestCode) return true
+        Log.w(TAG, "지금 울리는 알람이 아니라 무시한다: 요청=$requested 현재=${current.requestCode}")
+        return false
+    }
+
+    /**
+     * 겹쳐서 밀려난 알람을 미룬다. 지금 울리는 알람은 건드리지 않는다.
+     *
+     * 이 요청은 조용한 「겹친 알람」 알림에서 온다. 서비스가 그 알람을 더 이상 들고 있지 않으므로
+     * 필요한 값이 요청에 전부 실려 온다(#167).
+     */
+    private fun snoozeMissed(intent: Intent) {
+        val snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
+        if (!SnoozePolicy.canSnooze(snoozeCount)) return
+        val requestCode = intent.getIntExtra(EXTRA_REQUEST_CODE, 0)
+        ScheduleAlarmHelper.scheduleSnooze(
+            context = this,
+            baseRequestCode = requestCode,
+            scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID).orEmpty(),
+            title = intent.getStringExtra(EXTRA_TITLE) ?: "알람",
+            desc = intent.getStringExtra(EXTRA_DESC).orEmpty(),
+            isFullScreen = intent.getBooleanExtra(EXTRA_FULL_SCREEN, true),
+            snoozeCount = snoozeCount + 1,
+        )
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        runCatching { manager.cancel(MISSED_NOTIFICATION_ID_BASE + requestCode) }
     }
 
     /**

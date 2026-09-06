@@ -126,7 +126,7 @@ class AlarmFullScreenActivity : Activity() {
             snoozeButton.text = getString(R.string.alarm_snooze_action, SnoozePolicy.MINUTES)
             snoozeButton.visibility = View.VISIBLE
             snoozeButton.setOnClickListener {
-                startService(AlarmTriggerService.snoozeIntent(this))
+                startService(AlarmTriggerService.snoozeIntent(this, ringingRequestCode()))
                 finish()
             }
         } else {
@@ -135,9 +135,17 @@ class AlarmFullScreenActivity : Activity() {
         }
     }
 
+    /**
+     * 이 화면이 지금 보여 주는 알람의 자리 번호.
+     *
+     * 알람이 겹쳤을 때 화면에 보이는 일정과 서비스가 들고 있는 일정이 어긋날 수 있다. 화면이
+     * 자기가 받은 값을 그대로 되돌려 주면 서비스가 그 어긋남을 알아챈다(#167).
+     */
+    private fun ringingRequestCode(): Int = intent.getIntExtra(AlarmTriggerService.EXTRA_REQUEST_CODE, 0)
+
     /** 소리와 진동은 서비스가 낸다. 여기서는 끄라고만 알린다(#122). */
     private fun dismissAlarm() {
-        startService(AlarmTriggerService.dismissIntent(this))
+        startService(AlarmTriggerService.dismissIntent(this, ringingRequestCode()))
     }
 
     /** 화면이 안 보이면 시계를 멈춘다. 보이지 않는 화면을 1초마다 다시 그릴 이유가 없다(#131). */
