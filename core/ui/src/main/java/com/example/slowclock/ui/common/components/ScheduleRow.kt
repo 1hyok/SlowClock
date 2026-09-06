@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -65,18 +66,10 @@ fun ScheduleRow(
             MaterialTheme.colorScheme.onSurface
         }
 
-    Surface(
-        onClick = onClick ?: {},
-        enabled = onClick != null,
+    ScheduleRowSurface(
+        onClick = onClick,
+        completed = completed,
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color =
-            if (completed) {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            } else {
-                MaterialTheme.colorScheme.surface
-            },
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Row(
             modifier =
@@ -86,7 +79,7 @@ fun ScheduleRow(
                     .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.width(64.dp)) {
+            Column(modifier = Modifier.widthIn(min = 64.dp)) {
                 Text(
                     text = meridiem,
                     style = MaterialTheme.typography.labelSmall,
@@ -94,6 +87,7 @@ fun ScheduleRow(
                 )
                 Text(
                     text = clock,
+                    maxLines = 1,
                     style = MaterialTheme.typography.titleMedium,
                     color = titleColor,
                 )
@@ -152,5 +146,28 @@ fun ScheduleRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ScheduleRowSurface(
+    onClick: (() -> Unit)?,
+    completed: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val color = if (completed) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface
+    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    if (onClick == null) {
+        Surface(modifier = modifier, shape = MaterialTheme.shapes.medium, color = color, border = border, content = content)
+    } else {
+        Surface(
+            onClick = onClick,
+            modifier = modifier,
+            shape = MaterialTheme.shapes.medium,
+            color = color,
+            border = border,
+            content = content,
+        )
     }
 }
