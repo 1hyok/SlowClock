@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -42,6 +43,7 @@ class MainViewModel
         private val alarmScheduler: AlarmScheduler,
     ) : MviViewModel<MainIntent, MainUiState, MainReducerEvent>(MainUiState()) {
         private var scheduleJob: Job? = null
+        private var deleteJob: Job? = null
 
         /** 지금 구독이 보고 있는 날. 날이 바뀌면 다시 건다(#171). */
         private var subscribedDay: String = ""
@@ -71,9 +73,17 @@ class MainViewModel
                 }
 
                 MainIntent.Retry -> {
+                    if (!currentState.canRetry) return
+                    val failedDelete = currentState.failedDelete
                     dispatch(MainReducerEvent.ErrorConsumed)
-                    observeTodaySchedules()
-                    authRepository.currentUid?.let(::syncAlarms)
+                    if (failedDelete != null) {
+                        if (failedDelete.userId == currentState.currentUserId) {
+                            deleteSchedule(failedDelete.schedule)
+                        }
+                    } else {
+                        observeTodaySchedules()
+                        authRepository.currentUid?.let(::syncAlarms)
+                    }
                 }
 
                 is MainIntent.ToggleComplete -> {
@@ -91,6 +101,7 @@ class MainViewModel
                 }
 
                 is MainIntent.RequestDelete -> {
+                    if (currentState.pendingDelete != null) return
                     currentState.todaySchedules
                         .find { it.id == intent.scheduleId }
                         ?.let { dispatch(MainReducerEvent.DeleteRequested(it)) }
@@ -101,7 +112,7 @@ class MainViewModel
                 }
 
                 MainIntent.ConfirmDelete -> {
-                    deleteSchedule()
+                    currentState.scheduleToDelete?.let(::deleteSchedule)
                 }
 
                 is MainIntent.ToggleSharedReminderComplete -> {
@@ -133,6 +144,14 @@ class MainViewModel
                 MainIntent.ConsumeExactAlarmSettingsRequest -> {
                     dispatch(MainReducerEvent.ExactAlarmSettingsRequestConsumed)
                 }
+
+                MainIntent.ExactAlarmSettingsUnavailable -> {
+                    dispatch(MainReducerEvent.ExactAlarmSettingsFailed)
+                }
+
+                MainIntent.ConsumeUserMessage -> {
+                    dispatch(MainReducerEvent.UserMessageConsumed)
+                }
             }
         }
 
@@ -142,7 +161,17 @@ class MainViewModel
         ): MainUiState =
             when (event) {
                 is MainReducerEvent.UserResolved -> {
-                    state.copy(currentUserId = event.userId, isSignedInKnown = true)
+                    if (state.currentUserId != event.userId) {
+                        // 직접 계정 전환에도 이전 계정의 삭제·재시도와 목록을 넘기지 않는다.
+                        MainUiState(
+                            currentUserId = event.userId,
+                            isSignedInKnown = true,
+                            showExactAlarmNotice = state.showExactAlarmNotice,
+                            openExactAlarmSettings = state.openExactAlarmSettings,
+                        )
+                    } else {
+                        state.copy(isSignedInKnown = true)
+                    }
                 }
 
                 MainReducerEvent.SignedOut -> {
@@ -160,19 +189,29 @@ class MainViewModel
                         canRetry = false,
                         selectedScheduleForDetail = null,
                         scheduleToDelete = null,
+                        pendingDelete = null,
+                        failedDelete = null,
                     )
                 }
 
                 MainReducerEvent.Loading -> {
-                    state.copy(isLoading = true, error = null, canRetry = false)
+                    state.copy(
+                        isLoading = true,
+                        error = if (state.failedDelete != null) state.error else null,
+                        canRetry = state.failedDelete != null,
+                    )
                 }
 
                 is MainReducerEvent.SchedulesLoaded -> {
-                    state.withSchedules(event.schedules, event.nowMillis).copy(isLoading = false, error = null)
+                    state.withSchedules(event.schedules, event.nowMillis).copy(
+                        isLoading = false,
+                        error = if (state.failedDelete != null) state.error else null,
+                        canRetry = state.failedDelete != null,
+                    )
                 }
 
                 is MainReducerEvent.LoadFailed -> {
-                    state.copy(isLoading = false, error = event.error, canRetry = event.canRetry)
+                    state.copy(isLoading = false, error = event.error, canRetry = event.canRetry, failedDelete = null)
                 }
 
                 is MainReducerEvent.CompletionToggled -> {
@@ -198,14 +237,32 @@ class MainViewModel
                     state.copy(scheduleToDelete = null)
                 }
 
-                MainReducerEvent.Deleting -> {
-                    state.copy(isLoading = true, error = null, scheduleToDelete = null)
+                is MainReducerEvent.Deleting -> {
+                    state.copy(
+                        error = null,
+                        canRetry = false,
+                        scheduleToDelete = null,
+                        pendingDelete = event.operation,
+                        failedDelete = null,
+                    )
+                }
+
+                is MainReducerEvent.DeleteFailed -> {
+                    if (state.pendingDelete == event.operation) {
+                        state.copy(pendingDelete = null, failedDelete = event.operation, error = event.error, canRetry = true)
+                    } else {
+                        state
+                    }
                 }
 
                 is MainReducerEvent.Deleted -> {
-                    state
-                        .withSchedules(state.todaySchedules.filter { it.id != event.scheduleId }, event.nowMillis)
-                        .copy(isLoading = false)
+                    if (state.pendingDelete == event.operation) {
+                        state
+                            .withSchedules(state.todaySchedules.filter { it.id != event.operation.schedule.id }, event.nowMillis)
+                            .copy(pendingDelete = null)
+                    } else {
+                        state
+                    }
                 }
 
                 is MainReducerEvent.SharedRemindersLoaded -> {
@@ -226,7 +283,7 @@ class MainViewModel
                 }
 
                 MainReducerEvent.ErrorConsumed -> {
-                    state.copy(error = null, canRetry = false)
+                    state.copy(error = null, canRetry = false, failedDelete = null)
                 }
 
                 is MainReducerEvent.AlarmControlsChecked -> {
@@ -256,6 +313,16 @@ class MainViewModel
                 MainReducerEvent.ExactAlarmSettingsRequestConsumed -> {
                     state.copy(openExactAlarmSettings = null)
                 }
+
+                MainReducerEvent.ExactAlarmSettingsFailed -> {
+                    state.copy(
+                        userMessage = "설정 화면을 열 수 없습니다. 기기 설정에서 느린 시계의 알람 권한을 확인해주세요",
+                    )
+                }
+
+                MainReducerEvent.UserMessageConsumed -> {
+                    state.copy(userMessage = null)
+                }
             }
 
         private fun MainUiState.withSchedules(
@@ -284,6 +351,8 @@ class MainViewModel
                     alarmSyncJob?.cancel()
                     alarmSyncJob = null
                     alarmSyncedFor = null
+                    deleteJob?.cancel()
+                    deleteJob = null
                     dispatch(MainReducerEvent.UserResolved(uid.orEmpty()))
                     if (uid != null) {
                         observeTodaySchedules()
@@ -414,22 +483,28 @@ class MainViewModel
             }
         }
 
-        private fun deleteSchedule() {
-            val schedule = currentState.scheduleToDelete ?: return
-            dispatch(MainReducerEvent.Deleting)
-            viewModelScope.launch {
-                when (val result = scheduleRepository.deleteSchedule(schedule.id)) {
-                    is ScheduleRepository.ScheduleResult.Success -> {
-                        runCatching { alarmScheduler.cancel(schedule) }.onFailure { Log.e(TAG, "알람 취소 실패", it) }
-                        dispatch(MainReducerEvent.Deleted(schedule.id, System.currentTimeMillis()))
-                    }
+        private fun deleteSchedule(schedule: Schedule) {
+            val uid = currentState.currentUserId
+            if (uid.isBlank() || authRepository.currentUid != uid || currentState.pendingDelete != null) return
+            val operation = DeleteOperation(schedule, uid, UUID.randomUUID().toString())
+            dispatch(MainReducerEvent.Deleting(operation))
+            deleteJob =
+                viewModelScope.launch {
+                    val result = scheduleRepository.deleteSchedule(schedule.id)
+                    currentCoroutineContext().ensureActive()
+                    if (currentState.pendingDelete != operation || authRepository.currentUid != uid) return@launch
+                    when (result) {
+                        is ScheduleRepository.ScheduleResult.Success -> {
+                            runCatching { alarmScheduler.cancel(schedule) }.onFailure { Log.e(TAG, "알람 취소 실패", it) }
+                            dispatch(MainReducerEvent.Deleted(operation, System.currentTimeMillis()))
+                        }
 
-                    is ScheduleRepository.ScheduleResult.Error -> {
-                        Log.e(TAG, "일정 삭제 실패: ${result.error.message}")
-                        dispatch(MainReducerEvent.LoadFailed(result.error, canRetry = true))
+                        is ScheduleRepository.ScheduleResult.Error -> {
+                            Log.e(TAG, "일정 삭제 실패: ${result.error.message}")
+                            dispatch(MainReducerEvent.DeleteFailed(operation, result.error))
+                        }
                     }
                 }
-            }
         }
 
         private fun toggleSharedReminderComplete(scheduleId: String) {

@@ -452,4 +452,147 @@ class MainViewModelTest {
 
             verify(exactly = 0) { scheduleRepository.observeSchedulesForDate(any(), any()) }
         }
+
+    @Test
+    fun `삭제 실패는 목록 갱신 뒤에도 같은 삭제를 재시도한다`() =
+        runTest {
+            todaySchedules.value = listOf(soon)
+            coEvery { scheduleRepository.deleteSchedule("s1") } returnsMany
+                listOf(
+                    ScheduleRepository.ScheduleResult.Error(AppError.NetworkError),
+                    ScheduleRepository.ScheduleResult.Success(Unit),
+                )
+            val viewModel = createViewModel()
+            viewModel.onIntent(MainIntent.RequestDelete("s1"))
+            viewModel.onIntent(MainIntent.ConfirmDelete)
+            assertEquals(
+                "s1",
+                viewModel.uiState.value.failedDelete
+                    ?.schedule
+                    ?.id,
+            )
+            verify(exactly = 0) { alarmScheduler.cancel(any()) }
+
+            todaySchedules.value = listOf(soon, done)
+            assertEquals(AppError.NetworkError, viewModel.uiState.value.error)
+            assertTrue(viewModel.uiState.value.canRetry)
+            viewModel.onIntent(MainIntent.Retry)
+
+            coVerify(exactly = 2) { scheduleRepository.deleteSchedule("s1") }
+            verify(exactly = 1) { alarmScheduler.cancel(soon) }
+            assertNull(viewModel.uiState.value.failedDelete)
+            assertNull(viewModel.uiState.value.pendingDelete)
+            assertEquals(
+                listOf("s2"),
+                viewModel.uiState.value.todaySchedules
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun `삭제 중 목록 응답과 중복 확인이 와도 요청은 한 번이다`() =
+        runTest {
+            todaySchedules.value = listOf(soon)
+            val result = CompletableDeferred<ScheduleRepository.ScheduleResult<Unit>>()
+            coEvery { scheduleRepository.deleteSchedule("s1") } coAnswers { result.await() }
+            val viewModel = createViewModel()
+            viewModel.onIntent(MainIntent.RequestDelete("s1"))
+            viewModel.onIntent(MainIntent.ConfirmDelete)
+            todaySchedules.value = listOf(soon, done)
+            viewModel.onIntent(MainIntent.RequestDelete("s1"))
+            viewModel.onIntent(MainIntent.RequestDelete("s2"))
+            viewModel.onIntent(MainIntent.ConfirmDelete)
+            assertNotNull(viewModel.uiState.value.pendingDelete)
+            assertNull(viewModel.uiState.value.scheduleToDelete)
+            coVerify(exactly = 1) { scheduleRepository.deleteSchedule("s1") }
+            coVerify(exactly = 0) { scheduleRepository.deleteSchedule("s2") }
+            result.complete(ScheduleRepository.ScheduleResult.Success(Unit))
+            assertNull(viewModel.uiState.value.pendingDelete)
+            assertNull(viewModel.uiState.value.scheduleToDelete)
+        }
+
+    @Test
+    fun `삭제 실패를 닫으면 늦은 Retry 가 삭제를 다시 하지 않는다`() =
+        runTest {
+            todaySchedules.value = listOf(soon)
+            coEvery { scheduleRepository.deleteSchedule("s1") } returns ScheduleRepository.ScheduleResult.Error(AppError.NetworkError)
+            val viewModel = createViewModel()
+            viewModel.onIntent(MainIntent.RequestDelete("s1"))
+            viewModel.onIntent(MainIntent.ConfirmDelete)
+            viewModel.onIntent(MainIntent.ConsumeError)
+            viewModel.onIntent(MainIntent.Retry)
+            assertNull(viewModel.uiState.value.failedDelete)
+            coVerify(exactly = 1) { scheduleRepository.deleteSchedule("s1") }
+        }
+
+    @Test
+    fun `계정이 바뀐 뒤 이전 삭제 응답은 새 목록과 알람을 건드리지 않는다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            every { authRepository.currentUid } answers { uid.value }
+            todaySchedules.value = listOf(soon)
+            val result = CompletableDeferred<ScheduleRepository.ScheduleResult<Unit>>()
+            coEvery { scheduleRepository.deleteSchedule("s1") } coAnswers { withContext(NonCancellable) { result.await() } }
+            val viewModel = createViewModel()
+            viewModel.onIntent(MainIntent.RequestDelete("s1"))
+            viewModel.onIntent(MainIntent.ConfirmDelete)
+
+            uid.value = "uid-2"
+            val other = soon.copy(title = "새 계정 일정", userId = "uid-2")
+            todaySchedules.value = listOf(other)
+            result.complete(ScheduleRepository.ScheduleResult.Success(Unit))
+
+            assertEquals(listOf(other), viewModel.uiState.value.todaySchedules)
+            assertNull(viewModel.uiState.value.pendingDelete)
+            assertNull(viewModel.uiState.value.failedDelete)
+            assertNull(viewModel.uiState.value.error)
+            verify(exactly = 0) { alarmScheduler.cancel(any()) }
+        }
+
+    @Test
+    fun `삭제 실패 뒤 계정 전환은 재시도 대상을 지운다`() =
+        runTest {
+            val uid = MutableStateFlow<String?>("uid-1")
+            every { authRepository.observeCurrentUid() } returns uid
+            every { authRepository.currentUid } answers { uid.value }
+            todaySchedules.value = listOf(soon)
+            coEvery { scheduleRepository.deleteSchedule("s1") } returns ScheduleRepository.ScheduleResult.Error(AppError.NetworkError)
+            val viewModel = createViewModel()
+            viewModel.onIntent(MainIntent.RequestDelete("s1"))
+            viewModel.onIntent(MainIntent.ConfirmDelete)
+            uid.value = "uid-2"
+            viewModel.onIntent(MainIntent.Retry)
+            assertNull(viewModel.uiState.value.failedDelete)
+            assertFalse(viewModel.uiState.value.canRetry)
+            coVerify(exactly = 1) { scheduleRepository.deleteSchedule("s1") }
+        }
+
+    @Test
+    fun `반복 일정 완료와 취소는 표시된 발생일을 전달한다`() =
+        runTest {
+            val occurrence = soon.copy(occurrenceDate = "2026-09-06")
+            todaySchedules.value = listOf(occurrence)
+            coEvery { scheduleRepository.markScheduleAsCompleted("s1", any(), "2026-09-06") } returns
+                ScheduleRepository.ScheduleResult.Success(Unit)
+            val viewModel = createViewModel()
+            viewModel.onIntent(MainIntent.ToggleComplete("s1"))
+            viewModel.onIntent(MainIntent.ToggleComplete("s1"))
+            coVerify(exactly = 1) { scheduleRepository.markScheduleAsCompleted("s1", true, "2026-09-06") }
+            coVerify(exactly = 1) { scheduleRepository.markScheduleAsCompleted("s1", false, "2026-09-06") }
+        }
+
+    @Test
+    fun `알람 설정을 열지 못하면 소비할 수 있는 안내를 낸다`() =
+        runTest {
+            val viewModel = createViewModel()
+            viewModel.onIntent(MainIntent.ExactAlarmSettingsUnavailable)
+            assertTrue(
+                viewModel.uiState.value.userMessage
+                    .orEmpty()
+                    .contains("설정 화면을 열 수 없습니다"),
+            )
+            viewModel.onIntent(MainIntent.ConsumeUserMessage)
+            assertNull(viewModel.uiState.value.userMessage)
+        }
 }

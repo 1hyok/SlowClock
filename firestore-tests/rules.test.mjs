@@ -25,6 +25,7 @@ import {
     setDoc,
     updateDoc,
     where,
+    writeBatch,
 } from "firebase/firestore";
 
 const OWNER = "uid-owner";
@@ -180,12 +181,13 @@ describe("publicProfiles", () => {
     });
 
     it("계정을 삭제할 때 본인 공개 프로필도 지운다", async () => {
-        // UserRepository.deleteUserDocument 와 같은 순서다. 사용자 문서가 없어도 본인 확인은
-        // 인증 uid 로 해야 하며, 삭제에는 request.resource 의 새 필드가 없다.
+        // UserRepository.deleteUserDocument 와 같은 원자 batch다.
         const db = owner();
-        await assertSucceeds(deleteDoc(doc(db, "shareCodes", SHARE_CODE)));
-        await assertSucceeds(deleteDoc(doc(db, "users", OWNER)));
-        await assertSucceeds(deleteDoc(doc(db, "publicProfiles", OWNER)));
+        const batch = writeBatch(db);
+        batch.delete(doc(db, "shareCodes", SHARE_CODE));
+        batch.delete(doc(db, "users", OWNER));
+        batch.delete(doc(db, "publicProfiles", OWNER));
+        await assertSucceeds(batch.commit());
         assert.equal((await getDoc(doc(db, "publicProfiles", OWNER))).exists(), false);
         await assertSucceeds(deleteDoc(doc(db, "publicProfiles", OWNER)));
     });
@@ -246,8 +248,131 @@ describe("shareCodes", () => {
     });
 
     it("본인 코드만 반납한다", async () => {
-        await assertSucceeds(deleteDoc(doc(owner(), "shareCodes", SHARE_CODE)));
         await assertFails(deleteDoc(doc(other(), "shareCodes", SHARE_CODE)));
+        await assertSucceeds(deleteDoc(doc(owner(), "shareCodes", SHARE_CODE)));
+    });
+});
+
+describe("공유 등록부 복구와 삭제 재시도", () => {
+    it("기존 소유자는 동일한 값으로만 등록부를 확인한다", async () => {
+        const ref = doc(owner(), "shareCodes", SHARE_CODE);
+        await assertSucceeds(setDoc(ref, { userId: OWNER }));
+        await assertFails(setDoc(ref, { userId: OTHER }));
+        await assertFails(setDoc(ref, { userId: OWNER, extra: true }));
+        await assertFails(getDoc(ref));
+        await assertFails(getDocs(collection(owner(), "shareCodes")));
+    });
+
+    it("등록부가 없는 이전 계정은 본인 코드를 복구한 뒤 공유 일정을 쓴다", async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await deleteDoc(doc(context.firestore(), "shareCodes", SHARE_CODE));
+        });
+        const db = owner();
+        await assertFails(updateDoc(doc(db, "schedules", "shared-1"), { title: "수정" }));
+        await assertSucceeds(setDoc(doc(db, "shareCodes", SHARE_CODE), { userId: OWNER }));
+        await assertSucceeds(updateDoc(doc(db, "schedules", "shared-1"), { title: "수정" }));
+    });
+
+    it("없는 등록부 삭제는 로그인한 재시도에만 허용한다", async () => {
+        await assertSucceeds(deleteDoc(doc(owner(), "shareCodes", "MISSING")));
+        await assertSucceeds(deleteDoc(doc(owner(), "shareCodes", "MISSING")));
+        await assertFails(deleteDoc(doc(anonymous(), "shareCodes", "MISSING")));
+    });
+
+    it("등록부가 먼저 삭제된 계정도 나머지 문서를 한 번에 지우고 재시도한다", async () => {
+        const db = owner();
+        await assertSucceeds(deleteDoc(doc(db, "shareCodes", SHARE_CODE)));
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            const batch = writeBatch(db);
+            batch.delete(doc(db, "shareCodes", SHARE_CODE));
+            batch.delete(doc(db, "users", OWNER));
+            batch.delete(doc(db, "publicProfiles", OWNER));
+            await assertSucceeds(batch.commit());
+        }
+        assert.equal((await getDoc(doc(db, "users", OWNER))).exists(), false);
+        assert.equal((await getDoc(doc(db, "publicProfiles", OWNER))).exists(), false);
+    });
+
+    it("등록부 삭제가 거절되면 사용자와 공개 프로필도 보존한다", async () => {
+        const db = owner();
+        const batch = writeBatch(db);
+        batch.delete(doc(db, "shareCodes", "ZZZ999"));
+        batch.delete(doc(db, "users", OWNER));
+        batch.delete(doc(db, "publicProfiles", OWNER));
+        await assertFails(batch.commit());
+        assert.equal((await getDoc(doc(db, "users", OWNER))).exists(), true);
+        assert.equal((await getDoc(doc(db, "publicProfiles", OWNER))).exists(), true);
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            assert.equal((await getDoc(doc(context.firestore(), "shareCodes", "ZZZ999"))).data().userId, OTHER);
+        });
+    });
+});
+
+describe("공유 일정의 코드 소유권", () => {
+    for (const sharedCode of ["", undefined]) {
+        it(`비공유 일정(${String(sharedCode)})은 등록부 없이 저장한다`, async () => {
+            const data = { userId: STRANGER, title: "비공유" };
+            if (sharedCode !== undefined) data.sharedCode = sharedCode;
+            const ref = doc(stranger(), "schedules", "private-new");
+            await assertSucceeds(setDoc(ref, data));
+            await assertSucceeds(updateDoc(ref, { title: "수정" }));
+        });
+    }
+
+    it("본인 등록부의 코드로 생성하고 비공유 일정을 채운다", async () => {
+        const db = owner();
+        await assertSucceeds(setDoc(doc(db, "schedules", "shared-new"), {
+            userId: OWNER, title: "공유", sharedCode: SHARE_CODE,
+        }));
+        await assertSucceeds(updateDoc(doc(db, "schedules", "own-1"), { sharedCode: SHARE_CODE }));
+        await assertSucceeds(updateDoc(doc(db, "schedules", "shared-1"), { title: "수정" }));
+    });
+
+    for (const sharedCode of ["ZZZ999", "MISSING", null, 123]) {
+        it(`소유권 없는 코드(${String(sharedCode)})로 생성하거나 수정하지 못한다`, async () => {
+            const db = owner();
+            await assertFails(setDoc(doc(db, "schedules", "invalid-new"), {
+                userId: OWNER, title: "공유", sharedCode,
+            }));
+            await assertFails(updateDoc(doc(db, "schedules", "own-1"), { sharedCode }));
+        });
+    }
+
+    it("같은 코드의 일정 batch는 등록부 조회 한도 안에서 채운다", async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            const batch = writeBatch(context.firestore());
+            for (let i = 0; i < 30; i += 1) {
+                batch.set(doc(context.firestore(), "schedules", `backfill-${i}`), {
+                    userId: OWNER, title: "비공유 일정", sharedCode: "",
+                });
+            }
+            await batch.commit();
+        });
+        const db = owner();
+        const batch = writeBatch(db);
+        for (let i = 0; i < 30; i += 1) {
+            batch.update(doc(db, "schedules", `backfill-${i}`), { sharedCode: SHARE_CODE });
+        }
+        await assertSucceeds(batch.commit());
+        assert.equal((await getDoc(doc(db, "schedules", "backfill-29"))).data().sharedCode, SHARE_CODE);
+    });
+
+    it("사용자 문서의 코드만 바꿔서는 일정 공유 소유권을 얻지 못한다", async () => {
+        const db = owner();
+        await assertSucceeds(updateDoc(doc(db, "users", OWNER), { shareCode: "ZZZ999" }));
+        await assertFails(setDoc(doc(db, "schedules", "invalid-new"), {
+            userId: OWNER, title: "공유", sharedCode: "ZZZ999",
+        }));
+        await assertFails(updateDoc(doc(db, "schedules", "own-1"), { sharedCode: "ZZZ999" }));
+    });
+
+    it("등록부가 없어도 기존 감시자는 완료만 수정하고 소유자는 삭제할 수 있다", async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await deleteDoc(doc(context.firestore(), "shareCodes", SHARE_CODE));
+        });
+        await assertSucceeds(updateDoc(doc(other(), "schedules", "shared-1"), { completed: true }));
+        await assertFails(updateDoc(doc(other(), "schedules", "shared-1"), { title: "수정" }));
+        await assertSucceeds(deleteDoc(doc(owner(), "schedules", "shared-1")));
     });
 });
 

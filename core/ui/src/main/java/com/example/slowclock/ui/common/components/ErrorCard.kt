@@ -2,6 +2,7 @@ package com.example.slowclock.ui.common.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Block
@@ -32,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.slowclock.util.AppError
@@ -107,33 +110,39 @@ fun ErrorCard(
                 textAlign = TextAlign.Center,
             )
 
-            if (canRetry && onRetry != null) {
+            if (onDismiss != null || (canRetry && onRetry != null)) {
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val actionMinWidth = 144.dp * LocalDensity.current.fontScale
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     if (onDismiss != null) {
                         OutlinedButton(
                             onClick = onDismiss,
                             shape = MaterialTheme.shapes.small,
-                            modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                            modifier = Modifier.widthIn(min = actionMinWidth).weight(1f).heightIn(min = 56.dp),
                         ) {
                             Text(text = "닫기", style = MaterialTheme.typography.labelLarge)
                         }
                     }
 
-                    Button(
-                        onClick = onRetry,
-                        shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError,
-                            ),
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "다시 시도", style = MaterialTheme.typography.labelLarge)
+                    if (canRetry && onRetry != null) {
+                        Button(
+                            onClick = onRetry,
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.widthIn(min = actionMinWidth).weight(1f).heightIn(min = 56.dp),
+                            colors =
+                                ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = MaterialTheme.colorScheme.onError,
+                                ),
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "다시 시도", style = MaterialTheme.typography.labelLarge)
+                        }
                     }
                 }
             }

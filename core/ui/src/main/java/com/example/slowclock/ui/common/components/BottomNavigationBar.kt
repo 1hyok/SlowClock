@@ -46,12 +46,12 @@ fun BottomNavigationBar(
                         indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                     ),
                 icon = { Icon(item.icon, contentDescription = null) },
-                // 글꼴을 키우면 두 줄로 흘러 옆 항목과 겹친다. 한 줄로 고정한다.
+                // 큰 글자에서도 「시간표」의 끝 글자가 잘리지 않도록 줄바꿈을 허용한다.
                 label = {
                     Text(
                         text = item.label,
                         style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
+                        maxLines = 2,
                     )
                 },
             )
