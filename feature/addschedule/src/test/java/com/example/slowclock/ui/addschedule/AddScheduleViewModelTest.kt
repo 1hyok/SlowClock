@@ -47,7 +47,11 @@ class AddScheduleViewModelTest {
     @Test
     fun `서버 저장 후 알람 실패 재시도는 같은 ID를 예약하고 서버 저장을 반복하지 않는다`() =
         runTest {
-            coEvery { scheduleRepository.addSchedule(any()) } returns ScheduleRepository.ScheduleResult.Success("saved-id")
+            coEvery { scheduleRepository.addSchedule(any()) } answers {
+                ScheduleRepository.ScheduleResult.Success(
+                    firstArg<Schedule>().copy(id = "saved-id", sharedCode = "SERVER", completed = true),
+                )
+            }
             every { alarmScheduler.schedule(any()) } throws IllegalStateException("quota")
             val viewModel = createViewModel()
             viewModel.onIntent(AddScheduleIntent.UpdateTitle("약"))
@@ -73,13 +77,24 @@ class AddScheduleViewModelTest {
             assertTrue(viewModel.uiState.value.isSaved)
             assertNull(viewModel.uiState.value.pendingAlarmSchedule)
             coVerify(exactly = 1) { scheduleRepository.addSchedule(any()) }
-            verify(exactly = 2) { alarmScheduler.schedule(match { it.id == "saved-id" && it.title == "약" }) }
+            verify(exactly = 2) {
+                alarmScheduler.schedule(
+                    match {
+                        it.id == "saved-id" && it.title == "약" && it.sharedCode == "SERVER" &&
+                            it.completed
+                    },
+                )
+            }
         }
 
     @Test
     fun `알람 실패 안내를 닫으면 저장된 일정으로 돌아가고 재저장하지 않는다`() =
         runTest {
-            coEvery { scheduleRepository.addSchedule(any()) } returns ScheduleRepository.ScheduleResult.Success("saved-id")
+            coEvery { scheduleRepository.addSchedule(any()) } answers {
+                ScheduleRepository.ScheduleResult.Success(
+                    firstArg<Schedule>().copy(id = "saved-id", sharedCode = "SERVER", completed = true),
+                )
+            }
             every { alarmScheduler.schedule(any()) } throws IllegalStateException("quota")
             val viewModel = createViewModel()
             viewModel.onIntent(AddScheduleIntent.UpdateTitle("약"))
@@ -130,7 +145,8 @@ class AddScheduleViewModelTest {
     @Test
     fun `새 일정을 저장하면 Firestore 가 준 ID 로 알람을 걸고 저장 신호를 낸다`() =
         runTest {
-            coEvery { scheduleRepository.addSchedule(any()) } returns ScheduleRepository.ScheduleResult.Success("new-id")
+            coEvery { scheduleRepository.addSchedule(any()) } answers
+                { ScheduleRepository.ScheduleResult.Success(firstArg<Schedule>().copy(id = "new-id")) }
             val scheduled = slot<Schedule>()
             justRun { alarmScheduler.schedule(capture(scheduled)) }
             val viewModel = createViewModel()
@@ -187,7 +203,7 @@ class AddScheduleViewModelTest {
     fun `저장이 실패하면 재시도 가능한 오류를 두고 Retry 가 다시 저장한다`() =
         runTest {
             coEvery { scheduleRepository.addSchedule(any()) } returns ScheduleRepository.ScheduleResult.Error(AppError.NetworkError) andThen
-                ScheduleRepository.ScheduleResult.Success("new-id")
+                ScheduleRepository.ScheduleResult.Success(Schedule(id = "new-id"))
             val viewModel = createViewModel()
 
             viewModel.onIntent(AddScheduleIntent.UpdateTitle("약 먹기"))

@@ -66,13 +66,13 @@ fun ErrorCard(
             Icon(
                 imageVector =
                     when (error) {
-                        is AppError.NetworkError -> Icons.Outlined.WifiOff
+                        is AppError.OnlineWriteError, is AppError.NetworkError -> Icons.Outlined.WifiOff
                         is AppError.TimeoutError -> Icons.Outlined.Schedule
                         is AppError.AuthError -> Icons.Outlined.Lock
                         is AppError.PermissionError -> Icons.Outlined.Block
                         is AppError.InvalidDataError -> Icons.Outlined.EditNote
                         is AppError.NotFoundError -> Icons.Outlined.SearchOff
-                        is AppError.SaveError -> Icons.Outlined.SaveAs
+                        is AppError.ScheduleConflictError, is AppError.SaveError -> Icons.Outlined.SaveAs
                         is AppError.StorageFullError -> Icons.Outlined.Storage
                         is AppError.GeneralError -> Icons.Outlined.WarningAmber
                     },
@@ -86,12 +86,13 @@ fun ErrorCard(
             Text(
                 text =
                     when (error) {
-                        is AppError.NetworkError -> "연결 문제"
+                        is AppError.OnlineWriteError, is AppError.NetworkError -> "연결 문제"
                         is AppError.TimeoutError -> "시간 초과"
                         is AppError.AuthError -> "로그인 필요"
                         is AppError.PermissionError -> "권한 없음"
                         is AppError.InvalidDataError -> "입력 오류"
                         is AppError.NotFoundError -> "찾을 수 없음"
+                        is AppError.ScheduleConflictError -> "일정 확인 필요"
                         is AppError.SaveError -> "저장 실패"
                         is AppError.StorageFullError -> "저장공간 부족"
                         is AppError.GeneralError -> "알 수 없는 오류"

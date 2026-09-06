@@ -11,6 +11,7 @@ import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Transaction
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -59,93 +60,86 @@ class ScheduleRepositoryShareCodeTest {
     }
 
     @Test
-    fun `등록부 복구가 완료되기 전에 새 일정을 쓰지 않는다`() =
+    fun `신규 일정과 등록부는 같은 commit 확인까지 성공을 반환하지 않는다`() =
         runTest {
-            val pending = TaskCompletionSource<Void>()
-            every { codeRef.set(any()) } returns pending.task
-
-            val result = async { repository.addSchedule(schedule) }
+            val f = ScheduleTransactionFixture(id = schedule.id)
+            val pending = TaskCompletionSource<Any?>()
+            var saved: Any? = null
+            every { f.firestore.runTransaction(any<Transaction.Function<Any?>>()) } answers {
+                saved = firstArg<Transaction.Function<Any?>>().apply(f.transaction)
+                pending.task
+            }
+            val result = async { f.repository.addSchedule(schedule) }
             runCurrent()
             assertFalse(result.isCompleted)
-            verify(exactly = 0) { scheduleRef.set(any()) }
-            pending.setResult(null)
-
-            assertEquals(ScheduleRepository.ScheduleResult.Success(schedule.id), result.await())
-            verify(exactly = 1) { codeRef.set(mapOf("userId" to uid)) }
-            verify(exactly = 1) { scheduleRef.set(match<Schedule> { it.sharedCode == code && it.userId == uid }) }
+            verify(exactly = 1) { f.transaction.set(f.registryRef, mapOf("userId" to uid)) }
+            verify(exactly = 1) { f.transaction.set(f.scheduleRef, any()) }
+            verify(exactly = 0) { f.registryRef.set(any()) }
+            verify(exactly = 0) { f.scheduleRef.set(any()) }
+            pending.setResult(saved)
+            assertEquals(ScheduleRepository.ScheduleResult.Success(saved), result.await())
         }
 
     @Test
-    fun `등록부 확인이 끝나야 편집을 저장한다`() =
+    fun `편집과 등록부도 같은 commit 확인까지 성공을 반환하지 않는다`() =
         runTest {
-            val pending = TaskCompletionSource<Void>()
-            every { codeRef.set(any()) } returns pending.task
-
-            val result = async { repository.updateSchedule(schedule) }
+            val f = ScheduleTransactionFixture(id = schedule.id, server = schedule)
+            val pending = TaskCompletionSource<Any?>()
+            every { f.firestore.runTransaction(any<Transaction.Function<Any?>>()) } answers {
+                firstArg<Transaction.Function<Any?>>().apply(f.transaction)
+                pending.task
+            }
+            val result = async { f.repository.updateSchedule(schedule) }
             runCurrent()
             assertFalse(result.isCompleted)
-            verify(exactly = 0) { scheduleRef.set(any()) }
-            verify(exactly = 0) { scheduleRef.update(any<Map<String, Any>>()) }
-            pending.setResult(null)
-
+            verify(exactly = 1) { f.transaction.set(f.registryRef, mapOf("userId" to uid)) }
+            verify(exactly = 1) { f.transaction.update(f.scheduleRef, any<Map<String, Any?>>()) }
+            verify(exactly = 0) { f.registryRef.set(any()) }
+            pending.setResult(Unit)
             assertEquals(ScheduleRepository.ScheduleResult.Success(Unit), result.await())
         }
 
     @Test
-    fun `다른 계정의 이전 일정을 수정하려 하면 현재 계정으로 확인하고 쓰기를 막는다`() =
+    fun `다른 계정의 이전 일정은 등록부와 편집 쓰기를 모두 막는다`() =
         runTest {
-            val nextUser = mockk<FirebaseUser>()
-            every { nextUser.uid } returns "next-user"
-            every { auth.currentUser } returns nextUser
-            every { codeRef.set(mapOf("userId" to "next-user")) } returns Tasks.forException(denied())
-
-            assertTrue(repository.updateSchedule(schedule) is ScheduleRepository.ScheduleResult.Error)
-
-            verify(exactly = 1) { codeRef.set(mapOf("userId" to "next-user")) }
-            verify(exactly = 0) { scheduleRef.set(any()) }
-            verify(exactly = 0) { scheduleRef.update(any<Map<String, Any>>()) }
+            val f = ScheduleTransactionFixture(id = schedule.id, server = schedule).apply { uid = "next-user" }
+            assertEquals(ScheduleRepository.ScheduleResult.Error(AppError.PermissionError), f.repository.updateSchedule(schedule))
+            verify(exactly = 0) { f.transaction.set(any(), any()) }
+            verify(exactly = 0) { f.transaction.update(any<DocumentReference>(), any<Map<String, Any?>>()) }
         }
 
     @Test
-    fun `등록부 충돌은 저장과 편집을 막고 코드 유지 안내를 돌려준다`() =
+    fun `등록부 충돌로 거절된 commit은 저장과 편집을 성공으로 반환하지 않는다`() =
         runTest {
-            every { codeRef.set(any()) } returns Tasks.forException(denied())
-
-            val results = listOf(repository.addSchedule(schedule), repository.updateSchedule(schedule))
-
-            results.forEach { result ->
-                val error = (result as ScheduleRepository.ScheduleResult.Error).error
-                assertTrue(error is AppError.GeneralError)
-                assertTrue((error as AppError.GeneralError).message.contains("기존 코드는 유지됩니다"))
-            }
-            verify(exactly = 0) { scheduleRef.set(any()) }
-            verify(exactly = 0) { scheduleRef.update(any<Map<String, Any>>()) }
+            val f = ScheduleTransactionFixture(id = schedule.id, server = schedule)
+            every { f.firestore.runTransaction(any<Transaction.Function<Any?>>()) } returns Tasks.forException(denied())
+            val results = listOf(f.repository.addSchedule(schedule), f.repository.updateSchedule(schedule))
+            results.forEach { assertEquals(ScheduleRepository.ScheduleResult.Error(AppError.PermissionError), it) }
+            verify(exactly = 0) { f.registryRef.set(any()) }
+            verify(exactly = 0) { f.scheduleRef.set(any()) }
+            verify(exactly = 0) { f.scheduleRef.update(any<Map<String, Any?>>()) }
         }
 
     @Test
-    fun `등록부 네트워크 실패도 일정 저장 없이 결과로 돌아온다`() =
+    fun `등록부를 포함한 commit의 연결 실패는 온라인 저장 안내로 돌아온다`() =
         runTest {
-            every { codeRef.set(any()) } returns
-                Tasks.forException(
-                    FirebaseFirestoreException("offline", FirebaseFirestoreException.Code.UNAVAILABLE),
-                )
-
-            val result = repository.addSchedule(schedule) as ScheduleRepository.ScheduleResult.Error
-
-            assertEquals(AppError.NetworkError, result.error)
-            verify(exactly = 0) { scheduleRef.set(any()) }
+            val f = ScheduleTransactionFixture(id = schedule.id)
+            every { f.firestore.runTransaction(any<Transaction.Function<Any?>>()) } returns
+                Tasks.forException(FirebaseFirestoreException("offline", FirebaseFirestoreException.Code.UNAVAILABLE))
+            assertEquals(ScheduleRepository.ScheduleResult.Error(AppError.OnlineWriteError), f.repository.addSchedule(schedule))
+            verify(exactly = 0) { f.registryRef.set(any()) }
+            verify(exactly = 0) { f.scheduleRef.set(any()) }
         }
 
     @Test
-    fun `비공유 저장은 등록부를 호출하지 않는다`() =
+    fun `비공유 저장과 편집은 등록부를 호출하지 않는다`() =
         runTest {
-            every { snapshot.getString("shareCode") } returns ""
-
-            assertTrue(repository.addSchedule(schedule) is ScheduleRepository.ScheduleResult.Success)
-            assertTrue(repository.updateSchedule(schedule.copy(sharedCode = "")) is ScheduleRepository.ScheduleResult.Success)
-
-            verify(exactly = 0) { firestore.collection("shareCodes") }
-            verify(exactly = 1) { scheduleRef.set(match<Schedule> { it.sharedCode == "" }) }
+            val f = ScheduleTransactionFixture(id = schedule.id).apply { shareCode = "" }
+            assertTrue(f.repository.addSchedule(schedule) is ScheduleRepository.ScheduleResult.Success)
+            f.server = schedule.copy(sharedCode = "")
+            assertTrue(f.repository.updateSchedule(schedule) is ScheduleRepository.ScheduleResult.Success)
+            verify(exactly = 0) { f.transaction.set(f.registryRef, any()) }
+            verify(exactly = 1) { f.transaction.set(f.scheduleRef, match<Schedule> { it.sharedCode == "" }) }
         }
 
     @Test
