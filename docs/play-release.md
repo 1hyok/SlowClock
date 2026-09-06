@@ -31,6 +31,31 @@ Firebase App Distribution 과 Google Play 의 목적을 분리하고, 첫 Play �
 - release 빌드는 R8 과 리소스 축소를 켠다(`isMinifyEnabled = true`, `isShrinkResources = true`, #113). Firestore 가 이름으로 읽는 모델, kotlinx.serialization 이 만드는 serializer, Navigation 3 의 화면 키는 `app/proguard-rules.pro` 가 남긴다. Crashlytics 매핑 업로드도 함께 켜져 있어 난독화된 스택을 되돌릴 수 있다. [preflight 리포트](../.github/scripts/render-release-aab-report.mjs) 가 mapping 유무를 그대로 보고한다.
 - 테스터에게 나가는 App Distribution 빌드는 `versionCode` 에 `github.run_number`, `versionName` 에 `1.0-dist.<run>.<sha7>` 을 쓴다(#139). Play 트랙과는 별개의 번호 공간이라 Play 의 단조 증가를 건드리지 않는다. Play 에 올리는 값은 `resolve-play-version-code.mjs` 가 정한다.
 
+## 의존성 경보를 판정하는 법 (#161)
+
+기본 브랜치에 Dependabot 경보가 수십 건 떠 있고 push 할 때마다 그 숫자가 찍힌다. 출시 직전에 보면 멈추게 되는 숫자라, 판정 방법을 여기 적어 둔다.
+
+**판정 기준은 숫자가 아니라 「앱의 릴리스 런타임 클래스패스에 있나」 다.** 경보의 대부분은 Gradle 빌드 그래프(`settings.gradle.kts`)와 Node 쪽(`functions/`·`firestore-tests/`)에서 온다. 셋 다 사용자가 받는 APK·AAB 에 들어가지 않는다.
+
+```bash
+JAVA_HOME=~/Library/Java/JavaVirtualMachines/temurin-21.0.11/Contents/Home \
+  ./gradlew -q :app:dependencies --configuration releaseRuntimeClasspath > /tmp/app-deps.txt
+
+# 경보에 뜬 패키지 이름을 여기서 찾는다. 안 나오면 앱에 안 들어간다.
+grep -E "netty|logback|jose4j|jdom2" /tmp/app-deps.txt
+```
+
+들어가는 것이 있으면 그때 해결 버전을 본다. 경보의 `vulnerable_version_range` 와 실제로 해석된 버전을 대조한다 — 선언 버전이 아니라 해석된 버전이다.
+
+```bash
+gh api repos/1hyok/SlowClock/dependabot/alerts --paginate \
+  -q '.[] | select(.state=="open") | "\(.security_advisory.severity)\t\(.dependency.package.name)\t\(.security_vulnerability.vulnerable_version_range)"'
+```
+
+**2026-09-06 (main @ c7db4eb) 실측**: 열린 경보 54건(high 19 · moderate 29 · low 6). 릴리스 런타임 클래스패스에서 netty·logback·jose4j·jdom2·httpclient·commons-lang3 는 0건이다. 앱에 들어가는 경보 패키지는 guava 하나인데 두 권고 모두 `< 32.0.0-android` 가 대상이고 앱이 푸는 값은 `32.1.3-android` 라 이미 패치된 판이다. 곧 알려진 취약 코드가 산출물에 들어가지 않는다.
+
+`dependency-review` 워크플로는 PR 이 바꾸는 의존성만 본다. 기본 브랜치에 이미 쌓인 경보는 그 검사의 대상이 아니라, 초록인 채로 숫자가 남는다.
+
 ## 스토어 등록 정보와 앱 콘텐츠 선언 (#47)
 
 스토어 등록 정보 문안과 이미지는 [`docs/play/listing.md`](play/listing.md), [`docs/play/ic_launcher_512.png`](play/ic_launcher_512.png), [`docs/play/feature_graphic_1024x500.png`](play/feature_graphic_1024x500.png) 에 있다. 스크린샷은 로그인된 기기가 필요해 촬영 절차만 적어 두었다.
