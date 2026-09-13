@@ -420,7 +420,7 @@ export function parseResolvedDependencies(content, source = "") {
     const dependencies = [];
     const matcher = /([A-Za-z0-9_.-]+):([A-Za-z0-9_.-]+):([^\s()]+)(?:\s+->\s+([^\s()]+))?/g;
     for (const line of String(content).split(/\r?\n/)) {
-        if (/\(c\)\s*$/.test(line.trim())) {
+        if (/(?:\((?:c|n)\)|\bFAILED)\s*$/.test(line.trim())) {
             continue;
         }
         for (const match of line.matchAll(matcher)) {
@@ -438,6 +438,12 @@ export function parseResolvedDependencies(content, source = "") {
         }
     }
     return dependencies;
+}
+
+export function parseResolutionFailures(content, source = "") {
+    return String(content).split(/\r?\n/)
+        .filter((line) => /^[|\\+\s-]*[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:\S+.*\bFAILED\s*$/.test(line))
+        .map((line) => `Gradle 미해석 의존성 (${source}): ${line.trim()}`);
 }
 
 function mergeResolvedDependencies(entries) {
@@ -952,10 +958,12 @@ async function main() {
 
     const resolvedRaw = [];
     const missingResolvedReports = [];
+    const unresolvedDependencies = [];
     for (const reportPath of options.resolvedReports) {
         try {
             const content = await fs.readFile(reportPath, "utf8");
             resolvedRaw.push(...parseResolvedDependencies(content, path.basename(reportPath)));
+            unresolvedDependencies.push(...parseResolutionFailures(content, path.basename(reportPath)));
         } catch (error) {
             if (error?.code === "ENOENT") {
                 missingResolvedReports.push(reportPath);
@@ -1015,6 +1023,7 @@ async function main() {
         (entry) => entry.currentVersion && !entry.metadata?.url && !entry.metadata?.offline,
     );
     const gaps = [
+        ...unresolvedDependencies,
         ...missingResolvedReports.map((report) => `Gradle 해석 보고서 누락: ${report}`),
         ...Object.entries(resolutionStatus)
             .filter(([, exitCode]) => exitCode !== 0)
