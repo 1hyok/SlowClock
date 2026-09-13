@@ -24,6 +24,16 @@ dependencies {
     compileOnly(libs.compose.compiler.gradlePlugin)
     compileOnly(libs.ksp.gradlePlugin)
     compileOnly(libs.hilt.gradlePlugin)
+    // included build 는 루트 프로젝트의 constraints 를 상속하지 않는다.
+    constraints {
+        compileOnly(libs.security.jdom)
+        compileOnly(libs.security.jose)
+        compileOnly(libs.security.commons.lang)
+        compileOnly(libs.security.httpclient)
+        compileOnly(libs.security.bouncycastle.provider)
+        compileOnly(libs.security.bouncycastle.pkix)
+        compileOnly(libs.security.bouncycastle.util)
+    }
 }
 
 gradlePlugin {

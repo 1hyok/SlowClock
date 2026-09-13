@@ -75,6 +75,16 @@ test("WIF canary is manual, protected, and branch-restricted", () => {
   assert.match(canaryWorkflow, /CONFIRM_UPLOAD/);
 });
 
+test("WIF canary overrides the normal tester recipients and identifies its build", async () => {
+  assert.match(canaryWorkflow, /SLOWCLOCK_DISTRIBUTION_UPLOAD_ONLY: 'true'/);
+  assert.doesNotMatch(canaryWorkflow, /--(?:groups|testers)/);
+  const appBuild = await readFile(new URL("../../app/build.gradle.kts", import.meta.url), "utf8");
+  assert.match(appBuild, /groups = if \(System.getenv\("SLOWCLOCK_DISTRIBUTION_UPLOAD_ONLY"\) == "true"\) "" else "slowclock"/);
+  assert.doesNotMatch(appBuild, /(?:testers|testersFile|groupsFile)\s*=/);
+  assert.match(canaryWorkflow, /SLOWCLOCK_VERSION_CODE: \$\{\{ github\.run_number \}\}/);
+  assert.match(canaryWorkflow, /SLOWCLOCK_VERSION_NAME_SUFFIX="canary\./);
+});
+
 test("WIF credentials are issued only after the release APK build", () => {
   const buildIndex = canaryWorkflow.indexOf("./gradlew assembleRelease");
   const attestationIndex = canaryWorkflow.indexOf(
