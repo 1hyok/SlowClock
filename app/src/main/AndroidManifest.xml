@@ -68,6 +68,7 @@
         </activity>
         <activity
             android:name=".ui.alarm.AlarmFullScreenActivity"
+            android:theme="@style/Theme.SlowClock.Alarm"
             android:excludeFromRecents="true"
             android:launchMode="singleInstance"
             android:showOnLockScreen="true"

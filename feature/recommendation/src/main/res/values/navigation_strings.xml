@@ -1,3 +1,4 @@
 <resources>
     <string name="recommendation_back_without_selection">고르지 않고 돌아가기</string>
+    <string name="recommendation_health_notice">일상 일정 예시이며 의료 진단이나 치료를 위한 안내가 아닙니다. 건강에 관한 판단은 의료 전문가와 상담해 주세요.</string>
 </resources>
