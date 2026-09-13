@@ -38,8 +38,13 @@ node --test .github/scripts/*.test.mjs
 
 ## 남아 있는 경계
 
-2026-09-13에 안정판 `org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20`과 같은 버전의 Compose compiler·serialization 플러그인을 함께 적용했다. GHSA-r937-wjx7-w2jp의 KAPT 캐시 수정이 포함된 안정판으로 갱신하며, 기존 KSP 사용은 유지한다. [공식 릴리스](https://github.com/JetBrains/kotlin/releases/tag/v2.4.20), [Gradle·AGP 호환성](https://kotlinlang.org/docs/gradle-configure-project.html).
+2026-09-13 기준 `org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10`의 GHSA-r937-wjx7-w2jp는 유지한다. 수정 안정판 2.4.20은 배포되었고 로컬 빌드·단위 테스트 322개·lint·스크린샷 검증은 통과했으나, CodeQL CLI 2.26.4와 최신 2.27.0 모두 `Kotlin version 2.4.20 is too recent`로 실제 소스 추출에 실패했다. 공식 지원표와 실행 결과가 달라, 보안 분석을 유지하기 위해 Kotlin·Compose compiler·serialization을 기존 2.4.10에 둔다. CodeQL Action은 v4.38.0으로 갱신했다. 지원되는 추출기 배포 후 세 플러그인을 함께 갱신하고 실제 Kotlin 분석까지 검증한다.
 
-npm의 Functions 실행 의존성과 Firestore 테스트 도구는 각각의 lockfile과 테스트로 별도 검증한다. GitHub 경보 수는 기본 브랜치의 의존성 snapshot이 반영된 후 다시 확인한다.
+- [안정판 릴리스](https://github.com/JetBrains/kotlin/releases/tag/v2.4.20)
+- [실패한 최신 CodeQL 실행](https://github.com/1hyok/SlowClock/actions/runs/34745788351)
+- [CodeQL Action 릴리스](https://github.com/github/codeql-action/releases/tag/v4.38.0)
+- [공식 지원표](https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/)
 
-Kotlin 2.4.20 분석을 위해 CodeQL Action도 v4.38.0 (CLI 2.27.0)으로 갱신했다. 이전 CLI 2.26.4는 해당 컴파일러를 거부한다. [Action 릴리스](https://github.com/github/codeql-action/releases/tag/v4.38.0), [지원 Kotlin 범위](https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/).
+해당 취약점은 KAPT 캐시 역직렬화 경로이며 현재 프로젝트는 KSP를 사용한다. 이 사실을 경고 해제나 전체 빌드 도구의 안전 보장으로 확대하지 않는다. [공식 수정](https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6).
+
+npm의 Functions 실행 의존성과 Firestore 테스트 도구는 #225에서 별도 검증한다. GitHub 경고 감소는 기본 브랜치 snapshot 반영 후 확인한다.

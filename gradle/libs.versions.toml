@@ -1,8 +1,8 @@
 [versions]
 # AGP 9.1.1 은 Gradle 9.3.1 이상, JDK 17 이상. Kotlin 은 AGP 내장(built-in Kotlin)이라 kotlin-android 플러그인을 쓰지 않는다.
-# KGP 2.4.20 의 완전 지원 범위는 Gradle 7.6.3~9.7.0, AGP 8.5.2~9.3.1 (kotlinlang.org/docs/gradle-configure-project.html)
+# KGP 2.4.10 의 완전 지원 범위는 Gradle 7.6.3~9.5.0, AGP 8.5.2~9.1.0 (kotlinlang.org/docs/gradle-configure-project.html)
 agp = "9.1.1"
-kotlin = "2.4.20"
+kotlin = "2.4.10"
 coreKtx = "1.19.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
