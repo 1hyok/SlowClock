@@ -15,7 +15,9 @@ Firebase App Distribution 과 Google Play 의 목적을 분리하고, 첫 Play �
 
 ### Play Console 확인 상태
 
-2026-09-05 기준 Play 개발자 계정이 없다. 2023-11-13 이후 만든 개인 계정은 테스터 12명이 14일 연속 옵트인한 비공개 테스트를 거쳐야 production 신청이 가능하고, 심사는 최대 7일이다. 계정 생성과 테스터 모집이 일정의 하한이므로 앱 작업과 무관하게 먼저 시작한다.
+2026-09-06 실제 Console을 다시 확인했다. 로그인 계정이 접근 가능한 개인 개발자 계정은 있으나, 신원 확인 진행 중이며 소유자 연락처 전화번호 인증이 남아 있다. 앱이 없고 「앱 만들기」가 비활성화되어 있으므로 SlowClock의 앱 생성·등록정보 저장·AAB 업로드·선언 제출은 아직 실행할 수 없다. 접근 가능한 개발자 계정이 SlowClock을 게시할 계정으로 확정된 것은 아니다. 계정 소유자의 확인이 끝난 뒤 사용할 게시 계정에서 이어간다.
+
+등록정보·이미지·앱 콘텐츠 답안은 저장소에서 준비한다. 계정 생성 수수료를 결제하거나 소유자 본인 인증을 대신하지 않는다. 신규 개인 계정의 비공개 테스트 요건과 심사 일정은 실제 계정에 표시되는 안내 및 아래 공식 문서로 확인한다.
 
 공식 근거: [App testing requirements for new personal developer accounts](https://support.google.com/googleplay/android-developer/answer/14151465)
 
@@ -65,13 +67,13 @@ PR #199에서 Functions의 `qs`를 `6.16.0`으로 제한 업데이트하고 Node
 |---|---|---|
 | 개인정보처리방침 URL | `https://1hyok.me/SlowClock/privacy.html` | GitHub Pages. github.io 주소는 이 도메인으로 리다이렉트된다 |
 | 광고 | 광고 없음 | 광고 SDK 없음, `AD_ID` 권한 제거 |
-| 앱 액세스 | 일부 기능 제한(로그인 필요). 안내문: "Google 계정으로 로그인하면 모든 기능을 쓸 수 있습니다. 별도의 테스트 계정이나 자격 증명은 필요 없습니다." | Firebase UI Google 로그인만 제공 |
+| 앱 액세스 | 일부 기능 제한(로그인 필요). 안내문: "Google 계정으로 로그인하면 일정·알람·공유 코드 열람을 사용할 수 있습니다. 별도 가입 승인, 유료 구독이나 초대 제한은 없습니다. 공유를 확인하려면 한 계정의 내 정보에 표시되는 코드를 다른 계정의 공유 화면에 입력하세요." | Firebase UI Google 로그인만 제공. 현재 동작하지 않는 보호자 푸시까지 모든 기능 사용 가능 문구로 약속하지 않음 |
 | 콘텐츠 등급 | 앱 유형 「유틸리티·생산성·커뮤니케이션·기타」. 폭력·성적 내용·욕설·약물·도박 전부 「아니오」. 사용자 간 상호작용 「예」(공유 코드를 받은 사람이 그 사람의 일정과 이름을 본다), 개인정보 공유 「예」(이름·일정을 본인이 코드를 알려 준 사람과 공유), 위치 공유 「아니오」, 디지털 구매 「아니오」 | 공유 코드 기능(정보 화면). 가족 그룹을 만드는 화면은 앱에 없다 — `familyGroups` 컬렉션은 계정 삭제 때 정리하는 용도로만 남아 있다 |
 | 타겟층 | 18세 이상만 선택. 어린이 대상 아님 | 어르신·보호자용 앱 |
 | 뉴스 앱 | 아니오 | 정보 탭은 메디컬타임즈로 이동하는 버튼 하나뿐이고 기사를 앱 안에 표시하지 않는다(#51) |
 | 정부 앱 | 아니오 | |
 | 금융 기능 | 없음 | |
-| 건강 | 제출 전 범주 확인 필요. 현재 기능을 그대로 출시하면서 「건강 기능 없음」으로 단정하지 않는다 | 앱 안에 ADHD 분류와 감정 일기·회피 행동 돌아보기·명상 일정 추천이 있다. 기사 스크래핑 제거(#51)만으로 이 추천까지 없어지지는 않는다 |
+| 건강 | 제출 답안: Stress Management, Relaxation, Mental Acuity / Mental and Behavioral Health / Medication and Treatment Management / Healthcare Services and Management | 명상·ADHD 감정 일기 및 회피 행동 돌아보기·약 먹기·병원 예약 일정 예시를 공식 범주에 대조한 판단. 의료기기·진단·처방·치료·측정·Health Connect 기능은 제공하지 않음. Console 제출 및 Google 심사 완료를 뜻하지 않음 |
 | 데이터 보안: 수집 | 개인 정보(이름, 이메일 주소, 사용자 ID), 앱 활동(앱 상호작용, 기타 사용자 생성 콘텐츠: 일정·메모), 기기 또는 기타 ID(FCM 토큰, Firebase 설치 ID, Analytics 앱 인스턴스 ID, Crashlytics 설치 식별자), 위치(대략적인 위치: IP 기반), 앱 정보 및 성능(비정상 종료 로그, 진단) | Firebase Auth·Firestore·FCM·Analytics·Crashlytics |
 | 데이터 보안: 공유 | 제3자 공유 없음. Firebase 는 서비스 제공업체. 공유 코드를 통한 열람은 사용자가 시작한 행동 | privacy.html 4절, [firestore.md](firestore.md) 의 컬렉션 표 |
 | 데이터 보안: 처리 | 전송 중 암호화 「예」. 계정 삭제 요청 방법 「예」: 앱 안 내 정보 화면과 `https://1hyok.me/SlowClock/delete-account.html`(#46) | HTTPS, #46 |
@@ -83,9 +85,11 @@ PR #199에서 Functions의 `qs`를 `6.16.0`으로 제한 업데이트하고 Node
 
 Analytics는 광고 ID 권한을 제거해도 앱 인스턴스 ID와 IP 기반 대략적 위치를 자동 수집한다. 선언 근거는 [Analytics 공식 안내](https://support.google.com/analytics/answer/11582702?hl=en)와 [Firebase SDK별 안내](https://firebase.google.com/docs/android/play-data-disclosure)다. 현재 앱에는 새 그룹 생성 기능이 없고 과거 그룹 기록은 계정 삭제 때 정리한다.
 
-건강 선언은 데이터 수집 여부와 별개로 실제 제공 기능을 본다. [Play 공식 선언 안내](https://support.google.com/googleplay/android-developer/answer/14738291?hl=en)는 명상·인지 건강 안내를 스트레스 관리/이완/정신적 예민함 범주로, 정신 건강 지원 도구를 정신 및 행동 건강 범주로 설명한다. 현재 추천 내용은 이 범주와 대조해야 한다는 판단이며 Google의 심사 결과를 확인한 것은 아니다. 제출 전 실제 추천 화면과 스토어 문구를 함께 보고 해당 범주를 선택하고, 확정 전에는 선언을 초안으로 남긴다. 앱에는 진단·치료·측정 기능이나 Health Connect 연동이 구현되어 있지 않지만 그것만으로 건강 기능 전체가 없다고 판단하지 않는다. [건강 콘텐츠 정책](https://support.google.com/googleplay/android-developer/answer/16679511?hl=en)도 함께 확인한다.
+건강 선언은 데이터 수집 여부와 별개로 실제 제공 기능을 본다. [Play 공식 선언 안내](https://support.google.com/googleplay/android-developer/answer/14738291?hl=en)를 `RecommendationScreen.kt`의 추천 내용에 대조해 위 답안을 정했다. 범주는 명상·인지 건강 안내, 정신 건강 지원, 복약 알림, 의료 예약 일정에 각각 대응한다. 앱은 의료 판단을 하지 않고 사용자가 정한 일정과 알람을 제공한다. 계정 확인이 끝나 Console 입력이 열리면 위 답안을 옮기고 추가 질문을 실제 기능에 맞게 작성한다. [건강 콘텐츠 정책](https://support.google.com/googleplay/android-developer/answer/16679511?hl=en)에 따라 스토어 설명에는 의료기기가 아니며 질환을 진단·치료·치유·예방하지 않는다는 안내와 의료 전문가 상담 안내를 포함한다.
 
-제출 전에 Analytics Console의 보유 기간·Google Signals·광고 계정 연결·데이터 공유 설정을 실제로 확인해 선언과 맞춘다. 저장소만으로 이 설정의 현재 값을 확인한 것으로 취급하지 않는다. 계정 삭제와 별도 설치 식별자의 보유 범위는 개인정보처리방침 및 계정 삭제 안내에 함께 설명한다.
+2026-09-06 연결된 `slow-clock-scheduler` Analytics 속성에서 이벤트 보관 2개월, 사용자 데이터 보관 14개월, 새 사용자 활동 시 보관 기간 재설정 켜짐을 확인했다. Google Signals는 꺼져 있고 Google Ads 연결은 0건이다. 광고 개인화는 전체 307개 지역 허용에서 0개 허용으로 변경·저장했으며 이후 수집 데이터에 적용된다. 기존 데이터에 소급되는 삭제 조치는 아니다. [광고 개인화 설정의 적용 범위](https://support.google.com/analytics/answer/9626162?hl=en).
+
+Analytics 계정 데이터 공유는 Google 제품 및 서비스 꺼짐, 참여 모델링 및 비즈니스 통계·기술 지원·비즈니스 추천 켜짐을 확인했다. 계정 전체에 적용되는 값은 변경하지 않았다. 제출할 때 같은 속성과 계정의 최신 값을 다시 대조한다. 계정 삭제와 별도 설치 식별자의 보유 범위는 개인정보처리방침 및 계정 삭제 안내에 함께 설명한다.
 
 ### 스크린샷 촬영 절차
 

@@ -106,7 +106,8 @@ android {
             firebaseAppDistribution {
                 // 릴리스 노트는 배포 워크플로가 머지된 PR 본문에서 만들어 --releaseNotesFile 로 넘긴다.
                 // 여기서 releaseNotes 를 지정하면 그 파일을 덮어써 모든 배포가 같은 문구로 나간다(#79).
-                groups = "slowclock"
+                // WIF canary는 인증·업로드만 확인하며 테스터에게 전달하지 않는다.
+                groups = if (System.getenv("SLOWCLOCK_DISTRIBUTION_UPLOAD_ONLY") == "true") "" else "slowclock"
             }
         }
     }
