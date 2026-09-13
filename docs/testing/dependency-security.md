@@ -38,6 +38,6 @@ node --test .github/scripts/*.test.mjs
 
 ## 남아 있는 경계
 
-2026-09-06 기준 `org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10`의 GHSA-r937-wjx7-w2jp는 경보를 유지한다. [공식 수정](https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6)은 KAPT 증분 캐시 역직렬화 경로이며 현재 프로젝트는 KSP를 사용하고 KAPT 플러그인·작업을 사용하지 않는다. 패치가 포함된 2.4.20은 아직 시험판이므로, 안정 버전 공개 후 Kotlin·Compose compiler를 함께 갱신하고 전체 호환성 검증을 다시 수행한다. 이 판단을 전체 빌드 도구의 안전 보장이나 경보 해제로 확대하지 않는다. [Kotlin 공식 릴리스](https://github.com/JetBrains/kotlin/releases)
+2026-09-13에 안정판 `org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20`과 같은 버전의 Compose compiler·serialization 플러그인을 함께 적용했다. GHSA-r937-wjx7-w2jp의 KAPT 캐시 수정이 포함된 안정판으로 갱신하며, 기존 KSP 사용은 유지한다. [공식 릴리스](https://github.com/JetBrains/kotlin/releases/tag/v2.4.20), [Gradle·AGP 호환성](https://kotlinlang.org/docs/gradle-configure-project.html).
 
 npm의 Functions 실행 의존성과 Firestore 테스트 도구는 각각의 lockfile과 테스트로 별도 검증한다. GitHub 경보 수는 기본 브랜치의 의존성 snapshot이 반영된 후 다시 확인한다.
