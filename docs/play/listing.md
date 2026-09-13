@@ -44,11 +44,13 @@
 
 ## 스토어 등록 정보 자료
 
+규격은 [Play 미리보기 자료 사양](https://support.google.com/googleplay/android-developer/answer/9866151)의 요구를 그대로 적은 것이다. 아이콘만 32비트(알파 포함)를 요구하고, 그래픽 이미지와 스크린샷은 알파가 없는 24비트를 요구한다.
+
 | 자료 | 파일 | 규격 |
 |---|---|---|
-| 앱 아이콘 | `docs/play/ic_launcher_512.png` | 512×512 PNG, 투명 없음 |
-| 그래픽 이미지 | `docs/play/feature_graphic_1024x500.png` | 1024×500 PNG |
-| 휴대전화 스크린샷 | `docs/play/screenshots/` 4장 | 2~8장, 1080×2400 PNG |
+| 앱 아이콘 | `docs/play/ic_launcher_512.png` | 512×512, 32비트 PNG(알파 포함), 1024KB 이하. 그림 자체는 불투명하다 |
+| 그래픽 이미지 | `docs/play/feature_graphic_1024x500.png` | 1024×500, 24비트 PNG(알파 없음) |
+| 휴대전화 스크린샷 | `docs/play/screenshots/` 4장 | 2~8장, 1080×1920, 24비트 PNG(알파 없음). 긴 변이 짧은 변의 2배를 넘으면 안 된다 |
 
 올릴 순서와 파일이다.
 
@@ -59,20 +61,29 @@
 | 3 | `docs/play/screenshots/02-done.png` | 완료한 일 |
 | 4 | `docs/play/screenshots/04-dark.png` | 어두운 모드 |
 
-네 장은 앱의 화면 코드를 그대로 그려 만들었다. 만드는 자리는 `feature/main/src/screenshotTest/.../StoreScreenshotTest.kt` 이고, 렌더 결과는 그 모듈의 baseline 으로 먼저 들어간다. 여기 있는 넉 장은 그 baseline 을 옮겨 온 사본이다.
+네 장은 앱의 화면 코드를 그대로 그려 만들었다. 만드는 자리는 `feature/main/src/screenshotTest/.../StoreScreenshotTest.kt` 이고, 렌더 결과는 그 모듈의 baseline 으로 먼저 들어간다. 여기 있는 넉 장은 그 baseline의 RGB 픽셀을 그대로 보존한 24비트 PNG 내보내기다.
 
-baseline 이 바뀌면 이 사본도 함께 옮겨야 한다. 화면을 고쳤는데 옮기지 않으면 스토어 그림만 옛 화면으로 남는다(#155). 옮기는 자리는 이 넷이다.
+baseline이 바뀌면 이 사본도 함께 다시 내보내야 한다. 화면을 고쳤는데 옮기지 않으면 스토어 그림만 옛 화면으로 남는다(#155). 옮기는 자리는 이 넷이다.
 
 | baseline | 여기 |
 |---|---|
-| `StoreMainScreenshot_스토어 메인_768e228a_0.png` | `01-main.png` |
-| `StoreDoneScreenshot_스토어 완료_9c836483_0.png` | `02-done.png` |
-| `StoreTimelineScreenshot_스토어 시간표_1683b525_0.png` | `03-timeline.png` |
-| `StoreDarkScreenshot_스토어 어두운 모드_dde69d6e_0.png` | `04-dark.png` |
+| `StoreMainScreenshot_스토어 메인_67c6756c_0.png` | `01-main.png` |
+| `StoreDoneScreenshot_스토어 완료_eef9ef9e_0.png` | `02-done.png` |
+| `StoreTimelineScreenshot_스토어 시간표_d0dba646_0.png` | `03-timeline.png` |
+| `StoreDarkScreenshot_스토어 어두운 모드_665a3c63_0.png` | `04-dark.png` |
 
-baseline 은 macOS 렌더와 CI(Linux) 렌더가 달라 로컬에서 만들지 않는다. PR 에 `screenshot-baseline` 라벨을 붙여 CI 컨테이너가 갱신하게 한 뒤, 그 결과를 받아 위 표대로 옮긴다.
+baseline 은 macOS 렌더와 CI(Linux) 렌더가 달라 로컬에서 만들지 않는다. PR 에 `screenshot-baseline` 라벨을 붙여 CI 컨테이너가 갱신하게 한 뒤, 그 결과를 받은 뒤 `scripts/export-play-screenshots.sh`를 실행한다. 기존 PNG에 투명한 픽셀이 하나라도 있으면 내보내기를 거부한다. `scripts/export-play-screenshots.sh --check`는 1080×1920·24비트·알파 없음 및 CI baseline과 모든 RGB 픽셀이 같은지 검사한다. JDK에 포함된 ImageIO만 사용하므로 추가 라이브러리가 필요 없다.
 
-알람이 울리는 전체 화면과 공유 코드 화면은 남았다. 실제 동작과 계정이 있어야 자연스러워서 기기에서 찍는다. 에뮬레이터 `Pixel_7_Claude_QA`(1080×2400) 에 Google 계정으로 로그인한 뒤 `adb exec-out screencap -p > 파일.png` 로 찍는다. Play 는 두 장부터 받으므로 이 두 장이 없어도 등록은 막히지 않는다.
+알람 전체 화면과 공유 코드 화면은 선택적인 추가 소재다. 현재 네 장으로 최소 장수 조건을 충족하며, 추가 촬영이 필요하면 전용 에뮬레이터와 테스트 데이터만 사용한다. 계정·개인 정보가 포함된 화면을 스토어 소재로 사용하지 않는다.
+
+### 대체 텍스트
+
+- 아이콘: 시계 바늘과 하트로 표현한 느린 시계 앱 아이콘.
+- 그래픽: 느린 시계. 큰 글씨로 보는 오늘의 일정과 정시 알람.
+- 메인: 오늘 할 일과 진행 상황, 다음 일정의 시간과 제목을 보여 주는 화면.
+- 시간표: 선택한 날짜의 일정을 시간 순서대로 보여 주는 화면.
+- 완료: 오늘 완료한 일정과 진행 상태를 확인하는 화면.
+- 어두운 모드: 어두운 배경에서 오늘 할 일과 다음 일정을 확인하는 화면.
 
 ## 연락처
 

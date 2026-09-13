@@ -6,6 +6,7 @@
   #107 에서 화면 밝기 선택에 같은 함정이 있었고 같은 방법으로 고쳤다(#132).
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/alarm_background"
@@ -20,11 +21,12 @@
 
         <TextView
             android:id="@+id/currentTimeText"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
             android:fontFamily="monospace"
-            android:text="00:00:00"
+            tools:text="오전 12:00"
+            android:textAlignment="center"
             android:textColor="@color/alarm_on_background"
             android:textSize="48sp"
             android:textStyle="bold" />

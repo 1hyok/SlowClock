@@ -17,8 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.slowclock.data.model.Recommendation
+import com.example.slowclock.feature.recommendation.R
 
 /**
  * 추천 일정 목록.
@@ -37,6 +39,13 @@ fun RecommendationList(
         contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item(key = "health_notice") {
+            Text(
+                text = stringResource(R.string.recommendation_health_notice),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         items(recommendations, key = { it.title }) { item ->
             RecommendationRow(
                 title = item.title,

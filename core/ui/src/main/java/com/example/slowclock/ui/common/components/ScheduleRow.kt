@@ -157,7 +157,10 @@ private fun ScheduleRowSurface(
     content: @Composable () -> Unit,
 ) {
     val color = if (completed) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface
-    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    // 어두운 모드에서는 surface 와 background 가 같은 값이라 칸을 가르는 것이 이 선 하나뿐이다.
+    // outlineVariant 는 배경 대비 2.02:1 로 WCAG 1.4.11 의 3:1 에 못 미쳐 칸 경계가 보이지 않았다.
+    // outline 은 같은 자리에서 5.84:1(어두운 모드)·4.13:1(밝은 모드)이다.
+    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     if (onClick == null) {
         Surface(modifier = modifier, shape = MaterialTheme.shapes.medium, color = color, border = border, content = content)
     } else {

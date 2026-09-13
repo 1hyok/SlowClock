@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SlowClockTheme의 PaperBackground/NightBackground와 시작 창을 맞춘다. -->
+    <color name="window_background">#14120F</color>
+</resources>
