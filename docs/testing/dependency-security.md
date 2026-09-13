@@ -41,3 +41,5 @@ node --test .github/scripts/*.test.mjs
 2026-09-13에 안정판 `org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20`과 같은 버전의 Compose compiler·serialization 플러그인을 함께 적용했다. GHSA-r937-wjx7-w2jp의 KAPT 캐시 수정이 포함된 안정판으로 갱신하며, 기존 KSP 사용은 유지한다. [공식 릴리스](https://github.com/JetBrains/kotlin/releases/tag/v2.4.20), [Gradle·AGP 호환성](https://kotlinlang.org/docs/gradle-configure-project.html).
 
 npm의 Functions 실행 의존성과 Firestore 테스트 도구는 각각의 lockfile과 테스트로 별도 검증한다. GitHub 경보 수는 기본 브랜치의 의존성 snapshot이 반영된 후 다시 확인한다.
+
+Kotlin 2.4.20 분석을 위해 CodeQL Action도 v4.38.0 (CLI 2.27.0)으로 갱신했다. 이전 CLI 2.26.4는 해당 컴파일러를 거부한다. [Action 릴리스](https://github.com/github/codeql-action/releases/tag/v4.38.0), [지원 Kotlin 범위](https://codeql.github.com/docs/codeql-overview/supported-languages-and-frameworks/).
