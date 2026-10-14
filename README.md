@@ -2,6 +2,20 @@
 
 고령자 접근성을 우선한 일정·알람 Android 앱. 큰 글자와 큰 터치 영역, 보호자 공유 코드로 가족이 일정을 함께 본다.
 
+## 📱 앱 미리보기
+
+| 메인 일정 | 완료한 일정 |
+|---|---|
+| <img src="docs/play/screenshots/01-main.png" width="200" alt="메인 일정 화면"> | <img src="docs/play/screenshots/02-done.png" width="200" alt="완료한 일정 화면"> |
+| 타임라인 | 어두운 테마 |
+| <img src="docs/play/screenshots/03-timeline.png" width="200" alt="타임라인 화면"> | <img src="docs/play/screenshots/04-dark.png" width="200" alt="어두운 테마 화면"> |
+
+## 설치·테스트
+
+현재 공개 Google Play 설치 링크와 GitHub Release는 없습니다. Firebase App Distribution 빌드는 초대된 테스터용이며, Google Play 내부 테스트는 별도 절차를 따릅니다. 자세한 내용은 [Firebase App Distribution 안내](docs/release/distribution.md)와 [Google Play 내부 테스트 안내](docs/play-release.md)를 확인하세요.
+
+개발용으로 직접 빌드하려면 `app/google-services.json` 등 Firebase 설정이 필요합니다. 자세한 설정과 빌드 방법은 아래 개발 환경 설정을 참고하세요.
+
 ## 🧱 스택
 
 - Kotlin · Jetpack Compose · Material3
