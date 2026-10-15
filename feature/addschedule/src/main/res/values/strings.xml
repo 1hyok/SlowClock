@@ -2,4 +2,9 @@
 <resources>
     <string name="retry_saved_alarm">알람 다시 예약</string>
     <string name="return_to_saved_schedules">목록으로 돌아가기</string>
+    <string name="schedule_title_required">할 일 (필수)</string>
+    <string name="schedule_title_required_hint">할 일을 적어야 저장할 수 있습니다.</string>
+    <string name="schedule_time_format_hint">24시간제로 입력해 주세요. 오후 2시는 14시입니다.</string>
+    <string name="schedule_time_readback">입력한 시간: %1$s</string>
+    <string name="schedule_time_range_hint">시는 0~23, 분은 0~59를 모두 입력해 주세요.</string>
 </resources>

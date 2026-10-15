@@ -1,5 +1,6 @@
 package com.example.slowclock.data.remote.repository
 
+import android.app.UiModeManager
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.slowclock.data.model.ThemeMode
@@ -22,6 +23,7 @@ class SettingsRepository
         @ApplicationContext context: Context,
     ) {
         private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        private val uiModeManager by lazy { context.getSystemService(UiModeManager::class.java) }
 
         fun getShareCode(): String? = prefs.getString(KEY_SHARE_CODE, null)?.takeIf { it.isNotBlank() }
 
@@ -43,6 +45,27 @@ class SettingsRepository
 
         fun setThemeMode(mode: ThemeMode) {
             prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+            applyThemeMode()
+        }
+
+        /**
+         * Android 12 이상의 시작 창도 Compose에서 고른 테마를 따른다.
+         * https://developer.android.com/develop/ui/views/theming/darktheme
+         *
+         * SYSTEM 에 MODE_NIGHT_AUTO 를 주는 것은 상수 이름만 보면 어긋나 보인다. 문서상 AUTO 는
+         * "위치·시간에 따라 자동 전환" 이지만, UiModeManagerService 는 YES/NO 가 아닌 값을 모두
+         * UI_MODE_NIGHT_UNDEFINED 로 바꿔 앱별 override 를 지운다. 그래서 실제 동작이 "기기 설정을
+         * 따른다" 가 된다. override 를 지우는 별도 API 는 없다. 이름만 보고 MODE_NIGHT_NO 로
+         * 고치면 SYSTEM 이 항상 밝은 테마로 굳으니 바꾸지 말 것.
+         */
+        fun applyThemeMode() {
+            val nightMode =
+                when (getThemeMode()) {
+                    ThemeMode.SYSTEM -> UiModeManager.MODE_NIGHT_AUTO
+                    ThemeMode.LIGHT -> UiModeManager.MODE_NIGHT_NO
+                    ThemeMode.DARK -> UiModeManager.MODE_NIGHT_YES
+                }
+            uiModeManager?.setApplicationNightMode(nightMode)
         }
 
         /** 현재 값을 먼저 내고, 바뀔 때마다 다시 낸다. */

@@ -1,7 +1,5 @@
 package com.example.slowclock.ui.timeline
 
-import android.app.DatePickerDialog
-import android.widget.DatePicker
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,11 +23,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,7 +36,6 @@ import com.example.slowclock.ui.common.components.EmptyState
 import com.example.slowclock.ui.common.components.ErrorCard
 import com.example.slowclock.ui.common.components.ScreenHeader
 import com.example.slowclock.ui.common.components.rememberDayText
-import java.util.Calendar
 
 private const val SWIPE_THRESHOLD_PX = 100f
 
@@ -64,7 +61,7 @@ internal fun TimelineContent(
     onIntent: (TimelineIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
+    var showCalendar by rememberSaveable { mutableStateOf(false) }
     val currentOnIntent by rememberUpdatedState(onIntent)
     val selectedDate = state.selectedDate
     val dayText = rememberDayText(selectedDate.time)
@@ -91,7 +88,7 @@ internal fun TimelineContent(
             dayText = dayText,
             onPrevious = { onIntent(TimelineIntent.PreviousDay) },
             onNext = { onIntent(TimelineIntent.NextDay) },
-            onPickDate = { showDatePicker(context, selectedDate, onIntent) },
+            onPickDate = { showCalendar = true },
         )
 
         state.error?.let { error ->
@@ -116,6 +113,13 @@ internal fun TimelineContent(
         } else {
             Timeline(items = state.schedules)
         }
+    }
+    if (showCalendar) {
+        TimelineDatePickerDialog(
+            selectedDate = selectedDate,
+            onSelectDate = { year, month, day -> currentOnIntent(TimelineIntent.SelectDate(year, month, day)) },
+            onDismiss = { showCalendar = false },
+        )
     }
 }
 
@@ -161,20 +165,4 @@ private fun DayPicker(
             )
         }
     }
-}
-
-private fun showDatePicker(
-    context: android.content.Context,
-    selectedDate: Calendar,
-    onIntent: (TimelineIntent) -> Unit,
-) {
-    DatePickerDialog(
-        context,
-        { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
-            onIntent(TimelineIntent.SelectDate(year, month, dayOfMonth))
-        },
-        selectedDate.get(Calendar.YEAR),
-        selectedDate.get(Calendar.MONTH),
-        selectedDate.get(Calendar.DAY_OF_MONTH),
-    ).show()
 }

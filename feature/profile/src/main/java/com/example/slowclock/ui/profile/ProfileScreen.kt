@@ -16,7 +16,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -248,16 +247,11 @@ private fun ProfileBody(
         Button(
             onClick = { onIntent(ProfileIntent.SignOut) },
             enabled = !state.isDeleting,
-            colors =
-                ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                ),
             // 높이를 고정하면 글자 배율을 올렸을 때 글자가 위아래로 잘린다(#107 과 같은 함정).
             modifier = Modifier.widthIn(min = 200.dp).heightIn(min = 64.dp),
         ) {
             Text(
                 text = "로그아웃",
-                color = MaterialTheme.colorScheme.onError,
                 style = MaterialTheme.typography.bodyLarge,
             )
         }

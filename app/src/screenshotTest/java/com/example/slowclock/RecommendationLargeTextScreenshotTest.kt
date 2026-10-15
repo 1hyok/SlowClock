@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.android.tools.screenshot.PreviewTest
 import com.example.slowclock.ui.addschedule.components.RecommendationPlaceholder
+import com.example.slowclock.ui.recommendation.RecommendationScreen
 import com.example.slowclock.ui.theme.SlowClockTheme
 
 @PreviewTest
@@ -16,5 +17,15 @@ internal fun RecommendationLargeTextScreenshot() {
         Column {
             RecommendationPlaceholder(onNavigateToRecommendation = {})
         }
+    }
+}
+
+@PreviewTest
+@Preview(name = "추천 안내 360", widthDp = 360, heightDp = 800)
+@Preview(name = "추천 안내 큰 글자 320", widthDp = 320, heightDp = 1000, fontScale = 2f)
+@Composable
+internal fun RecommendationHealthNoticeScreenshot() {
+    SlowClockTheme(darkTheme = false) {
+        RecommendationScreen(onSelectRecommendation = {}, onNavigateBack = {})
     }
 }

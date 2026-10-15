@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.core.content.edit
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -117,7 +118,9 @@ class MainActivity : ComponentActivity() {
             enableEdgeToEdge()
             setContent {
                 // 테마는 사용자가 정보 화면에서 고른 값을 따른다. 기본은 기기 설정이다.
-                val themeMode by settingsRepository.observeThemeMode().collectAsStateWithLifecycle(ThemeMode.SYSTEM)
+                val initialTheme = remember { settingsRepository.getThemeMode() }
+                val themeFlow = remember { settingsRepository.observeThemeMode() }
+                val themeMode by themeFlow.collectAsStateWithLifecycle(initialTheme)
                 SlowClockTheme(
                     darkTheme =
                         when (themeMode) {

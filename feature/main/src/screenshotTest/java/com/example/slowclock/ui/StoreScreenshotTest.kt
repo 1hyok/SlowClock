@@ -22,11 +22,11 @@ import java.util.Date
 // Play 스토어 등록 정보에 올릴 화면. 로그인한 기기가 있어야 찍을 수 있는 화면을 실제 화면
 // 코드로 그려 낸다. 없는 기능을 보여 주지 않고, 화면을 그리는 코드도 앱과 같은 것이다(#115).
 //
-// 크기는 Play 가 받는 1080x2400 이다. 360dp x 800dp 에 dpi 480(밀도 3.0)을 곱하면 그 값이 된다.
+// 크기는 Play 가 받는 1080x1920 이다. 360dp x 640dp 에 dpi 480(밀도 3.0)을 곱하면 그 값이 된다.
 // 여기서 나온 PNG 를 docs/play/screenshots/ 에 옮겨 둔다. 다시 만들려면 이 파일의 미리보기를
 // 렌더한 뒤 같은 자리에 덮어쓴다.
 
-private const val STORE_DEVICE = "spec:width=360dp,height=800dp,dpi=480"
+private const val STORE_DEVICE = "spec:width=360dp,height=640dp,dpi=480"
 
 private fun storeTime(
     hour: Int,
@@ -60,6 +60,10 @@ private val fixedToday: Date =
             set(Calendar.MILLISECOND, 0)
         }.time
 
+// 1080x1920 은 9:16 이라 종전 9:20 보다 아래가 짧다. 맨 아래 「남은 일정」 한 줄이 화면 끝에
+// 걸치고 「일정 추가」 버튼이 그 줄 제목의 일부를 덮는다. 목록 길이를 줄여도 위쪽 높이가 고정이라
+// 접히는 자리는 그대로이고, 덮이는 줄이 「끝낸 일정」 으로 바뀌어 스토어 그림으로는 오히려
+// 나빠진다(실제로 렌더해 확인). 버튼이 목록 위에 겹치는 것은 앱의 실제 모습이므로 그대로 둔다.
 private val storeMainState =
     MainUiState(
         todaySchedules = storeSchedules,

@@ -108,12 +108,13 @@ class AlarmFullScreenActivity : Activity() {
     }
 
     private fun updateCurrentTime(timeTextView: TextView) {
+        val formatter = SimpleDateFormat("a h:mm", Locale.KOREAN)
         timeRunnable =
             object : Runnable {
                 override fun run() {
-                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    timeTextView.text = sdf.format(Date())
-                    timeHandler.postDelayed(this, 1000)
+                    val now = System.currentTimeMillis()
+                    timeTextView.text = formatter.format(Date(now))
+                    timeHandler.postDelayed(this, 60_000L - now % 60_000L)
                 }
             }
         timeHandler.post(timeRunnable)
@@ -150,7 +151,7 @@ class AlarmFullScreenActivity : Activity() {
         startService(AlarmTriggerService.dismissIntent(this, ringingRequestCode(), intent.getStringExtra(AlarmNotifications.EXTRA_TOKEN)))
     }
 
-    /** 화면이 안 보이면 시계를 멈춘다. 보이지 않는 화면을 1초마다 다시 그릴 이유가 없다(#131). */
+    /** 화면이 안 보이면 시계를 멈춘다. 보이지 않는 화면을 다시 그릴 이유가 없다(#131). */
     override fun onStop() {
         super.onStop()
         timeHandler.removeCallbacks(timeRunnable)
